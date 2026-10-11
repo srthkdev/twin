@@ -1,0 +1,1029 @@
+{
+ "generatedAt": "2026-10-11T17:54:27+00:00",
+ "split": {
+  "dev": 10,
+  "test": 21
+ },
+ "methods": {
+  "twin": {
+   "label": "Twin (Qloo + density correction)",
+   "hit1": 0.119,
+   "hit3": 0.452,
+   "mrr": 0.338,
+   "n": 42
+  },
+  "raw": {
+   "label": "Raw Qloo heatmaps (no correction)",
+   "hit1": 0.214,
+   "hit3": 0.405,
+   "mrr": 0.378,
+   "n": 42
+  },
+  "llm": {
+   "label": "LLM only (Claude Sonnet, no data)",
+   "hit1": 0.524,
+   "hit3": 0.738,
+   "mrr": 0.67,
+   "n": 42
+  },
+  "random": {
+   "label": "Random",
+   "hit1": 0.041,
+   "hit3": 0.124,
+   "mrr": 0.156,
+   "n": 42
+  }
+ },
+ "methodsDev": {
+  "twin": {
+   "hit1": 0.35,
+   "hit3": 0.7,
+   "mrr": 0.544,
+   "n": 20
+  },
+  "raw": {
+   "hit1": 0.1,
+   "hit3": 0.35,
+   "mrr": 0.286,
+   "n": 20
+  },
+  "llm": {
+   "hit1": 0.55,
+   "hit3": 0.75,
+   "mrr": 0.693,
+   "n": 20
+  },
+  "random": {
+   "hit1": 0.041,
+   "hit3": 0.122,
+   "mrr": 0.155,
+   "n": 20
+  }
+ },
+ "pairs": [
+  {
+   "a": "los-angeles-silver-lake",
+   "b": "new-york-williamsburg",
+   "split": "dev",
+   "source": "https://www.complex.com/pop-culture/2014/01/the-williamsburg-of-every-city",
+   "quote": "Los Angeles: Williamsburg is Silver Lake (Gawker reader map as reported by Complex)",
+   "verbatim": false,
+   "rank": {
+    "twin": 1,
+    "raw": 1,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 2,
+    "raw": 2,
+    "llm": 1,
+    "random": 12.5
+   }
+  },
+  {
+   "a": "los-angeles-echo-park",
+   "b": "new-york-bushwick",
+   "split": "test",
+   "source": "https://www.complex.com/pop-culture/2014/01/the-williamsburg-of-every-city",
+   "quote": "Los Angeles: Bushwick is Echo Park (Gawker reader map as reported by Complex)",
+   "verbatim": false,
+   "rank": {
+    "twin": 2,
+    "raw": 8,
+    "llm": 2,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 1,
+    "raw": 1,
+    "llm": 1,
+    "random": 12.5
+   }
+  },
+  {
+   "a": "los-angeles-west-hollywood",
+   "b": "new-york-chelsea",
+   "split": "test",
+   "source": "https://urbanize.la/post/explaining-los-angeles-geography-new-yorkers",
+   "quote": "Greenwich Village, Chelsea, Gramercy and NoMad are similar as lifestyle centers to West Hollywood, the Sunset Strip, Beverly Grove...",
+   "verbatim": false,
+   "rank": {
+    "twin": 3,
+    "raw": 6,
+    "llm": 2,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 4,
+    "raw": 6,
+    "llm": 1,
+    "random": 12.5
+   }
+  },
+  {
+   "a": "mexico-city-polanco",
+   "b": "los-angeles-beverly-hills",
+   "split": "test",
+   "source": "https://en.wikipedia.org/wiki/Polanco,_Mexico_City",
+   "quote": "[Avenida Presidente Masaryk] is compared by some to Beverly Hills' Rodeo Drive or New York City's Fifth Avenue.",
+   "verbatim": true,
+   "rank": {
+    "twin": 20,
+    "raw": 12,
+    "llm": 2,
+    "random": 12.5
+   },
+   "rankRev": {
+    "twin": 6,
+    "raw": 1,
+    "llm": 1,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "london-shoreditch",
+   "b": "new-york-williamsburg",
+   "split": "dev",
+   "source": "https://www.uniplaces.com/neighbourhood/london/shoreditch",
+   "quote": "Shoreditch is often compared to Williamsburg (Victorian buildings alongside startups, restaurants, pop-up shops, galleries)",
+   "verbatim": false,
+   "rank": {
+    "twin": 1,
+    "raw": 8,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 6,
+    "raw": 1,
+    "llm": 1,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-dalston",
+   "b": "new-york-williamsburg",
+   "split": "dev",
+   "source": "https://www.thebillfold.com/2013/04/the-chelsea-of-new-orleans-french-quarter-the-queens-of-la-venice/",
+   "quote": "Here's Sarah Brown comparing Hackney/Dalston in London and Williamsburg in Brooklyn.",
+   "verbatim": true,
+   "rank": {
+    "twin": 3,
+    "raw": 3,
+    "llm": 2,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 2,
+    "raw": 9,
+    "llm": 2,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-mayfair",
+   "b": "new-york-upper-east-side",
+   "split": "dev",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Upper East Side with Mayfair (average property price in New York vs. London)",
+   "verbatim": false,
+   "rank": {
+    "twin": 7,
+    "raw": 9,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 9,
+    "raw": 7,
+    "llm": 4,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-notting-hill",
+   "b": "new-york-west-village",
+   "split": "test",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "living in Notting Hill is the London equivalent to living in the West Village/Soho",
+   "verbatim": true,
+   "rank": {
+    "twin": 2,
+    "raw": 6,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 6,
+    "raw": 6,
+    "llm": 1,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-hampstead",
+   "b": "new-york-park-slope",
+   "split": "test",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Hampstead with Park Slope, Brooklyn",
+   "verbatim": false,
+   "rank": {
+    "twin": 2,
+    "raw": 8,
+    "llm": 3,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 4,
+    "raw": 15,
+    "llm": 4,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-canary-wharf",
+   "b": "new-york-financial-district",
+   "split": "test",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Canary Wharf with Financial District",
+   "verbatim": false,
+   "rank": {
+    "twin": 18,
+    "raw": 12,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 15,
+    "raw": 12,
+    "llm": 1,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-camden",
+   "b": "new-york-east-village",
+   "split": "test",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Camden with East Village",
+   "verbatim": false,
+   "rank": {
+    "twin": 2,
+    "raw": 1,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 7,
+    "raw": 2,
+    "llm": 5,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-chelsea",
+   "b": "new-york-west-village",
+   "split": "dev",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing London's Chelsea with West Village",
+   "verbatim": false,
+   "rank": {
+    "twin": 2,
+    "raw": 6,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 2,
+    "raw": 7,
+    "llm": 4,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-islington",
+   "b": "new-york-west-village",
+   "split": "test",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Islington with Greenwich Village / West Village",
+   "verbatim": false,
+   "rank": {
+    "twin": 13,
+    "raw": 10,
+    "llm": 4,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 9,
+    "raw": 8,
+    "llm": 2,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-south-kensington",
+   "b": "new-york-soho",
+   "split": "test",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "South Kensington vs. Soho (section heading)",
+   "verbatim": true,
+   "rank": {
+    "twin": 1,
+    "raw": 1,
+    "llm": 6,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 3,
+    "raw": 5,
+    "llm": 10,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-soho",
+   "b": "new-york-chelsea",
+   "split": "test",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing London's Soho with Chelsea / Meatpacking district",
+   "verbatim": false,
+   "rank": {
+    "twin": 3,
+    "raw": 2,
+    "llm": 5,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 1,
+    "raw": 1,
+    "llm": 4,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-brixton",
+   "b": "new-york-harlem",
+   "split": "dev",
+   "source": "https://www.nbcnews.com/news/world/meghan-markle-prince-harry-s-looming-visit-divides-brixton-n835346",
+   "quote": "Brixton has been dubbed 'London's Harlem'",
+   "verbatim": false,
+   "rank": {
+    "twin": 17,
+    "raw": 20,
+    "llm": 3,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 17,
+    "raw": 15,
+    "llm": 1,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "london-peckham",
+   "b": "new-york-bushwick",
+   "split": "test",
+   "source": "https://www.saveur.com/insomniacs-guide-london-peckham/",
+   "quote": "Saveur's search for a London equivalent of Bushwick points to Peckham Rye (long-time grit, low cost, gentrification pressure)",
+   "verbatim": false,
+   "rank": {
+    "twin": 2,
+    "raw": 9,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 5,
+    "raw": 14,
+    "llm": 1,
+    "random": 13.0
+   }
+  },
+  {
+   "a": "paris-le-marais",
+   "b": "new-york-west-village",
+   "split": "test",
+   "source": "https://www.eurocheapo.com/blog/paris-vs-new-york-the-neighborhood-showdown.html",
+   "quote": "Marais / West Village, Chelsea: verdict 'Spot on' - 'has all of the vivacity of'",
+   "verbatim": true,
+   "rank": {
+    "twin": 2,
+    "raw": 4,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 1,
+    "raw": 1,
+    "llm": 1,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "paris-le-marais",
+   "b": "new-york-chelsea",
+   "split": "test",
+   "source": "https://www.eurocheapo.com/blog/paris-vs-new-york-the-neighborhood-showdown.html",
+   "quote": "Marais / West Village, Chelsea: verdict 'Spot on' - 'has all of the vivacity of'",
+   "verbatim": true,
+   "rank": {
+    "twin": 8,
+    "raw": 2,
+    "llm": 7,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 5,
+    "raw": 2,
+    "llm": 1,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "paris-champs-elysees",
+   "b": "new-york-times-square",
+   "split": "dev",
+   "source": "https://www.eurocheapo.com/blog/paris-vs-new-york-the-neighborhood-showdown.html",
+   "quote": "Champs Elysees / Times Square: 'Both are equally avoided by locals.'",
+   "verbatim": true,
+   "rank": {
+    "twin": 1,
+    "raw": 2,
+    "llm": 5,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 1,
+    "raw": 6,
+    "llm": 1,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "paris-canal-saint-martin",
+   "b": "new-york-williamsburg",
+   "split": "test",
+   "source": "https://www.nationalgeographic.com/travel/article/young-and-hungry-in-paris",
+   "quote": "Like Shoreditch in London, or Williamsburg in New York, it's where the new things are being created in Paris.",
+   "verbatim": true,
+   "rank": {
+    "twin": 3,
+    "raw": 11,
+    "llm": 2,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 3,
+    "raw": 3,
+    "llm": 2,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "paris-canal-saint-martin",
+   "b": "london-shoreditch",
+   "split": "test",
+   "source": "https://www.nationalgeographic.com/travel/article/young-and-hungry-in-paris",
+   "quote": "Like Shoreditch in London, or Williamsburg in New York, it's where the new things are being created in Paris.",
+   "verbatim": true,
+   "rank": {
+    "twin": 4,
+    "raw": 1,
+    "llm": 1,
+    "random": 13.0
+   },
+   "rankRev": {
+    "twin": 2,
+    "raw": 2,
+    "llm": 3,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "paris-la-defense",
+   "b": "london-canary-wharf",
+   "split": "dev",
+   "source": "https://greatruns.com/paris-la-defensenanterre/",
+   "quote": "La Defense is Paris' version of London's Canary Wharf/Docklands (also CBRE comparison on defense-92.fr)",
+   "verbatim": false,
+   "rank": {
+    "twin": 1,
+    "raw": 3,
+    "llm": 1,
+    "random": 13.0
+   },
+   "rankRev": {
+    "twin": 6,
+    "raw": 19,
+    "llm": 1,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "berlin-prenzlauer-berg",
+   "b": "new-york-park-slope",
+   "split": "test",
+   "source": "https://kottke.org/13/04/new-york-elsewhere",
+   "quote": "Prenzlauer Berg = Park Slope.",
+   "verbatim": true,
+   "rank": {
+    "twin": 1,
+    "raw": 10,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 3,
+    "raw": 4,
+    "llm": 1,
+    "random": 11.5
+   }
+  },
+  {
+   "a": "berlin-kreuzberg-so36",
+   "b": "new-york-williamsburg",
+   "split": "dev",
+   "source": "https://travelsofadam.com/where-to-stay-berlin-neighborhoods/",
+   "quote": "It's the Brooklyn equivalent of something between Williamsburg and Park Slope.",
+   "verbatim": true,
+   "rank": {
+    "twin": 2,
+    "raw": 4,
+    "llm": 4,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 1,
+    "raw": 2,
+    "llm": 4,
+    "random": 11.5
+   }
+  },
+  {
+   "a": "mexico-city-roma-norte",
+   "b": "new-york-williamsburg",
+   "split": "test",
+   "source": "https://en.wikipedia.org/wiki/Colonia_Roma",
+   "quote": "Roma has consequently been called the \"Williamsburg of Mexico City.\"",
+   "verbatim": true,
+   "rank": {
+    "twin": 6,
+    "raw": 13,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 2,
+    "raw": 1,
+    "llm": 1,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "mexico-city-roma-norte",
+   "b": "new-york-west-village",
+   "split": "test",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "feels the most like New York's West Village",
+   "verbatim": true,
+   "rank": {
+    "twin": 12,
+    "raw": 14,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 4,
+    "raw": 2,
+    "llm": 1,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "mexico-city-polanco",
+   "b": "new-york-upper-east-side",
+   "split": "test",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "the affluent neighborhood of Polanco is similar to Manhattan's Upper East Side",
+   "verbatim": true,
+   "rank": {
+    "twin": 8,
+    "raw": 4,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 11,
+    "raw": 1,
+    "llm": 1,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "mexico-city-condesa",
+   "b": "new-york-soho",
+   "split": "test",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "Similar to New York's Soho, the neighborhood of Condesa",
+   "verbatim": true,
+   "rank": {
+    "twin": 18,
+    "raw": 14,
+    "llm": 14,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 17,
+    "raw": 7,
+    "llm": 2,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "mexico-city-coyoacan",
+   "b": "new-york-park-slope",
+   "split": "dev",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "Like the Bushwick or Park Slope",
+   "verbatim": true,
+   "rank": {
+    "twin": 3,
+    "raw": 21,
+    "llm": 1,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 1,
+    "raw": 9,
+    "llm": 3,
+    "random": 11.0
+   }
+  },
+  {
+   "a": "mexico-city-zona-rosa",
+   "b": "new-york-williamsburg",
+   "split": "test",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "Juarez: Much like Williamsburg once was",
+   "verbatim": true,
+   "rank": {
+    "twin": 9,
+    "raw": 16,
+    "llm": 7,
+    "random": 13.5
+   },
+   "rankRev": {
+    "twin": 8,
+    "raw": 3,
+    "llm": 5,
+    "random": 11.0
+   }
+  }
+ ],
+ "basketSweep": [
+  {
+   "size": 10,
+   "mrr": 0.256,
+   "mrrDev": 0.322,
+   "mrrTest": 0.224,
+   "sd": 0.027
+  },
+  {
+   "size": 20,
+   "mrr": 0.277,
+   "mrrDev": 0.338,
+   "mrrTest": 0.248,
+   "sd": 0.033
+  },
+  {
+   "size": 40,
+   "mrr": 0.377,
+   "mrrDev": 0.391,
+   "mrrTest": 0.371,
+   "sd": 0.025
+  },
+  {
+   "size": 60,
+   "mrr": 0.399,
+   "mrrDev": 0.497,
+   "mrrTest": 0.353,
+   "sd": 0.032
+  },
+  {
+   "size": 116,
+   "mrr": 0.404,
+   "mrrDev": 0.544,
+   "mrrTest": 0.338,
+   "sd": 0.0
+  }
+ ],
+ "radiusSweep": [
+  {
+   "km": 0.8,
+   "mrr": 0.395,
+   "mrrDev": 0.47,
+   "mrrTest": 0.36
+  },
+  {
+   "km": 1.3,
+   "mrr": 0.404,
+   "mrrDev": 0.544,
+   "mrrTest": 0.338
+  },
+  {
+   "km": 2.0,
+   "mrr": 0.379,
+   "mrrDev": 0.415,
+   "mrrTest": 0.361
+  },
+  {
+   "km": 3.0,
+   "mrr": 0.355,
+   "mrrDev": 0.483,
+   "mrrTest": 0.294
+  }
+ ],
+ "sanity": [
+  {
+   "city": "los-angeles",
+   "hood": "Compton",
+   "item": "Kendrick Lamar",
+   "expect": "high",
+   "pct": 0.995,
+   "raw_pct": 0.828
+  },
+  {
+   "city": "los-angeles",
+   "hood": "Boyle Heights",
+   "item": "Bad Bunny",
+   "expect": "high",
+   "pct": 0.813,
+   "raw_pct": 0.863
+  },
+  {
+   "city": "los-angeles",
+   "hood": "East Los Angeles",
+   "item": "Peso Pluma",
+   "expect": "high",
+   "pct": 0.832,
+   "raw_pct": 0.858
+  },
+  {
+   "city": "los-angeles",
+   "hood": "Silver Lake",
+   "item": "Peso Pluma",
+   "expect": "low",
+   "pct": 0.054,
+   "raw_pct": 0.454
+  },
+  {
+   "city": "los-angeles",
+   "hood": "East Los Angeles",
+   "item": "Morgan Wallen",
+   "expect": "low",
+   "pct": 0.245,
+   "raw_pct": 0.543
+  },
+  {
+   "city": "los-angeles",
+   "hood": "Koreatown",
+   "item": "Korean food",
+   "expect": "high",
+   "pct": 0.704,
+   "raw_pct": 0.981
+  },
+  {
+   "city": "los-angeles",
+   "hood": "West Hollywood",
+   "item": "Gay bars",
+   "expect": "high",
+   "pct": 0.768,
+   "raw_pct": 0.992
+  },
+  {
+   "city": "los-angeles",
+   "hood": "Beverly Hills",
+   "item": "Gucci",
+   "expect": "high",
+   "pct": 0.861,
+   "raw_pct": 0.891
+  },
+  {
+   "city": "los-angeles",
+   "hood": "Silver Lake",
+   "item": "Record stores",
+   "expect": "high",
+   "pct": 0.841,
+   "raw_pct": 0.976
+  },
+  {
+   "city": "new-york",
+   "hood": "Harlem",
+   "item": "Kendrick Lamar",
+   "expect": "high",
+   "pct": 0.774,
+   "raw_pct": 0.878
+  },
+  {
+   "city": "new-york",
+   "hood": "Flushing",
+   "item": "Chinese food",
+   "expect": "high",
+   "pct": 0.873,
+   "raw_pct": 0.784
+  },
+  {
+   "city": "new-york",
+   "hood": "Jackson Heights",
+   "item": "Indian food",
+   "expect": "high",
+   "pct": 0.815,
+   "raw_pct": 0.796
+  },
+  {
+   "city": "new-york",
+   "hood": "Chelsea",
+   "item": "Gay bars",
+   "expect": "high",
+   "pct": 0.667,
+   "raw_pct": 0.974
+  },
+  {
+   "city": "new-york",
+   "hood": "Upper East Side",
+   "item": "Ralph Lauren",
+   "expect": "high",
+   "pct": 0.69,
+   "raw_pct": 0.919
+  },
+  {
+   "city": "new-york",
+   "hood": "Williamsburg",
+   "item": "Record stores",
+   "expect": "high",
+   "pct": 0.823,
+   "raw_pct": 0.939
+  },
+  {
+   "city": "new-york",
+   "hood": "Astoria",
+   "item": "Middle Eastern food",
+   "expect": "high",
+   "pct": 0.741,
+   "raw_pct": 0.875
+  },
+  {
+   "city": "london",
+   "hood": "Brixton",
+   "item": "Burna Boy",
+   "expect": "high",
+   "pct": 0.599,
+   "raw_pct": 0.771
+  },
+  {
+   "city": "london",
+   "hood": "Southall",
+   "item": "Indian food",
+   "expect": "high",
+   "pct": 0.952,
+   "raw_pct": 0.933
+  },
+  {
+   "city": "london",
+   "hood": "Soho",
+   "item": "Gay bars",
+   "expect": "high",
+   "pct": 0.61,
+   "raw_pct": 0.981
+  },
+  {
+   "city": "london",
+   "hood": "Mayfair",
+   "item": "Rolex",
+   "expect": "high",
+   "pct": 0.655,
+   "raw_pct": 0.992
+  },
+  {
+   "city": "london",
+   "hood": "Shoreditch",
+   "item": "Vintage clothing",
+   "expect": "high",
+   "pct": 0.749,
+   "raw_pct": 0.978
+  },
+  {
+   "city": "berlin",
+   "hood": "Kreuzberg (SO36)",
+   "item": "Turkish food",
+   "expect": "high",
+   "pct": 0.642,
+   "raw_pct": 0.929
+  },
+  {
+   "city": "berlin",
+   "hood": "Friedrichshain",
+   "item": "Charlotte de Witte",
+   "expect": "high",
+   "pct": 0.729,
+   "raw_pct": 0.927
+  },
+  {
+   "city": "berlin",
+   "hood": "Schöneberg (Nollendorfplatz)",
+   "item": "Gay bars",
+   "expect": "high",
+   "pct": 0.856,
+   "raw_pct": 0.942
+  },
+  {
+   "city": "berlin",
+   "hood": "Neukölln (Sonnenallee)",
+   "item": "Middle Eastern food",
+   "expect": "high",
+   "pct": 0.726,
+   "raw_pct": 0.8
+  },
+  {
+   "city": "mexico-city",
+   "hood": "Zona Rosa / Juárez",
+   "item": "Gay bars",
+   "expect": "high",
+   "pct": 0.619,
+   "raw_pct": 0.963
+  },
+  {
+   "city": "mexico-city",
+   "hood": "Polanco",
+   "item": "Gucci",
+   "expect": "high",
+   "pct": 0.64,
+   "raw_pct": 0.959
+  },
+  {
+   "city": "mexico-city",
+   "hood": "Roma Norte",
+   "item": "Coffee roasters",
+   "expect": "high",
+   "pct": 0.606,
+   "raw_pct": 0.964
+  },
+  {
+   "city": "mexico-city",
+   "hood": "Tepito",
+   "item": "Peso Pluma",
+   "expect": "high",
+   "pct": 0.617,
+   "raw_pct": 0.813
+  },
+  {
+   "city": "paris",
+   "hood": "Le Marais",
+   "item": "Gay bars",
+   "expect": "high",
+   "pct": 0.635,
+   "raw_pct": 0.979
+  },
+  {
+   "city": "paris",
+   "hood": "Belleville",
+   "item": "Chinese food",
+   "expect": "high",
+   "pct": 0.593,
+   "raw_pct": 0.903
+  },
+  {
+   "city": "paris",
+   "hood": "Quartier Asiatique (13th)",
+   "item": "Vietnamese food",
+   "expect": "high",
+   "pct": 0.866,
+   "raw_pct": 0.929
+  },
+  {
+   "city": "paris",
+   "hood": "Goutte d'Or",
+   "item": "Halal food",
+   "expect": "high",
+   "pct": 0.578,
+   "raw_pct": 0.919
+  },
+  {
+   "city": "paris",
+   "hood": "Passy (16th)",
+   "item": "Hermès",
+   "expect": "high",
+   "pct": 0.821,
+   "raw_pct": 0.894
+  }
+ ],
+ "rawCollapse": {
+  "twin_mean_cos_spread": 0.728,
+  "raw_mean_cos_spread": 0.109,
+  "twin_mean_cos": 0.162,
+  "raw_mean_cos": 0.951,
+  "definition": "mean over (hood, other city) of max-min cosine to that city's hoods"
+ }
+}

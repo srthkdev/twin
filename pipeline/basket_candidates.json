@@ -1,0 +1,1391 @@
+[
+ {
+  "id": "artist-radiohead",
+  "label": "Radiohead",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "70CAE5BF-2F4C-445C-A3E5-4EDACFC3591C",
+  "resolved_name": "Radiohead"
+ },
+ {
+  "id": "artist-tame-impala",
+  "label": "Tame Impala",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "D1AE8792-9129-46E0-AEE7-2C3A81E91385",
+  "resolved_name": "Tame Impala"
+ },
+ {
+  "id": "artist-phoebe-bridgers",
+  "label": "Phoebe Bridgers",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "AFBC71A7-9439-4AB0-AB68-D14B11AAF836",
+  "resolved_name": "Phoebe Bridgers"
+ },
+ {
+  "id": "artist-arctic-monkeys",
+  "label": "Arctic Monkeys",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "E3CF515E-C3EA-46DF-92DD-64A0DC360C90",
+  "resolved_name": "Arctic Monkeys"
+ },
+ {
+  "id": "artist-bon-iver",
+  "label": "Bon Iver",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "E51DB8F2-7A93-4746-A283-E55B5216FDE1",
+  "resolved_name": "Bon Iver"
+ },
+ {
+  "id": "artist-frank-ocean",
+  "label": "Frank Ocean",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "2B134C93-39EB-4A08-A72D-5F8F1167FDAA",
+  "resolved_name": "Frank Ocean"
+ },
+ {
+  "id": "artist-kendrick-lamar",
+  "label": "Kendrick Lamar",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "C915A918-39C5-47A3-A101-D9FA1DECBD9C",
+  "resolved_name": "Kendrick Lamar"
+ },
+ {
+  "id": "artist-drake",
+  "label": "Drake",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "FAA55DC8-6030-4CC8-9BA6-4668295C3FA7",
+  "resolved_name": "Drake"
+ },
+ {
+  "id": "artist-travis-scott",
+  "label": "Travis Scott",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "7D9B2B36-0EE8-4211-B745-13FB8F4002EB",
+  "resolved_name": "Travi$ Scott"
+ },
+ {
+  "id": "artist-bad-bunny",
+  "label": "Bad Bunny",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "BDA1B73F-10E7-4D09-AC51-B796CCEC5FF3",
+  "resolved_name": "Bad Bunny"
+ },
+ {
+  "id": "artist-peso-pluma",
+  "label": "Peso Pluma",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "CC64E9A6-0432-47EA-9877-071FF8F413C4",
+  "resolved_name": "Peso Pluma"
+ },
+ {
+  "id": "artist-karol-g",
+  "label": "Karol G",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "658495BB-DF77-472E-A6B2-9E37FF248FB3",
+  "resolved_name": "Karol G"
+ },
+ {
+  "id": "artist-rosalía",
+  "label": "Rosalía",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "8BE95420-BCDA-4B00-871F-247A55D35594",
+  "resolved_name": "Rosalía"
+ },
+ {
+  "id": "artist-bts",
+  "label": "BTS",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "F347D506-CB6F-46FA-9A8B-AFBC31C71A1A",
+  "resolved_name": "BTS"
+ },
+ {
+  "id": "artist-blackpink",
+  "label": "BLACKPINK",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "AFB6CA3D-9620-4D8B-9958-6727BA40AFA6",
+  "resolved_name": "BLACKPINK"
+ },
+ {
+  "id": "artist-aphex-twin",
+  "label": "Aphex Twin",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "4278382F-4991-4D63-B207-942D86A26ACB",
+  "resolved_name": "Aphex Twin"
+ },
+ {
+  "id": "artist-daft-punk",
+  "label": "Daft Punk",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "012EF80C-B187-4ECB-9C3D-9CA5228B503C",
+  "resolved_name": "Daft Punk"
+ },
+ {
+  "id": "artist-peggy-gou",
+  "label": "Peggy Gou",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "CCCDAEFE-96FC-414B-9FBD-F07D3D929FB6",
+  "resolved_name": "PEGGY GOU"
+ },
+ {
+  "id": "artist-charlotte-de-witte",
+  "label": "Charlotte de Witte",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "83EB2335-C9ED-4418-B25C-0A450F5F7C63",
+  "resolved_name": "Charlotte de Witte"
+ },
+ {
+  "id": "artist-kraftwerk",
+  "label": "Kraftwerk",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "202AE914-AF28-4D79-B328-9D848B643B86",
+  "resolved_name": "Kraftwerk"
+ },
+ {
+  "id": "artist-morgan-wallen",
+  "label": "Morgan Wallen",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "59DCDFA8-5082-47D9-B3E5-2B49CF2A778F",
+  "resolved_name": "Morgan Wallen"
+ },
+ {
+  "id": "artist-johnny-cash",
+  "label": "Johnny Cash",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "7750E5CF-DD08-4836-9634-AB11246AAE7B",
+  "resolved_name": "Johnny Cash"
+ },
+ {
+  "id": "artist-metallica",
+  "label": "Metallica",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "C445C761-CB38-4FEE-B085-D35F444A04DF",
+  "resolved_name": "Metallica"
+ },
+ {
+  "id": "artist-rammstein",
+  "label": "Rammstein",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "EC0AFFC5-3D07-40AD-AB32-2C758DA9D667",
+  "resolved_name": "Rammstein"
+ },
+ {
+  "id": "artist-ludovico-einaudi",
+  "label": "Ludovico Einaudi",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "C9FB5AB7-7509-41C5-B7DD-1309C9C6CFB1",
+  "resolved_name": "Ludovico Einaudi"
+ },
+ {
+  "id": "artist-miles-davis",
+  "label": "Miles Davis",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "578CFC26-B696-449A-9655-3FB270DDA725",
+  "resolved_name": "Miles Davis"
+ },
+ {
+  "id": "artist-burna-boy",
+  "label": "Burna Boy",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "4A322BDD-04A3-4369-8234-B38A7FB485D9",
+  "resolved_name": "Burna Boy"
+ },
+ {
+  "id": "artist-wizkid",
+  "label": "Wizkid",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "C510E01A-E17C-45FC-8DCE-64A963A121A4",
+  "resolved_name": "Wizkid"
+ },
+ {
+  "id": "artist-taylor-swift",
+  "label": "Taylor Swift",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "4BBEF799-A0C4-4110-AB01-39216993C312",
+  "resolved_name": "Taylor Swift"
+ },
+ {
+  "id": "artist-beyoncé",
+  "label": "Beyoncé",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "F6754C46-B3E7-457F-8B7E-06C613597320",
+  "resolved_name": "Beyoncé"
+ },
+ {
+  "id": "artist-ed-sheeran",
+  "label": "Ed Sheeran",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "058B79A3-49F5-4927-9AB6-DE713C706796",
+  "resolved_name": "Ed Sheeran"
+ },
+ {
+  "id": "artist-coldplay",
+  "label": "Coldplay",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "B6FA456F-B729-4700-B01F-E82AD3AC8ADA",
+  "resolved_name": "Coldplay"
+ },
+ {
+  "id": "artist-billie-eilish",
+  "label": "Billie Eilish",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "D7BCE4CD-5135-4608-8A7D-78E08FFD52F3",
+  "resolved_name": "Billie Eilish"
+ },
+ {
+  "id": "artist-david-guetta",
+  "label": "David Guetta",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "EB042810-1AAC-4170-B781-38FCB7F012A2",
+  "resolved_name": "David Guetta"
+ },
+ {
+  "id": "artist-arijit-singh",
+  "label": "Arijit Singh",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "924C8504-4BD8-4615-AB2D-1C16880A8A62",
+  "resolved_name": "Arijit Singh"
+ },
+ {
+  "id": "artist-fairuz",
+  "label": "Fairuz",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "385D9F2E-340C-416F-920C-767496FA20C7",
+  "resolved_name": "Fairuz"
+ },
+ {
+  "id": "artist-tarkan",
+  "label": "Tarkan",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "39F060B0-9D2E-4F37-93ED-F590FEA4FC7E",
+  "resolved_name": "Tarkan"
+ },
+ {
+  "id": "artist-chappell-roan",
+  "label": "Chappell Roan",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "1C8D8828-5739-4304-9506-BA01B3D63516",
+  "resolved_name": "Chappell Roan"
+ },
+ {
+  "id": "artist-kylie-minogue",
+  "label": "Kylie Minogue",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "742BAD50-D6B3-43C6-96AD-701AE2FFC420",
+  "resolved_name": "Kylie Minogue"
+ },
+ {
+  "id": "brand-gucci",
+  "label": "Gucci",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "84B18312-3C2B-41A9-863B-89651C2F6A2C",
+  "resolved_name": "Gucci"
+ },
+ {
+  "id": "brand-hermès",
+  "label": "Hermès",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "EC1EFF80-25D5-48C1-A03A-B9C73166CDDD",
+  "resolved_name": "Hermès"
+ },
+ {
+  "id": "brand-louis-vuitton",
+  "label": "Louis Vuitton",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "5760BF0A-EBDF-4B9A-88CD-69F4BF08C362",
+  "resolved_name": "Louis Vuitton"
+ },
+ {
+  "id": "brand-rolex",
+  "label": "Rolex",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "B1673630-172B-4B51-8A21-A60D82DF3FBF",
+  "resolved_name": "Rolex"
+ },
+ {
+  "id": "brand-supreme",
+  "label": "Supreme",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "7161ADA0-8DC8-471E-A4A8-61EE15578400",
+  "resolved_name": "Supreme"
+ },
+ {
+  "id": "brand-carhartt",
+  "label": "Carhartt",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "2D69DB33-B4DF-4879-B3DC-308E3402A1FD",
+  "resolved_name": "Carhartt"
+ },
+ {
+  "id": "brand-nike",
+  "label": "Nike",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "C70CE2B8-0AD1-4150-BF18-5A6347F2E860",
+  "resolved_name": "Nike"
+ },
+ {
+  "id": "brand-stüssy",
+  "label": "Stüssy",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "92384FD1-363D-4423-926C-EAF478CE079B",
+  "resolved_name": "Stüssy"
+ },
+ {
+  "id": "brand-patagonia",
+  "label": "Patagonia",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "DB4CE34E-3A63-4947-946F-9D52502C5762",
+  "resolved_name": "Patagonia"
+ },
+ {
+  "id": "brand-arc-teryx",
+  "label": "Arc'teryx",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "B2A2238B-5FDC-46CD-B6F9-A32DB1474C70",
+  "resolved_name": "Arc'teryx"
+ },
+ {
+  "id": "brand-lululemon",
+  "label": "Lululemon",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "D9B9B404-7B35-4E4B-A0CE-4CAB8155FE9E",
+  "resolved_name": "Lululemon"
+ },
+ {
+  "id": "brand-aesop",
+  "label": "Aesop",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "32F867B9-E6DF-44C3-BCE4-40160C7ED5E4",
+  "resolved_name": "Aesop"
+ },
+ {
+  "id": "brand-equinox",
+  "label": "Equinox",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "A09F35D3-38CB-4657-9562-ED485E715D25",
+  "resolved_name": "Equinox"
+ },
+ {
+  "id": "brand-whole-foods-market",
+  "label": "Whole Foods Market",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "1E5D90F5-5E0D-4486-B651-D0E7B8A6BE23",
+  "resolved_name": "Whole Foods Market"
+ },
+ {
+  "id": "brand-zara",
+  "label": "Zara",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "74A44B01-5C99-4754-9585-F487D21C543D",
+  "resolved_name": "Zara"
+ },
+ {
+  "id": "brand-h-m",
+  "label": "H&M",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "108EB684-257B-42D7-84E5-6E9D8BE3E793",
+  "resolved_name": "H&M"
+ },
+ {
+  "id": "brand-uniqlo",
+  "label": "Uniqlo",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "46C9F889-EC89-4715-A767-DEABACF52C41",
+  "resolved_name": "Uniqlo"
+ },
+ {
+  "id": "brand-birkenstock",
+  "label": "Birkenstock",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "E43E58D0-7342-496E-BEE3-0022BFEB1AFC",
+  "resolved_name": "Birkenstock"
+ },
+ {
+  "id": "brand-dr--martens",
+  "label": "Dr. Martens",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "F59D6DB5-5A85-48C6-A2EC-CAAE334D4348",
+  "resolved_name": "Dr. Martens"
+ },
+ {
+  "id": "brand-ralph-lauren",
+  "label": "Ralph Lauren",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "2723B38E-C3E2-435F-A77B-A94A92D68D07",
+  "resolved_name": "Ralph Lauren"
+ },
+ {
+  "id": "brand-levi-s",
+  "label": "Levi's",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "EE2B58FF-37F6-4521-912F-55EBC25D83E2",
+  "resolved_name": "Levi Strauss & Co."
+ },
+ {
+  "id": "brand-tesla",
+  "label": "Tesla",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "29B49E3F-A0EC-42C6-A453-38B1C20D8374",
+  "resolved_name": "Tesla"
+ },
+ {
+  "id": "brand-ikea",
+  "label": "IKEA",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "7E9A2E74-1CB5-43E9-8B74-69CA8283BFBD",
+  "resolved_name": "IKEA"
+ },
+ {
+  "id": "brand-mcdonald-s",
+  "label": "McDonald's",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "8417D6F9-C8C7-40AD-BE49-0987A4663228",
+  "resolved_name": "McDonald's"
+ },
+ {
+  "id": "brand-starbucks",
+  "label": "Starbucks",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "B13C02E3-BA3C-4B39-85B4-ACF12FEBC892",
+  "resolved_name": "Starbucks"
+ },
+ {
+  "id": "brand-harley-davidson",
+  "label": "Harley-Davidson",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "8FD09C3A-7362-4749-BDCE-12C3933FDC25",
+  "resolved_name": "Harley-Davidson"
+ },
+ {
+  "id": "brand-walmart",
+  "label": "Walmart",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "D72865CB-DDB5-4202-96A4-D0415C0ACBF3",
+  "resolved_name": "Walmart"
+ },
+ {
+  "id": "movie-parasite",
+  "label": "Parasite",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "A499EC25-7FF6-46DE-9DA5-3E78E99B9E26",
+  "resolved_name": "Parasite"
+ },
+ {
+  "id": "movie-moonlight",
+  "label": "Moonlight",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "2955F3C4-36AB-49F3-A818-3597F35EF46C",
+  "resolved_name": "Moonlight"
+ },
+ {
+  "id": "movie-the-grand-budapest-hotel",
+  "label": "The Grand Budapest Hotel",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "DF788007-B5EA-4F29-872B-96BCB8EEC42F",
+  "resolved_name": "The Grand Budapest Hotel"
+ },
+ {
+  "id": "movie-portrait-of-a-lady-on-fire",
+  "label": "Portrait of a Lady on Fire",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "66EBD81E-3F1B-4913-AF28-FD197DC49EE9",
+  "resolved_name": "Portrait of a Lady on Fire"
+ },
+ {
+  "id": "movie-lost-in-translation",
+  "label": "Lost in Translation",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "603C7E42-C952-45CB-8B6F-3B803FEFB2F7",
+  "resolved_name": "Lost in Translation"
+ },
+ {
+  "id": "movie-barbie",
+  "label": "Barbie",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "BAF6FB9E-7E2E-4008-944B-97C0CF430D41",
+  "resolved_name": "Barbie"
+ },
+ {
+  "id": "movie-fast-x",
+  "label": "Fast X",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "2B8CA5A9-FE7E-4E71-B2FA-23749E0BE057",
+  "resolved_name": "Fast X"
+ },
+ {
+  "id": "movie-avengers--endgame",
+  "label": "Avengers: Endgame",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "813B0455-6AD2-4802-B4B5-314799249A9F",
+  "resolved_name": "Avengers: Endgame"
+ },
+ {
+  "id": "movie-top-gun--maverick",
+  "label": "Top Gun: Maverick",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "63109D8F-F736-42BF-BF29-460BB2AE0D2F",
+  "resolved_name": "Top Gun: Maverick"
+ },
+ {
+  "id": "tv-succession",
+  "label": "Succession",
+  "kind": "tv",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "65EAC55F-6FDC-452D-A633-A9E9F2BBD45E",
+  "resolved_name": "Succession"
+ },
+ {
+  "id": "tv-euphoria",
+  "label": "Euphoria",
+  "kind": "tv",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "5A82F9BC-10F6-4A45-8097-6B1E147B7824",
+  "resolved_name": "Euphoria"
+ },
+ {
+  "id": "tv-breaking-bad",
+  "label": "Breaking Bad",
+  "kind": "tv",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "D03D0913-A7B9-4C46-BFEB-958C1B3FA387",
+  "resolved_name": "Breaking Bad"
+ },
+ {
+  "id": "tv-rupaul-s-drag-race",
+  "label": "RuPaul's Drag Race",
+  "kind": "tv",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "F484DCB5-3576-49FF-A8F6-8B3F3A9C3056",
+  "resolved_name": "RuPaul's Drag Race"
+ },
+ {
+  "id": "tv-friends",
+  "label": "Friends",
+  "kind": "tv",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "4E62202B-3672-4B2E-A21F-C5EA4A0BA01F",
+  "resolved_name": "Friends"
+ },
+ {
+  "id": "tv-love-island",
+  "label": "Love Island",
+  "kind": "tv",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "29D5D393-174D-4194-AB12-9F917BA156FA",
+  "resolved_name": "Love Island"
+ },
+ {
+  "id": "podcast-the-joe-rogan-experience",
+  "label": "The Joe Rogan Experience",
+  "kind": "podcast",
+  "group": "culture",
+  "key": "signal.interests.entities",
+  "val": "2BBC8913-13CA-47A3-BCD0-B48E70D6B005",
+  "resolved_name": "The Joe Rogan Experience"
+ },
+ {
+  "id": "person-dave-chappelle",
+  "label": "Dave Chappelle",
+  "kind": "person",
+  "group": "culture",
+  "key": "signal.interests.entities",
+  "val": "85F62979-0C0D-493C-9426-B83C23DBA7EC",
+  "resolved_name": "Dave Chappelle"
+ },
+ {
+  "id": "person-kevin-hart",
+  "label": "Kevin Hart",
+  "kind": "person",
+  "group": "culture",
+  "key": "signal.interests.entities",
+  "val": "D3E9FC88-9837-46A5-8F0F-A69FD4D18082",
+  "resolved_name": "Kevin Hart"
+ },
+ {
+  "id": "person-john-mulaney",
+  "label": "John Mulaney",
+  "kind": "person",
+  "group": "culture",
+  "key": "signal.interests.entities",
+  "val": "BDA4DDC1-E7C1-410E-8001-C1E17E29465C",
+  "resolved_name": "John Mulaney"
+ },
+ {
+  "id": "brand-real-madrid-cf",
+  "label": "Real Madrid CF",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "3AE1EAA9-1A61-4AEC-BBC5-47C5B8ABC720",
+  "resolved_name": "Real Madrid CF"
+ },
+ {
+  "id": "brand-fc-barcelona",
+  "label": "FC Barcelona",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "AB274E13-8E14-4A39-BCB6-82977B9DB380",
+  "resolved_name": "FC Barcelona"
+ },
+ {
+  "id": "brand-manchester-united",
+  "label": "Manchester United",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "D719B77A-E9A2-4E07-BF7B-F6ED1C9521C6",
+  "resolved_name": "Manchester United F.C."
+ },
+ {
+  "id": "brand-los-angeles-lakers",
+  "label": "Los Angeles Lakers",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "9EA0A171-B6E8-49BE-A216-739460F6FC91",
+  "resolved_name": "Los Angeles Lakers"
+ },
+ {
+  "id": "brand-ultimate-fighting-championship",
+  "label": "Ultimate Fighting Championship",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "C07C6DB7-CC47-40C3-837C-C482678A1961",
+  "resolved_name": "Ultimate Fighting Championship"
+ },
+ {
+  "id": "brand-formula-one",
+  "label": "Formula One",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "096748F7-CBE7-40A9-A23D-C1CF0F28C99A",
+  "resolved_name": "Formula One"
+ },
+ {
+  "id": "brand-new-york-yankees",
+  "label": "New York Yankees",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "709D89A7-455A-40E4-A0D3-E77201C1C630",
+  "resolved_name": "New York Yankees"
+ },
+ {
+  "id": "brand-liga-mx",
+  "label": "Liga MX",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "50FAD38B-E270-4534-9A42-66447714D1D2",
+  "resolved_name": "Liga Mx"
+ },
+ {
+  "id": "tag-vegan",
+  "label": "Vegan restaurants",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:vegan"
+ },
+ {
+  "id": "tag-vietnamese",
+  "label": "Vietnamese food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:vietnamese"
+ },
+ {
+  "id": "tag-turkish",
+  "label": "Turkish food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:turkish"
+ },
+ {
+  "id": "tag-middle-eastern",
+  "label": "Middle Eastern food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:middle_eastern"
+ },
+ {
+  "id": "tag-thai",
+  "label": "Thai food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:thai"
+ },
+ {
+  "id": "tag-indian",
+  "label": "Indian food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:indian"
+ },
+ {
+  "id": "tag-korean",
+  "label": "Korean food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:korean"
+ },
+ {
+  "id": "tag-chinese",
+  "label": "Chinese food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:chinese"
+ },
+ {
+  "id": "tag-dim-sum",
+  "label": "Dim sum",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:dim_sum"
+ },
+ {
+  "id": "tag-sushi",
+  "label": "Sushi",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:sushi"
+ },
+ {
+  "id": "tag-taco",
+  "label": "Tacos",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:taco"
+ },
+ {
+  "id": "tag-ethiopian",
+  "label": "Ethiopian food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:ethiopian"
+ },
+ {
+  "id": "tag-caribbean",
+  "label": "Caribbean food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:caribbean"
+ },
+ {
+  "id": "tag-halal",
+  "label": "Halal food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:halal"
+ },
+ {
+  "id": "tag-kebab-shop",
+  "label": "Kebab shops",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:kebab_shop"
+ },
+ {
+  "id": "tag-falafel",
+  "label": "Falafel",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:falafel"
+ },
+ {
+  "id": "tag-kosher",
+  "label": "Kosher food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:kosher"
+ },
+ {
+  "id": "tag-tapas",
+  "label": "Tapas",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:tapas"
+ },
+ {
+  "id": "tag-french",
+  "label": "French food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:french"
+ },
+ {
+  "id": "tag-italian",
+  "label": "Italian food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:italian"
+ },
+ {
+  "id": "tag-pizza",
+  "label": "Pizza",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:pizza"
+ },
+ {
+  "id": "tag-burgers",
+  "label": "Burgers",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:burgers"
+ },
+ {
+  "id": "tag-fast-food",
+  "label": "Fast food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:fast_food"
+ },
+ {
+  "id": "tag-fine-dining",
+  "label": "Fine dining",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:fine_dining"
+ },
+ {
+  "id": "tag-steak-house",
+  "label": "Steakhouses",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:steak_house"
+ },
+ {
+  "id": "tag-brunch",
+  "label": "Brunch",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:brunch"
+ },
+ {
+  "id": "tag-bakery",
+  "label": "Bakeries",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:bakery"
+ },
+ {
+  "id": "tag-bubble-tea-store",
+  "label": "Bubble tea",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:bubble_tea_store"
+ },
+ {
+  "id": "tag-organic",
+  "label": "Organic food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:organic"
+ },
+ {
+  "id": "tag-soul-food",
+  "label": "Soul food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:soul_food"
+ },
+ {
+  "id": "tag-coffee-roasters",
+  "label": "Coffee roasters",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:coffee_roasters"
+ },
+ {
+  "id": "tag-coffee-shop",
+  "label": "Coffee shops",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:coffee_shop"
+ },
+ {
+  "id": "tag-wine-bar",
+  "label": "Wine bars",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:wine_bar"
+ },
+ {
+  "id": "tag-cocktail-bar",
+  "label": "Cocktail bars",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:cocktail_bar"
+ },
+ {
+  "id": "tag-pub",
+  "label": "Pubs",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:pub"
+ },
+ {
+  "id": "tag-gastropub",
+  "label": "Gastropubs",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:gastropub"
+ },
+ {
+  "id": "tag-brewery",
+  "label": "Breweries",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:brewery"
+ },
+ {
+  "id": "tag-night-club",
+  "label": "Night clubs",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:night_club"
+ },
+ {
+  "id": "tag-jazz-club",
+  "label": "Jazz clubs",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:jazz_club"
+ },
+ {
+  "id": "tag-live-music-venue",
+  "label": "Live music venues",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:live_music_venue"
+ },
+ {
+  "id": "tag-karaoke",
+  "label": "Karaoke",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:karaoke"
+ },
+ {
+  "id": "tag-salsa-bar",
+  "label": "Salsa bars",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:salsa_bar"
+ },
+ {
+  "id": "tag-gay-bar",
+  "label": "Gay bars",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:gay_bar"
+ },
+ {
+  "id": "tag-gay-night-club",
+  "label": "Gay night clubs",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:gay_night_club"
+ },
+ {
+  "id": "tag-queer-bar",
+  "label": "Queer bars",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:queer_bar"
+ },
+ {
+  "id": "tag-lesbian-bar",
+  "label": "Lesbian bars",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:lesbian_bar"
+ },
+ {
+  "id": "tag-record-store",
+  "label": "Record stores",
+  "kind": "place-tag",
+  "group": "culture",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:record_store"
+ },
+ {
+  "id": "tag-art-gallery",
+  "label": "Art galleries",
+  "kind": "place-tag",
+  "group": "culture",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:art_gallery"
+ },
+ {
+  "id": "tag-book-store",
+  "label": "Bookstores",
+  "kind": "place-tag",
+  "group": "culture",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:book_store"
+ },
+ {
+  "id": "tag-museum",
+  "label": "Museums",
+  "kind": "place-tag",
+  "group": "culture",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:museum"
+ },
+ {
+  "id": "tag-theater-company",
+  "label": "Theater companies",
+  "kind": "place-tag",
+  "group": "culture",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:theater_company"
+ },
+ {
+  "id": "tag-tattoo-shop",
+  "label": "Tattoo shops",
+  "kind": "place-tag",
+  "group": "culture",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:tattoo_shop"
+ },
+ {
+  "id": "tag-vintage-clothing-store",
+  "label": "Vintage clothing",
+  "kind": "place-tag",
+  "group": "fashion",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:vintage_clothing_store"
+ },
+ {
+  "id": "tag-thrift-store",
+  "label": "Thrift stores",
+  "kind": "place-tag",
+  "group": "fashion",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:thrift_store"
+ },
+ {
+  "id": "tag-boutique",
+  "label": "Boutiques",
+  "kind": "place-tag",
+  "group": "fashion",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:boutique"
+ },
+ {
+  "id": "tag-skateboard-shop",
+  "label": "Skate shops",
+  "kind": "place-tag",
+  "group": "fashion",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:skateboard_shop"
+ },
+ {
+  "id": "tag-yoga-studio",
+  "label": "Yoga studios",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:yoga_studio"
+ },
+ {
+  "id": "tag-pilates-studio",
+  "label": "Pilates studios",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:pilates_studio"
+ },
+ {
+  "id": "tag-gym",
+  "label": "Gyms",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:gym"
+ },
+ {
+  "id": "tag-rock-climbing-gym",
+  "label": "Climbing gyms",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:rock_climbing_gym"
+ },
+ {
+  "id": "tag-spa",
+  "label": "Spas",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:spa"
+ },
+ {
+  "id": "tag-golf-club",
+  "label": "Golf clubs",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:golf_club"
+ },
+ {
+  "id": "tag-tennis-club",
+  "label": "Tennis clubs",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:tennis_club"
+ },
+ {
+  "id": "tag-playground",
+  "label": "Playgrounds",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:playground"
+ },
+ {
+  "id": "tag-park",
+  "label": "Parks",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:park"
+ },
+ {
+  "id": "tag-barber-shop",
+  "label": "Barber shops",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:barber_shop"
+ },
+ {
+  "id": "tag-hotel",
+  "label": "Hotels",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:hotel"
+ },
+ {
+  "id": "tag-market",
+  "label": "Markets",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:market"
+ },
+ {
+  "id": "tag-wine-store",
+  "label": "Wine stores",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:wine_store"
+ }
+]

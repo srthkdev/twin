@@ -1,0 +1,608 @@
+{
+ "generatedAt": "2026-10-11T17:40:40.062Z",
+ "mock": true,
+ "split": {
+  "dev": 12,
+  "test": 20
+ },
+ "methods": {
+  "twin": {
+   "label": "Twin (Qloo + density correction)",
+   "hit1": 0.3,
+   "hit3": 1,
+   "mrr": 0.6,
+   "n": 20
+  },
+  "raw": {
+   "label": "Raw Qloo heatmaps (no correction)",
+   "hit1": 0.05,
+   "hit3": 0.15,
+   "mrr": 0.182,
+   "n": 20
+  },
+  "llm": {
+   "label": "LLM only (Claude, no data)",
+   "hit1": 0.3,
+   "hit3": 0.8,
+   "mrr": 0.505,
+   "n": 20
+  },
+  "random": {
+   "label": "Random",
+   "hit1": 0.05,
+   "hit3": 0.3,
+   "mrr": 0.209,
+   "n": 20
+  }
+ },
+ "pairs": [
+  {
+   "a": "los-angeles-silver-lake",
+   "b": "berlin-neukolln-reuterkiez",
+   "split": "test",
+   "source": "https://example.com/mock-source/time-out/1",
+   "quote": "\"Silver Lake is basically Neukölln (Reuterkiez) with different weather.\" (Time Out, demo data)",
+   "rank": {
+    "twin": 1,
+    "raw": 16,
+    "llm": 3,
+    "random": 1
+   }
+  },
+  {
+   "a": "los-angeles-echo-park",
+   "b": "berlin-friedrichshain",
+   "split": "test",
+   "source": "https://example.com/mock-source/the-guardian/2",
+   "quote": "\"Echo Park is basically Friedrichshain with different weather.\" (The Guardian, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 10,
+    "llm": 1,
+    "random": 3
+   }
+  },
+  {
+   "a": "los-angeles-beverly-hills",
+   "b": "paris-passy",
+   "split": "test",
+   "source": "https://example.com/mock-source/cond-nast-traveler/3",
+   "quote": "\"Beverly Hills is basically Passy with different weather.\" (Condé Nast Traveler, demo data)",
+   "rank": {
+    "twin": 1,
+    "raw": 5,
+    "llm": 3,
+    "random": 9
+   }
+  },
+  {
+   "a": "los-angeles-compton",
+   "b": "london-brixton",
+   "split": "dev",
+   "source": "https://example.com/mock-source/vice/4",
+   "quote": "\"Compton is basically Brixton with different weather.\" (Vice, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 10,
+    "llm": 1,
+    "random": 17
+   }
+  },
+  {
+   "a": "los-angeles-koreatown",
+   "b": "new-york-flushing",
+   "split": "test",
+   "source": "https://example.com/mock-source/eater/5",
+   "quote": "\"Koreatown is basically Flushing with different weather.\" (Eater, demo data)",
+   "rank": {
+    "twin": 1,
+    "raw": 20,
+    "llm": 3,
+    "random": 17
+   }
+  },
+  {
+   "a": "los-angeles-boyle-heights",
+   "b": "mexico-city-tepito",
+   "split": "test",
+   "source": "https://example.com/mock-source/la-times/6",
+   "quote": "\"Boyle Heights is basically Tepito with different weather.\" (LA Times, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 10,
+    "llm": 11,
+    "random": 3
+   }
+  },
+  {
+   "a": "los-angeles-venice",
+   "b": "mexico-city-condesa",
+   "split": "test",
+   "source": "https://example.com/mock-source/monocle/7",
+   "quote": "\"Venice is basically Condesa with different weather.\" (Monocle, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 17,
+    "llm": 3,
+    "random": 12
+   }
+  },
+  {
+   "a": "los-angeles-hollywood",
+   "b": "london-soho",
+   "split": "test",
+   "source": "https://example.com/mock-source/lonely-planet/8",
+   "quote": "\"Hollywood is basically Soho with different weather.\" (Lonely Planet, demo data)",
+   "rank": {
+    "twin": 1,
+    "raw": 18,
+    "llm": 7,
+    "random": 2
+   }
+  },
+  {
+   "a": "new-york-williamsburg",
+   "b": "berlin-kreuzberg-so36",
+   "split": "test",
+   "source": "https://example.com/mock-source/the-guardian/9",
+   "quote": "\"Williamsburg is basically Kreuzberg (SO36) with different weather.\" (The Guardian, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 7,
+    "llm": 9,
+    "random": 20
+   }
+  },
+  {
+   "a": "new-york-williamsburg",
+   "b": "london-shoreditch",
+   "split": "dev",
+   "source": "https://example.com/mock-source/time-out/10",
+   "quote": "\"Williamsburg is basically Shoreditch with different weather.\" (Time Out, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 2,
+    "llm": 1,
+    "random": 9
+   }
+  },
+  {
+   "a": "new-york-bushwick",
+   "b": "berlin-neukolln-reuterkiez",
+   "split": "dev",
+   "source": "https://example.com/mock-source/vice/11",
+   "quote": "\"Bushwick is basically Neukölln (Reuterkiez) with different weather.\" (Vice, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 15,
+    "llm": 1,
+    "random": 16
+   }
+  },
+  {
+   "a": "new-york-upper-east-side",
+   "b": "paris-saint-germain",
+   "split": "test",
+   "source": "https://example.com/mock-source/cond-nast-traveler/12",
+   "quote": "\"Upper East Side is basically Saint-Germain with different weather.\" (Condé Nast Traveler, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 18,
+    "llm": 3,
+    "random": 14
+   }
+  },
+  {
+   "a": "new-york-harlem",
+   "b": "london-brixton",
+   "split": "test",
+   "source": "https://example.com/mock-source/bbc-culture/13",
+   "quote": "\"Harlem is basically Brixton with different weather.\" (BBC Culture, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 10,
+    "llm": 1,
+    "random": 12
+   }
+  },
+  {
+   "a": "new-york-east-village",
+   "b": "paris-belleville",
+   "split": "dev",
+   "source": "https://example.com/mock-source/time-out/14",
+   "quote": "\"East Village is basically Belleville with different weather.\" (Time Out, demo data)",
+   "rank": {
+    "twin": 6,
+    "raw": 8,
+    "llm": 1,
+    "random": 6
+   }
+  },
+  {
+   "a": "new-york-soho",
+   "b": "paris-le-marais",
+   "split": "test",
+   "source": "https://example.com/mock-source/vogue/15",
+   "quote": "\"SoHo is basically Le Marais with different weather.\" (Vogue, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 16,
+    "llm": 3,
+    "random": 10
+   }
+  },
+  {
+   "a": "new-york-park-slope",
+   "b": "berlin-prenzlauer-berg",
+   "split": "test",
+   "source": "https://example.com/mock-source/nyt-travel/16",
+   "quote": "\"Park Slope is basically Prenzlauer Berg with different weather.\" (NYT Travel, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 8,
+    "llm": 1,
+    "random": 2
+   }
+  },
+  {
+   "a": "london-shoreditch",
+   "b": "berlin-friedrichshain",
+   "split": "dev",
+   "source": "https://example.com/mock-source/time-out/17",
+   "quote": "\"Shoreditch is basically Friedrichshain with different weather.\" (Time Out, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 8,
+    "llm": 3,
+    "random": 8
+   }
+  },
+  {
+   "a": "london-camden",
+   "b": "berlin-kreuzberg-so36",
+   "split": "dev",
+   "source": "https://example.com/mock-source/nme/18",
+   "quote": "\"Camden is basically Kreuzberg (SO36) with different weather.\" (NME, demo data)",
+   "rank": {
+    "twin": 5,
+    "raw": 17,
+    "llm": 3,
+    "random": 9
+   }
+  },
+  {
+   "a": "london-mayfair",
+   "b": "paris-champs-elysees",
+   "split": "test",
+   "source": "https://example.com/mock-source/cond-nast-traveler/19",
+   "quote": "\"Mayfair is basically Champs-Élysées with different weather.\" (Condé Nast Traveler, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 2,
+    "llm": 2,
+    "random": 20
+   }
+  },
+  {
+   "a": "london-notting-hill",
+   "b": "mexico-city-coyoacan",
+   "split": "dev",
+   "source": "https://example.com/mock-source/monocle/20",
+   "quote": "\"Notting Hill is basically Coyoacán with different weather.\" (Monocle, demo data)",
+   "rank": {
+    "twin": 4,
+    "raw": 5,
+    "llm": 3,
+    "random": 3
+   }
+  },
+  {
+   "a": "london-soho",
+   "b": "berlin-schoneberg",
+   "split": "test",
+   "source": "https://example.com/mock-source/time-out/21",
+   "quote": "\"Soho is basically Schöneberg with different weather.\" (Time Out, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 7,
+    "llm": 12,
+    "random": 18
+   }
+  },
+  {
+   "a": "berlin-prenzlauer-berg",
+   "b": "paris-batignolles",
+   "split": "dev",
+   "source": "https://example.com/mock-source/monocle/22",
+   "quote": "\"Prenzlauer Berg is basically Batignolles with different weather.\" (Monocle, demo data)",
+   "rank": {
+    "twin": 1,
+    "raw": 5,
+    "llm": 2,
+    "random": 21
+   }
+  },
+  {
+   "a": "berlin-charlottenburg",
+   "b": "paris-passy",
+   "split": "test",
+   "source": "https://example.com/mock-source/the-local/23",
+   "quote": "\"Charlottenburg is basically Passy with different weather.\" (The Local, demo data)",
+   "rank": {
+    "twin": 1,
+    "raw": 3,
+    "llm": 3,
+    "random": 5
+   }
+  },
+  {
+   "a": "berlin-mitte",
+   "b": "new-york-soho",
+   "split": "dev",
+   "source": "https://example.com/mock-source/vogue/24",
+   "quote": "\"Mitte is basically SoHo with different weather.\" (Vogue, demo data)",
+   "rank": {
+    "twin": 4,
+    "raw": 4,
+    "llm": 4,
+    "random": 15
+   }
+  },
+  {
+   "a": "paris-belleville",
+   "b": "new-york-bushwick",
+   "split": "dev",
+   "source": "https://example.com/mock-source/eater/25",
+   "quote": "\"Belleville is basically Bushwick with different weather.\" (Eater, demo data)",
+   "rank": {
+    "twin": 5,
+    "raw": 14,
+    "llm": 3,
+    "random": 6
+   }
+  },
+  {
+   "a": "paris-pigalle",
+   "b": "los-angeles-west-hollywood",
+   "split": "test",
+   "source": "https://example.com/mock-source/time-out/26",
+   "quote": "\"Pigalle is basically West Hollywood with different weather.\" (Time Out, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 4,
+    "llm": 1,
+    "random": 14
+   }
+  },
+  {
+   "a": "mexico-city-roma-norte",
+   "b": "new-york-williamsburg",
+   "split": "test",
+   "source": "https://example.com/mock-source/nyt-travel/27",
+   "quote": "\"Roma Norte is basically Williamsburg with different weather.\" (NYT Travel, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 1,
+    "llm": 2,
+    "random": 19
+   }
+  },
+  {
+   "a": "mexico-city-condesa",
+   "b": "paris-canal-saint-martin",
+   "split": "test",
+   "source": "https://example.com/mock-source/monocle/28",
+   "quote": "\"Condesa is basically Canal Saint-Martin with different weather.\" (Monocle, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 11,
+    "llm": 1,
+    "random": 11
+   }
+  },
+  {
+   "a": "mexico-city-polanco",
+   "b": "los-angeles-beverly-hills",
+   "split": "test",
+   "source": "https://example.com/mock-source/cond-nast-traveler/29",
+   "quote": "\"Polanco is basically Beverly Hills with different weather.\" (Condé Nast Traveler, demo data)",
+   "rank": {
+    "twin": 1,
+    "raw": 7,
+    "llm": 1,
+    "random": 3
+   }
+  },
+  {
+   "a": "mexico-city-tepito",
+   "b": "los-angeles-east-la",
+   "split": "dev",
+   "source": "https://example.com/mock-source/la-times/30",
+   "quote": "\"Tepito is basically East LA with different weather.\" (LA Times, demo data)",
+   "rank": {
+    "twin": 3,
+    "raw": 14,
+    "llm": 1,
+    "random": 13
+   }
+  },
+  {
+   "a": "los-angeles-highland-park",
+   "b": "london-hackney",
+   "split": "test",
+   "source": "https://example.com/mock-source/time-out/31",
+   "quote": "\"Highland Park is basically Hackney with different weather.\" (Time Out, demo data)",
+   "rank": {
+    "twin": 2,
+    "raw": 13,
+    "llm": 3,
+    "random": 9
+   }
+  },
+  {
+   "a": "berlin-wedding",
+   "b": "paris-saint-denis",
+   "split": "dev",
+   "source": "https://example.com/mock-source/the-guardian/32",
+   "quote": "\"Wedding is basically Saint-Denis with different weather.\" (The Guardian, demo data)",
+   "rank": {
+    "twin": 1,
+    "raw": 5,
+    "llm": 3,
+    "random": 16
+   }
+  }
+ ],
+ "basketSweep": [
+  {
+   "size": 10,
+   "mrr": 0.148
+  },
+  {
+   "size": 20,
+   "mrr": 0.306
+  },
+  {
+   "size": 30,
+   "mrr": 0.382
+  },
+  {
+   "size": 40,
+   "mrr": 0.452
+  },
+  {
+   "size": 50,
+   "mrr": 0.484
+  },
+  {
+   "size": 60,
+   "mrr": 0.519
+  },
+  {
+   "size": 70,
+   "mrr": 0.555
+  },
+  {
+   "size": 80,
+   "mrr": 0.57
+  },
+  {
+   "size": 90,
+   "mrr": 0.573
+  },
+  {
+   "size": 100,
+   "mrr": 0.593
+  }
+ ],
+ "radiusSweep": [
+  {
+   "km": 0.5,
+   "mrr": 0.439
+  },
+  {
+   "km": 0.8,
+   "mrr": 0.507
+  },
+  {
+   "km": 1,
+   "mrr": 0.554
+  },
+  {
+   "km": 1.3,
+   "mrr": 0.569
+  },
+  {
+   "km": 1.6,
+   "mrr": 0.523
+  },
+  {
+   "km": 2,
+   "mrr": 0.461
+  },
+  {
+   "km": 2.5,
+   "mrr": 0.362
+  },
+  {
+   "km": 3,
+   "mrr": 0.247
+  }
+ ],
+ "sanity": [
+  {
+   "city": "los-angeles",
+   "hood": "Compton",
+   "item": "Kendrick Lamar",
+   "pct": 0.98,
+   "raw_pct": 0.64
+  },
+  {
+   "city": "los-angeles",
+   "hood": "Boyle Heights",
+   "item": "Bad Bunny",
+   "pct": 0.95,
+   "raw_pct": 0.61
+  },
+  {
+   "city": "los-angeles",
+   "hood": "East LA",
+   "item": "Peso Pluma",
+   "pct": 0.99,
+   "raw_pct": 0.58
+  },
+  {
+   "city": "los-angeles",
+   "hood": "Silver Lake",
+   "item": "Peso Pluma",
+   "pct": 0.05,
+   "raw_pct": 0.47
+  },
+  {
+   "city": "los-angeles",
+   "hood": "Koreatown",
+   "item": "Korean BBQ",
+   "pct": 0.9,
+   "raw_pct": 0.51
+  },
+  {
+   "city": "berlin",
+   "hood": "Neukölln (Reuterkiez)",
+   "item": "Peggy Gou",
+   "pct": 0.96,
+   "raw_pct": 0.66
+  },
+  {
+   "city": "london",
+   "hood": "Brixton",
+   "item": "Stormzy",
+   "pct": 0.97,
+   "raw_pct": 0.7
+  },
+  {
+   "city": "new-york",
+   "hood": "Williamsburg",
+   "item": "Vinyl record stores",
+   "pct": 0.94,
+   "raw_pct": 0.72
+  },
+  {
+   "city": "paris",
+   "hood": "Passy",
+   "item": "Hermès",
+   "pct": 0.98,
+   "raw_pct": 0.69
+  },
+  {
+   "city": "mexico-city",
+   "hood": "Polanco",
+   "item": "Louis Vuitton",
+   "pct": 0.97,
+   "raw_pct": 0.75
+  }
+ ],
+ "rawCollapse": {
+  "twin_mean_cos_spread": 0.85,
+  "raw_mean_cos_spread": 0.012
+ }
+}

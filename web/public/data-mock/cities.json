@@ -1,0 +1,74 @@
+[
+ {
+  "id": "los-angeles",
+  "name": "Los Angeles",
+  "country": "United States",
+  "center": [
+   -118.32,
+   34.05
+  ],
+  "zoom": 9.6,
+  "cellCount": 1100,
+  "hoodCount": 21
+ },
+ {
+  "id": "new-york",
+  "name": "New York",
+  "country": "United States",
+  "center": [
+   -73.97,
+   40.73
+  ],
+  "zoom": 10.2,
+  "cellCount": 1021,
+  "hoodCount": 21
+ },
+ {
+  "id": "london",
+  "name": "London",
+  "country": "United Kingdom",
+  "center": [
+   -0.1,
+   51.51
+  ],
+  "zoom": 10.2,
+  "cellCount": 1241,
+  "hoodCount": 22
+ },
+ {
+  "id": "berlin",
+  "name": "Berlin",
+  "country": "Germany",
+  "center": [
+   13.4,
+   52.5
+  ],
+  "zoom": 10.3,
+  "cellCount": 1286,
+  "hoodCount": 20
+ },
+ {
+  "id": "mexico-city",
+  "name": "Mexico City",
+  "country": "Mexico",
+  "center": [
+   -99.15,
+   19.4
+  ],
+  "zoom": 10.2,
+  "cellCount": 847,
+  "hoodCount": 20
+ },
+ {
+  "id": "paris",
+  "name": "Paris",
+  "country": "France",
+  "center": [
+   2.35,
+   48.86
+  ],
+  "zoom": 11,
+  "cellCount": 1169,
+  "hoodCount": 21
+ }
+]
