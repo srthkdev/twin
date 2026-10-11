@@ -75,7 +75,7 @@ Rank = rank of the ground-truth twin among all hoods of the target city (1 = bes
 
 ### `evals.json` -> `census` (external census validation, written by `pipeline/census.py`)
 ```json
-"census": { "acsYear": 2023, "cities": ["los-angeles","new-york"], "preregisteredCommit": "384afef",
+"census": { "acsYear": 2023, "cities": ["los-angeles","new-york"], "preregisteredCommit": "4965b70",
   "summary": { "n": 36, "correctSignCorrected": 32, "correctSignRaw": 30, "correctedBeatsRaw": 21,
                "meanAbsRhoCorrected": 0.286, "meanAbsRhoRaw": 0.22, "meanSignedRhoCorrected": 0.246, "meanSignedRhoRaw": 0.196 },
   "rows": [ { "city": "los-angeles", "id": "H01", "label": "Latin artists \u2194 % Hispanic", "items": ["artist-bad-bunny","artist-peso-pluma"],

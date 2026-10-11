@@ -94,7 +94,7 @@ export function EvalsClient() {
           corrected map agree with the census, and does Twin find the twins people already name. Losses are shown next to wins.
         </p>
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-dim">
-          <span>ground truth <span className="text-muted-foreground">e9d159c</span></span>
+          <span>ground truth <span className="text-muted-foreground">edf9056</span></span>
           {census && <span>census hypotheses <span className="text-muted-foreground">{census.preregisteredCommit.slice(0, 7)}</span></span>}
         </div>
       </div>
