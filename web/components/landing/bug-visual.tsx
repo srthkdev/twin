@@ -62,8 +62,8 @@ export function BugVisual() {
             className="aspect-square rounded-[1px] transition-[background-color,transform,opacity] duration-1000 ease-out"
             style={{
               transitionDelay: `${((i % COLS) + Math.floor(i / COLS)) * 14}ms`,
-              backgroundColor: twin ? `hsl(${c.hue} ${c.sat}% ${16 + c.tw * 50}%)` : `hsl(45 5% ${10 + c.raw * 58}%)`,
-              opacity: twin ? 0.35 + c.tw * 0.65 : 0.4 + c.raw * 0.6,
+              backgroundColor: twin ? `hsl(${c.hue} ${c.sat}% ${(16 + c.tw * 50).toFixed(1)}%)` : `hsl(45 5% ${(10 + c.raw * 58).toFixed(1)}%)`,
+              opacity: +(twin ? 0.35 + c.tw * 0.65 : 0.4 + c.raw * 0.6).toFixed(3),
               transform: twin ? `scale(${0.7 + c.tw * 0.3})` : "scale(1)",
             }}
           />

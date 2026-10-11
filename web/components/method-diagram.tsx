@@ -42,7 +42,7 @@ export function MethodDiagram() {
   const bars = useMemo(() => Array.from({ length: N }, (_, i) => 0.15 + (((i * 37) % 13) / 13) * 0.85), []);
 
   const fill = (step: number, v: number) =>
-    step === 2 ? `hsl(34 ${50 + v * 40}% ${9 + v * 50}%)` : `hsl(45 5% ${9 + v * (step === 1 ? 46 : 60)}%)`;
+    step === 2 ? `hsl(34 ${(50 + v * 40).toFixed(1)}% ${(9 + v * 50).toFixed(1)}%)` : `hsl(45 5% ${(9 + v * (step === 1 ? 46 : 60)).toFixed(1)}%)`;
 
   const layers = [raw, base, lift];
 
@@ -69,7 +69,7 @@ export function MethodDiagram() {
                 {li < 3 ? (
                   <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${N}, ${CELL}px)`, gap: GAP }}>
                     {layers[li].map((v, i) => (
-                      <div key={i} className="transition-[background-color] duration-500" style={{ width: CELL, height: CELL, background: fill(li, v) }} />
+                      <div key={i} className="transition-[background-color] duration-500" style={{ width: CELL, height: CELL, backgroundColor: fill(li, v) }} />
                     ))}
                   </div>
                 ) : (
@@ -78,7 +78,7 @@ export function MethodDiagram() {
                     {Array.from({ length: N * N }, (_, i) => {
                       const col = i % N, row = N - 1 - Math.floor(i / N);
                       const lit = row < Math.round(bars[col] * (on ? N : N * 0.75));
-                      return <div key={i} className="transition-[background-color] duration-500" style={{ width: CELL, height: CELL, background: lit ? `hsl(34 85% ${30 + (row / N) * 30}%)` : "hsl(45 5% 9%)" }} />;
+                      return <div key={i} className="transition-[background-color] duration-500" style={{ width: CELL, height: CELL, backgroundColor: lit ? `hsl(34 85% ${(30 + (row / N) * 30).toFixed(1)}%)` : "hsl(45 5% 9%)" }} />;
                     })}
                   </div>
                 )}
