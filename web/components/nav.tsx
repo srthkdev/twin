@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/explore", label: "explore" },
   { href: "/evals", label: "evals" },
   { href: "/method", label: "method" },
+  { href: "/blog", label: "blog" },
 ];
 
 export const NAV_H = 44;

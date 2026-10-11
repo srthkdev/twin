@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="140" viewBox="0 0 520 140" fill="none">
+  <rect width="520" height="140" fill="#0b0b0a"/>
+  <g transform="translate(40 34)">
+    <rect x="0" y="0" width="34" height="34" fill="#f0a03c"/>
+    <rect x="38" y="38" width="34" height="34" fill="#f0a03c"/>
+    <rect x="38.75" y="0.75" width="32.5" height="32.5" stroke="#383631" stroke-width="1.5"/>
+    <rect x="0.75" y="38.75" width="32.5" height="32.5" stroke="#383631" stroke-width="1.5"/>
+  </g>
+  <text x="140" y="92" fill="#e6e3da" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="64" font-weight="600" letter-spacing="-2">twin</text>
+  <text x="296" y="92" fill="#f0a03c" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="64" font-weight="600">.</text>
+  <text x="142" y="118" fill="#8d8a80" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">every neighbourhood has a twin</text>
+</svg>

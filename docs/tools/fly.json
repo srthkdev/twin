@@ -1,0 +1,4 @@
+[{"preload": 9000},
+ {"at": 0.1, "js": "document.querySelectorAll('nextjs-portal').forEach(e => e.remove())"},
+ {"at": 1.5, "js": "[...document.querySelectorAll('aside button')].find(b => /^BERberlin/.test(b.textContent.replace(/\\s/g,'')))?.click()"},
+ {"at": 12.5, "js": "[...document.querySelectorAll('aside tr')].find(r => /Neuk/.test(r.textContent))?.click()"}]

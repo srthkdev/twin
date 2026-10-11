@@ -1,0 +1,2 @@
+[{"preload": 6000},
+ {"at": 0.0, "js": "document.querySelectorAll('nextjs-portal').forEach(e => e.remove()); window.scrollTo(0, 330)"}]
