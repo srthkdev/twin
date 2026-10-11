@@ -1,0 +1,35 @@
+{
+  "note": "Pre-registered BEFORE any correlation with census data was computed. Each hypothesis is applied separately in los-angeles and new-york. Corrected = mean of V over items; Raw = mean of RAW affinity over items; density = d. Spearman across geohash-6 cells (pop >= 500). 'Correct sign' means sign(rho) == expected. 'Corrected beats raw' means expected_sign*rhoCorrected > expected_sign*rhoRaw. All hypotheses are reported, including failures.",
+  "dataSource": "ACS 5-year 2023 tract estimates (table-based summary file bulk download from www2.census.gov, because api.census.gov now requires a key); tract internal points from the 2023 Census Gazetteer tracts file.",
+  "variables": {
+    "pct_hispanic": "B03003_003 / B03003_001",
+    "pct_black": "B02001_003 / B02001_001 (Black alone)",
+    "pct_asian": "B02001_005 / B02001_001 (Asian alone)",
+    "pct_korean": "B02015_005 / B01003_001 (Korean, of total pop)",
+    "pct_chinese": "B02015_002 / B01003_001 (Chinese except Taiwanese, of total pop)",
+    "pct_nhwhite": "B03002_003 / B03002_001",
+    "med_income": "B19013_001 median household income (pop-weighted mean of tract medians)",
+    "med_age": "B01002_001 median age (pop-weighted mean of tract medians)",
+    "pct_bachelor": "(B15003_022+023+024+025) / B15003_001"
+  },
+  "hypotheses": [
+    {"id": "H01", "label": "Latin artists ↔ % Hispanic", "items": ["artist-bad-bunny", "artist-peso-pluma"], "variable": "pct_hispanic", "expected": "+"},
+    {"id": "H02", "label": "Tacos ↔ % Hispanic", "items": ["tag-taco"], "variable": "pct_hispanic", "expected": "+"},
+    {"id": "H03", "label": "Korean food ↔ % Korean", "items": ["tag-korean"], "variable": "pct_korean", "expected": "+"},
+    {"id": "H04", "label": "BTS ↔ % Asian", "items": ["artist-bts"], "variable": "pct_asian", "expected": "+"},
+    {"id": "H05", "label": "Dim sum + Chinese food ↔ % Chinese", "items": ["tag-dim-sum", "tag-chinese"], "variable": "pct_chinese", "expected": "+"},
+    {"id": "H06", "label": "Luxury brands ↔ median income", "items": ["brand-gucci", "brand-hermès", "brand-rolex"], "variable": "med_income", "expected": "+"},
+    {"id": "H07", "label": "Golf + tennis clubs ↔ median income", "items": ["tag-golf-club", "tag-tennis-club"], "variable": "med_income", "expected": "+"},
+    {"id": "H08", "label": "Outdoor/wellness brands ↔ % bachelor's+", "items": ["brand-patagonia", "brand-arc-teryx", "brand-lululemon"], "variable": "pct_bachelor", "expected": "+"},
+    {"id": "H09", "label": "Whole Foods + Aesop + organic ↔ % bachelor's+", "items": ["brand-whole-foods-market", "brand-aesop", "tag-organic"], "variable": "pct_bachelor", "expected": "+"},
+    {"id": "H10", "label": "Night clubs + cocktail bars ↔ median age", "items": ["tag-night-club", "tag-cocktail-bar"], "variable": "med_age", "expected": "-"},
+    {"id": "H11", "label": "Kendrick + Beyoncé ↔ % Black", "items": ["artist-kendrick-lamar", "artist-beyoncé"], "variable": "pct_black", "expected": "+"},
+    {"id": "H12", "label": "Soul food ↔ % Black", "items": ["tag-soul-food"], "variable": "pct_black", "expected": "+"},
+    {"id": "H13", "label": "Morgan Wallen + Harley-Davidson ↔ % non-Hispanic white", "items": ["artist-morgan-wallen", "brand-harley-davidson"], "variable": "pct_nhwhite", "expected": "+"},
+    {"id": "H14", "label": "Fast food ↔ median income", "items": ["tag-fast-food"], "variable": "med_income", "expected": "-"},
+    {"id": "H15", "label": "McDonald's + Walmart ↔ median income", "items": ["brand-mcdonald-s", "brand-walmart"], "variable": "med_income", "expected": "-"},
+    {"id": "H16", "label": "Real Madrid + FC Barcelona ↔ % Hispanic", "items": ["brand-real-madrid-cf", "brand-fc-barcelona"], "variable": "pct_hispanic", "expected": "+"},
+    {"id": "H17", "label": "Caribbean food ↔ % Black", "items": ["tag-caribbean"], "variable": "pct_black", "expected": "+"},
+    {"id": "H18", "label": "Fine dining + wine bars ↔ median income", "items": ["tag-fine-dining", "tag-wine-bar"], "variable": "med_income", "expected": "+"}
+  ]
+}
