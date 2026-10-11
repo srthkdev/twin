@@ -73,6 +73,19 @@ All floats rounded to 3 dp. Coordinates are WGS84. `id`s are kebab-case.
 ```
 Rank = rank of the ground-truth twin among all hoods of the target city (1 = best). hit@k / MRR over **test** pairs.
 
+### `evals.json` -> `census` (external census validation, written by `pipeline/census.py`)
+```json
+"census": { "acsYear": 2023, "cities": ["los-angeles","new-york"], "preregisteredCommit": "384afef",
+  "summary": { "n": 36, "correctSignCorrected": 32, "correctSignRaw": 30, "correctedBeatsRaw": 21,
+               "meanAbsRhoCorrected": 0.286, "meanAbsRhoRaw": 0.22, "meanSignedRhoCorrected": 0.246, "meanSignedRhoRaw": 0.196 },
+  "rows": [ { "city": "los-angeles", "id": "H01", "label": "Latin artists \u2194 % Hispanic", "items": ["artist-bad-bunny","artist-peso-pluma"],
+              "variable": "pct_hispanic", "expected": "+", "rhoCorrected": 0.643, "ciCorrected": [0.615,0.672],
+              "rhoRaw": 0.287, "ciRaw": [0.241,0.331], "rhoDensity": -0.239, "n": 1717 } ],
+  "scatter": { "los-angeles|Latin artists \u2194 % Hispanic": [[x_census, y_corrected, y_raw]] },
+  "joinStats": { "los-angeles": { "tractsCells": 2126, "qlooCells": 4770, "joined": 1717 } } }
+```
+`rows` = hypotheses x cities (hypotheses pre-registered in `pipeline/census_hypotheses.json`). Rho = Spearman across geohash-6 cells (pop >= 500); CIs = 95% bootstrap. `expected` is "+" or "-"; "correct sign" = sign(rho) equals it. `scatter` keys are `"{city}|{label}"`, each <= 400 sampled points of `[census value (fraction, or $ / years), mean corrected V, mean raw affinity]`. Existing keys of `evals.json` are unchanged.
+
 ## Ground-truth rule
 `pipeline/ground_truth.json` is written and committed **before** looking at model results. Every pair needs a
 real published source (URL + quote) comparing the two neighbourhoods. Dev pairs may be used for tuning; test pairs never.

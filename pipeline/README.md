@@ -33,6 +33,60 @@ Dev split (10 pairs, 20 directed): Twin 0.35 / 0.70 / 0.544, Raw 0.10 / 0.35 / 0
 
 Raw collapse: mean cosine between hoods of different cities is 0.951 for raw vs 0.162 for corrected; spread (max-min per hood and target city) 0.109 vs 0.728. Basket sweep (MRR on all 31 pairs): 10 items 0.256, 20 0.277, 40 0.377, 60 0.399, all 116 0.404. Radius sweep MRR: 0.8 km 0.395, 1.3 km 0.404, 2.0 km 0.379, 3.0 km 0.355. See `web/public/data/evals.json` for the sanity table (corrected vs raw percentile; the correction deliberately lowers percentiles for items correlated with density, e.g. gay bars in Chelsea 0.67 corrected vs 0.97 raw).
 
+## Census validation (external, `census.py`)
+Question: does the density correction recover real cultural geography, judged against data Qloo never saw? 18 hypotheses (item(s) <-> ACS variable <-> expected sign) were written to `census_hypotheses.json` and committed (`384afef`) **before any correlation was computed**; each is run in Los Angeles County and NYC (36 tests, none dropped). Only the 3 scatter plots shown in the app were picked before seeing results (Latin artists, luxury brands, Korean food; LA).
+
+**Data.** ACS 5-year 2023 tract estimates (`api.census.gov` now demands a key, so we used the table-based summary-file bulk download on `www2.census.gov`, same numbers) plus the 2023 Gazetteer tract internal points; cached in `cache/census/` (gitignored). Each tract goes to the geohash-6 cell holding its internal point; counts are summed per cell, so percentages are ratio-of-sums. **Medians (income, age) are the population-weighted mean of tract medians**, which is not a true cell median. Cells need population >= 500 and to exist in the Qloo data (LA 1,717 of 4,770 Qloo cells, NYC 944 of 1,365; Qloo cells are mostly commercial/activity locations, so many have no resident tract point). Spearman across cells; corrected = mean `V` over the hypothesis items, raw = mean `RAW`, density = `d`. 95% CI: 1,000 seeded bootstrap resamples of cells (ranks fixed on the full sample, percentile interval).
+
+| city | hypothesis | exp. | corrected rho [95% CI] | raw rho [95% CI] | density rho | n cells |
+|---|---|---|---|---|---|---|
+| los-angeles | H01 Latin artists ↔ % Hispanic | + | +0.64 [+0.61,+0.67] | +0.29 [+0.24,+0.33] | -0.24 | 1717 |
+| los-angeles | H02 Tacos ↔ % Hispanic | + | +0.33 [+0.29,+0.38] | +0.10 [+0.05,+0.14] | -0.24 | 1717 |
+| los-angeles | H03 Korean food ↔ % Korean | + | +0.20 [+0.16,+0.25] | +0.30 [+0.26,+0.35] | +0.22 | 1717 |
+| los-angeles | H04 BTS ↔ % Asian | + | +0.08 [+0.03,+0.13] | +0.14 [+0.10,+0.19] | +0.07 | 1717 |
+| los-angeles | H05 Dim sum + Chinese food ↔ % Chinese | + | +0.11 [+0.07,+0.16] | +0.20 [+0.15,+0.24] | +0.09 | 1717 |
+| los-angeles | H06 Luxury brands ↔ median income | + | -0.17 [-0.21,-0.12] | -0.10 [-0.15,-0.05] | -0.07 | 1708 |
+| los-angeles | H07 Golf + tennis clubs ↔ median income | + | +0.37 [+0.33,+0.41] | +0.15 [+0.10,+0.20] | -0.07 | 1708 |
+| los-angeles | H08 Outdoor/wellness brands ↔ % bachelor's+ | + | +0.50 [+0.46,+0.54] | +0.43 [+0.40,+0.47] | +0.29 | 1717 |
+| los-angeles | H09 Whole Foods + Aesop + organic ↔ % bachelor's+ | + | +0.48 [+0.45,+0.52] | +0.42 [+0.38,+0.46] | +0.29 | 1717 |
+| los-angeles | H10 Night clubs + cocktail bars ↔ median age | - | -0.05 [-0.10,-0.00] | -0.01 [-0.06,+0.03] | -0.02 | 1717 |
+| los-angeles | H11 Kendrick + Beyoncé ↔ % Black | + | +0.36 [+0.32,+0.41] | +0.18 [+0.14,+0.23] | +0.07 | 1717 |
+| los-angeles | H12 Soul food ↔ % Black | + | +0.38 [+0.34,+0.42] | +0.31 [+0.27,+0.35] | +0.07 | 1717 |
+| los-angeles | H13 Morgan Wallen + Harley-Davidson ↔ % non-Hispanic white | + | +0.01 [-0.03,+0.06] | +0.26 [+0.21,+0.30] | +0.25 | 1717 |
+| los-angeles | H14 Fast food ↔ median income | - | -0.20 [-0.25,-0.16] | -0.18 [-0.23,-0.13] | -0.07 | 1708 |
+| los-angeles | H15 McDonald's + Walmart ↔ median income | - | -0.28 [-0.32,-0.23] | -0.16 [-0.21,-0.12] | -0.07 | 1708 |
+| los-angeles | H16 Real Madrid + FC Barcelona ↔ % Hispanic | + | +0.41 [+0.37,+0.45] | -0.04 [-0.09,+0.01] | -0.24 | 1717 |
+| los-angeles | H17 Caribbean food ↔ % Black | + | +0.33 [+0.28,+0.37] | +0.19 [+0.15,+0.24] | +0.07 | 1717 |
+| los-angeles | H18 Fine dining + wine bars ↔ median income | + | +0.35 [+0.31,+0.39] | +0.16 [+0.12,+0.21] | -0.07 | 1708 |
+| new-york | H01 Latin artists ↔ % Hispanic | + | +0.49 [+0.44,+0.54] | +0.31 [+0.25,+0.37] | +0.08 | 944 |
+| new-york | H02 Tacos ↔ % Hispanic | + | -0.15 [-0.21,-0.09] | -0.03 [-0.09,+0.03] | +0.08 | 944 |
+| new-york | H03 Korean food ↔ % Korean | + | +0.48 [+0.43,+0.54] | +0.52 [+0.47,+0.57] | +0.31 | 944 |
+| new-york | H04 BTS ↔ % Asian | + | +0.10 [+0.03,+0.16] | +0.14 [+0.09,+0.20] | +0.02 | 944 |
+| new-york | H05 Dim sum + Chinese food ↔ % Chinese | + | +0.34 [+0.27,+0.40] | +0.39 [+0.34,+0.45] | +0.08 | 944 |
+| new-york | H06 Luxury brands ↔ median income | + | -0.29 [-0.34,-0.23] | -0.01 [-0.07,+0.06] | +0.06 | 943 |
+| new-york | H07 Golf + tennis clubs ↔ median income | + | +0.04 [-0.02,+0.10] | +0.10 [+0.03,+0.17] | +0.06 | 943 |
+| new-york | H08 Outdoor/wellness brands ↔ % bachelor's+ | + | +0.19 [+0.13,+0.25] | +0.39 [+0.34,+0.45] | +0.34 | 944 |
+| new-york | H09 Whole Foods + Aesop + organic ↔ % bachelor's+ | + | +0.40 [+0.34,+0.45] | +0.44 [+0.39,+0.49] | +0.34 | 944 |
+| new-york | H10 Night clubs + cocktail bars ↔ median age | - | -0.05 [-0.11,+0.01] | -0.20 [-0.26,-0.14] | -0.24 | 944 |
+| new-york | H11 Kendrick + Beyoncé ↔ % Black | + | +0.32 [+0.26,+0.38] | -0.10 [-0.16,-0.04] | -0.09 | 944 |
+| new-york | H12 Soul food ↔ % Black | + | +0.67 [+0.63,+0.71] | +0.29 [+0.24,+0.35] | -0.09 | 944 |
+| new-york | H13 Morgan Wallen + Harley-Davidson ↔ % non-Hispanic white | + | +0.05 [-0.01,+0.12] | +0.27 [+0.21,+0.33] | +0.20 | 944 |
+| new-york | H14 Fast food ↔ median income | - | +0.12 [+0.06,+0.18] | +0.16 [+0.10,+0.23] | +0.06 | 943 |
+| new-york | H15 McDonald's + Walmart ↔ median income | - | -0.30 [-0.35,-0.24] | -0.06 [-0.12,+0.01] | +0.06 | 943 |
+| new-york | H16 Real Madrid + FC Barcelona ↔ % Hispanic | + | +0.14 [+0.08,+0.20] | +0.11 [+0.05,+0.17] | +0.08 | 944 |
+| new-york | H17 Caribbean food ↔ % Black | + | +0.50 [+0.44,+0.54] | +0.43 [+0.38,+0.49] | -0.09 | 944 |
+| new-york | H18 Fine dining + wine bars ↔ median income | + | +0.42 [+0.37,+0.47] | +0.35 [+0.29,+0.41] | +0.06 | 943 |
+
+**Summary (36 tests).** Correct sign: corrected 32, raw 30. Correct sign with CI excluding 0: corrected 27, raw 28. Corrected beats raw (signed in expected direction): 21 of 36 (LA 13/18, NYC 8/18). Mean |rho|: corrected 0.286, raw 0.220; mean signed rho (expected direction): 0.246 vs 0.196.
+
+**Honest interpretation.**
+* The data support the weak form of the claim: Qloo's taste signal has real, external, cultural-geography content, and the correction usually sharpens it. The clearest wins are ethnic/cultural-community items where raw is diluted by density: Latin artists <-> % Hispanic (LA 0.64 vs 0.29), Real Madrid/Barca <-> % Hispanic in LA (0.41 vs -0.04), soul food <-> % Black in NYC (0.67 vs 0.29), Kendrick/Beyonce <-> % Black in NYC (0.32 vs -0.10), and income-aligned items in LA (golf/tennis 0.37 vs 0.15, fine dining 0.35 vs 0.16).
+* The data **do not** support a clean "raw is just population density" story. Raw per-item affinity already has the right sign in 30 of 36 tests and its CIs exclude zero about as often as corrected. The cell-level density `d` is only weakly related to these demographics (|rho| mostly < 0.1 apart from -0.24 against % Hispanic in LA and 0.31-0.35 vs. Korean/outdoor items in NYC), so raw is not density in the census sense; the correction removes a Qloo popularity/activity baseline, which is a different thing. Corrected beating raw in only 58% of tests (21/36) is modest and in NYC it is a coin flip (8/18).
+* **Failures.** Luxury brands <-> income (the most obvious hypothesis) has the wrong sign after correction in both cities (LA -0.17, NYC -0.29; raw about 0), as does fast-food/McDonald's-Walmart <-> income in NYC for fast food (+0.12, wrong sign). Night clubs/cocktail bars <-> median age is ~0 (-0.05 in both). Morgan Wallen/Harley <-> % non-Hispanic white is ~0 after correction (0.01/0.05) while raw gets 0.26/0.27, i.e. the correction removed signal there. BTS <-> % Asian is weak for both (0.08-0.14). All Asian-cuisine items (Korean, Chinese/dim sum) and outdoor brands in NYC are better in raw than corrected. Likely reason: the baseline subtracts each cell's mean rank over the basket, and affluent or heavily Asian cells are high on many basket items at once, so subtracting that baseline also subtracts part of the true signal (luxury in rich cells is largely "everything is high there").
+* Taken together: the correction helps most where a community's tastes differ sharply from the city-wide popularity pattern, and hurts where the true signal is itself a broad "high on everything" affluence/activity pattern.
+
+**Limitations.** Ecological correlation (cell-level, says nothing about individuals). A tract contributes to exactly one cell via its internal point, though tracts straddle cells and cells straddle tracts; tracts in dense areas are small but in LA's periphery large. ACS tract estimates carry sizeable margins of error (especially Korean/Chinese detail and medians), which attenuates correlations for both methods; the Gazetteer/ACS 2023 vintage is not matched to when Qloo data was gathered. Qloo cells reflect where people go and where venues are (activity location), not where they live, which weakens residence-based census comparisons - commuter and tourist districts will mismatch. Pop >= 500 keeps only cells with residents, so downtown/commercial cells are excluded. Each hypothesis uses 1-3 basket items, so some depend on a single sparse series. 36 tests are not independent (LA and NYC share items; several hypotheses share variables), so counts like 21/36 should not be read as a precise significance test. Bootstrap CIs resample cells independently and ignore spatial autocorrelation, so they are too narrow.
+
 ## Known limitations
 * Cell files: LA county has 4,770 cells; the exported file keeps the 3,478 within 18 km of a curated hood (2 dp) to stay under 2.5 MB. Vectors were computed on all cells.
 * Basket `kind` includes `person` (comedians), which is not in the contract's kind list.
