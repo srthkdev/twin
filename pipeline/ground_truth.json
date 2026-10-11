@@ -1,0 +1,254 @@
+{
+ "note": "Excluded by pre-declared rule (source itself rates the match 'Stretch'): Eurocheapo Passy/UWS, Saint-Germain/UES, Latin Quarter/Greenwich Village.",
+ "seed": 20261030,
+ "pairs": [
+  {
+   "a": "los-angeles-silver-lake",
+   "b": "new-york-williamsburg",
+   "source": "https://www.complex.com/pop-culture/2014/01/the-williamsburg-of-every-city",
+   "quote": "Los Angeles: Williamsburg is Silver Lake (Gawker reader map as reported by Complex)",
+   "verbatim": false,
+   "split": "dev"
+  },
+  {
+   "a": "los-angeles-echo-park",
+   "b": "new-york-bushwick",
+   "source": "https://www.complex.com/pop-culture/2014/01/the-williamsburg-of-every-city",
+   "quote": "Los Angeles: Bushwick is Echo Park (Gawker reader map as reported by Complex)",
+   "verbatim": false,
+   "split": "test"
+  },
+  {
+   "a": "los-angeles-west-hollywood",
+   "b": "new-york-chelsea",
+   "source": "https://urbanize.la/post/explaining-los-angeles-geography-new-yorkers",
+   "quote": "Greenwich Village, Chelsea, Gramercy and NoMad are similar as lifestyle centers to West Hollywood, the Sunset Strip, Beverly Grove...",
+   "verbatim": false,
+   "split": "test"
+  },
+  {
+   "a": "mexico-city-polanco",
+   "b": "los-angeles-beverly-hills",
+   "source": "https://en.wikipedia.org/wiki/Polanco,_Mexico_City",
+   "quote": "[Avenida Presidente Masaryk] is compared by some to Beverly Hills' Rodeo Drive or New York City's Fifth Avenue.",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "london-shoreditch",
+   "b": "new-york-williamsburg",
+   "source": "https://www.uniplaces.com/neighbourhood/london/shoreditch",
+   "quote": "Shoreditch is often compared to Williamsburg (Victorian buildings alongside startups, restaurants, pop-up shops, galleries)",
+   "verbatim": false,
+   "split": "dev"
+  },
+  {
+   "a": "london-dalston",
+   "b": "new-york-williamsburg",
+   "source": "https://www.thebillfold.com/2013/04/the-chelsea-of-new-orleans-french-quarter-the-queens-of-la-venice/",
+   "quote": "Here's Sarah Brown comparing Hackney/Dalston in London and Williamsburg in Brooklyn.",
+   "verbatim": true,
+   "split": "dev"
+  },
+  {
+   "a": "london-mayfair",
+   "b": "new-york-upper-east-side",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Upper East Side with Mayfair (average property price in New York vs. London)",
+   "verbatim": false,
+   "split": "dev"
+  },
+  {
+   "a": "london-notting-hill",
+   "b": "new-york-west-village",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "living in Notting Hill is the London equivalent to living in the West Village/Soho",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "london-hampstead",
+   "b": "new-york-park-slope",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Hampstead with Park Slope, Brooklyn",
+   "verbatim": false,
+   "split": "test"
+  },
+  {
+   "a": "london-canary-wharf",
+   "b": "new-york-financial-district",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Canary Wharf with Financial District",
+   "verbatim": false,
+   "split": "test"
+  },
+  {
+   "a": "london-camden",
+   "b": "new-york-east-village",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Camden with East Village",
+   "verbatim": false,
+   "split": "test"
+  },
+  {
+   "a": "london-chelsea",
+   "b": "new-york-west-village",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing London's Chelsea with West Village",
+   "verbatim": false,
+   "split": "dev"
+  },
+  {
+   "a": "london-islington",
+   "b": "new-york-west-village",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing Islington with Greenwich Village / West Village",
+   "verbatim": false,
+   "split": "test"
+  },
+  {
+   "a": "london-south-kensington",
+   "b": "new-york-soho",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "South Kensington vs. Soho (section heading)",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "london-soho",
+   "b": "new-york-chelsea",
+   "source": "https://www.abode2.com/a-tale-of-two-cities",
+   "quote": "Table pairing London's Soho with Chelsea / Meatpacking district",
+   "verbatim": false,
+   "split": "test"
+  },
+  {
+   "a": "london-brixton",
+   "b": "new-york-harlem",
+   "source": "https://www.nbcnews.com/news/world/meghan-markle-prince-harry-s-looming-visit-divides-brixton-n835346",
+   "quote": "Brixton has been dubbed 'London's Harlem'",
+   "verbatim": false,
+   "split": "dev"
+  },
+  {
+   "a": "london-peckham",
+   "b": "new-york-bushwick",
+   "source": "https://www.saveur.com/insomniacs-guide-london-peckham/",
+   "quote": "Saveur's search for a London equivalent of Bushwick points to Peckham Rye (long-time grit, low cost, gentrification pressure)",
+   "verbatim": false,
+   "split": "test"
+  },
+  {
+   "a": "paris-le-marais",
+   "b": "new-york-west-village",
+   "source": "https://www.eurocheapo.com/blog/paris-vs-new-york-the-neighborhood-showdown.html",
+   "quote": "Marais / West Village, Chelsea: verdict 'Spot on' - 'has all of the vivacity of'",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "paris-le-marais",
+   "b": "new-york-chelsea",
+   "source": "https://www.eurocheapo.com/blog/paris-vs-new-york-the-neighborhood-showdown.html",
+   "quote": "Marais / West Village, Chelsea: verdict 'Spot on' - 'has all of the vivacity of'",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "paris-champs-elysees",
+   "b": "new-york-times-square",
+   "source": "https://www.eurocheapo.com/blog/paris-vs-new-york-the-neighborhood-showdown.html",
+   "quote": "Champs Elysees / Times Square: 'Both are equally avoided by locals.'",
+   "verbatim": true,
+   "split": "dev"
+  },
+  {
+   "a": "paris-canal-saint-martin",
+   "b": "new-york-williamsburg",
+   "source": "https://www.nationalgeographic.com/travel/article/young-and-hungry-in-paris",
+   "quote": "Like Shoreditch in London, or Williamsburg in New York, it's where the new things are being created in Paris.",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "paris-canal-saint-martin",
+   "b": "london-shoreditch",
+   "source": "https://www.nationalgeographic.com/travel/article/young-and-hungry-in-paris",
+   "quote": "Like Shoreditch in London, or Williamsburg in New York, it's where the new things are being created in Paris.",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "paris-la-defense",
+   "b": "london-canary-wharf",
+   "source": "https://greatruns.com/paris-la-defensenanterre/",
+   "quote": "La Defense is Paris' version of London's Canary Wharf/Docklands (also CBRE comparison on defense-92.fr)",
+   "verbatim": false,
+   "split": "dev"
+  },
+  {
+   "a": "berlin-prenzlauer-berg",
+   "b": "new-york-park-slope",
+   "source": "https://kottke.org/13/04/new-york-elsewhere",
+   "quote": "Prenzlauer Berg = Park Slope.",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "berlin-kreuzberg-so36",
+   "b": "new-york-williamsburg",
+   "source": "https://travelsofadam.com/where-to-stay-berlin-neighborhoods/",
+   "quote": "It's the Brooklyn equivalent of something between Williamsburg and Park Slope.",
+   "verbatim": true,
+   "split": "dev"
+  },
+  {
+   "a": "mexico-city-roma-norte",
+   "b": "new-york-williamsburg",
+   "source": "https://en.wikipedia.org/wiki/Colonia_Roma",
+   "quote": "Roma has consequently been called the \"Williamsburg of Mexico City.\"",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "mexico-city-roma-norte",
+   "b": "new-york-west-village",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "feels the most like New York's West Village",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "mexico-city-polanco",
+   "b": "new-york-upper-east-side",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "the affluent neighborhood of Polanco is similar to Manhattan's Upper East Side",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "mexico-city-condesa",
+   "b": "new-york-soho",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "Similar to New York's Soho, the neighborhood of Condesa",
+   "verbatim": true,
+   "split": "test"
+  },
+  {
+   "a": "mexico-city-coyoacan",
+   "b": "new-york-park-slope",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "Like the Bushwick or Park Slope",
+   "verbatim": true,
+   "split": "dev"
+  },
+  {
+   "a": "mexico-city-zona-rosa",
+   "b": "new-york-williamsburg",
+   "source": "https://saltandwind.com/best-neighborhoods-visit-travel-mexico-city/",
+   "quote": "Juarez: Much like Williamsburg once was",
+   "verbatim": true,
+   "split": "test"
+  }
+ ]
+}
