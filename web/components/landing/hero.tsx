@@ -2,11 +2,8 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowRight, Sparkles } from "lucide-react";
 import { useDataset } from "@/hooks/use-dataset";
 import { Combobox } from "@/components/combobox";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { GlobeArc } from "@/components/map/landing-globe";
 import type { DataSet } from "@/lib/types";
 
@@ -36,10 +33,12 @@ function buildArcs(ds: DataSet): GlobeArc[] {
 }
 
 const QUICK = [
-  ["los-angeles-silver-lake", "berlin", "Silver Lake → Berlin"],
-  ["new-york-williamsburg", "london", "Williamsburg → London"],
-  ["mexico-city-roma-norte", "paris", "Roma Norte → Paris"],
+  ["los-angeles-silver-lake", "berlin", "silver lake → berlin"],
+  ["new-york-williamsburg", "london", "williamsburg → london"],
+  ["mexico-city-roma-norte", "paris", "roma norte → paris"],
 ] as const;
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
 export function Hero() {
   const { ds } = useDataset();
@@ -52,63 +51,88 @@ export function Hero() {
   const go = (h = hood, c = city) => router.push(`/explore?from=${h}&to=${c}`);
   const sourceCity = ds?.hoods.find((h) => h.id === hood)?.city;
   const sameCity = sourceCity === city;
-  const stats = ds ? [[ds.cities.length, "cities"], [ds.basket.length, "taste dimensions"], [ds.hoods.length, "neighbourhoods"]] : [];
+  const top = ds?.twins[hood]?.[city]?.[0];
+  const topName = top && ds?.hoods.find((h) => h.id === top.hood)?.name;
 
   return (
-    <section className="relative isolate flex min-h-[100svh] flex-col items-center overflow-hidden px-4 pt-28 sm:pt-32">
-      <div className="absolute inset-0 -z-10"><LandingGlobe arcs={arcs} /></div>
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_36%_at_50%_34%,rgba(7,8,11,.6),rgba(7,8,11,.12)_70%,transparent),linear-gradient(to_bottom,transparent_75%,#07080b)]" />
+    <section className="grid min-h-[calc(100svh-44px)] border-b border-line pt-11 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+      <div className="flex flex-col justify-between gap-12 px-5 py-10 sm:px-10 lg:py-14">
+        <div className="label">qloo taste data · {ds ? pad2(ds.cities.length) : "--"} cities · 1 km cells</div>
 
-      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass mb-6 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs text-white/80">
-        <Sparkles className="size-3.5 text-cyan-300" /> Powered by Qloo taste data · corrected for popularity bias
-      </motion.div>
-      <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.08 }}
-        className="max-w-4xl text-balance text-center text-5xl font-semibold leading-[1.02] tracking-[-0.035em] sm:text-7xl lg:text-[88px]">
-        Every neighbourhood has a <span className="text-gradient">twin.</span>
-      </motion.h1>
-      <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.18 }}
-        className="mt-6 max-w-2xl text-balance text-center text-base text-white/70 sm:text-lg">
-        Silver Lake&apos;s cultural twin is Neukölln (<span className="font-mono text-white">0.77</span>) — not Mitte. Twin reads Qloo&apos;s taste signals across artists, brands and places,
-        strips out the popularity bias, and matches the fingerprint of any block to any other city.
-      </motion.p>
+        <div>
+          <h1 className="text-[clamp(38px,6.2vw,76px)] font-medium leading-[0.98] tracking-[-0.055em]">
+            every neighbourhood<br />has a twin<span className="text-primary">.</span>
+          </h1>
+          <p className="mt-6 max-w-[52ch] text-[13.5px] leading-relaxed text-muted-foreground">
+            Twin reads Qloo&apos;s taste data for every square kilometre of a city — which artists, brands, food and nightlife
+            over-index there — removes the popularity baseline that makes every busy block look alike, and finds the place
+            in another city with the same fingerprint.
+          </p>
 
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.3 }}
-        className="glass glow-ring mt-10 flex w-full max-w-3xl flex-col items-stretch gap-3 rounded-3xl p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-3 sm:p-4">
-        <span className="px-2 text-lg font-medium text-white/70 sm:text-2xl">Find the</span>
-        {ds ? (
-          <>
-            <Combobox ariaLabel="Source neighbourhood" value={hood} onChange={setHood} options={hoodOpts} placeholder="neighbourhood" searchPlaceholder="Search any neighbourhood…" className="text-lg sm:text-2xl" />
-            <span className="px-2 text-lg font-medium text-white/70 sm:text-2xl">of</span>
-            <Combobox ariaLabel="Target city" value={city} onChange={setCity} options={cityOpts} placeholder="city" searchPlaceholder="Search cities…" className="text-lg sm:text-2xl" />
-            <button
-              onClick={() => go()} disabled={sameCity}
-              className="bg-gradient-accent group ml-0 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-base font-semibold text-black shadow-[0_0_40px_-6px_rgba(34,211,238,.7)] transition hover:scale-[1.03] disabled:opacity-40 sm:ml-2"
+          <div className="mt-10 max-w-xl border border-line-strong bg-card">
+            <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
+              <span className="label">query</span>
+              <span className="text-[11px] text-dim">↵ to run</span>
+            </div>
+            <form
+              onSubmit={(e) => { e.preventDefault(); if (!sameCity) go(); }}
+              className="flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-3 text-[15px]"
             >
-              Find twin <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
-            </button>
-          </>
-        ) : (
-          <Skeleton className="h-12 w-full max-w-md rounded-xl bg-white/10" />
-        )}
-      </motion.div>
-      {sameCity && <p className="mt-2 text-xs text-amber-300">Pick a target city different from the neighbourhood&apos;s own.</p>}
-
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="mt-5 flex flex-wrap justify-center gap-2">
-        {QUICK.map(([h, c, l]) => (
-          <button key={l} onClick={() => go(h, c)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 transition hover:border-violet-400/60 hover:text-white">
-            {l}
-          </button>
-        ))}
-      </motion.div>
-
-      <div className="mt-auto flex w-full max-w-3xl justify-around gap-4 pb-10 pt-16">
-        {stats.map(([n, l]) => (
-          <div key={l} className="text-center">
-            <div className="font-mono text-3xl font-medium tabular-nums sm:text-4xl">{n}</div>
-            <div className="mt-1 text-xs uppercase tracking-widest text-white/50">{l}</div>
+              <span className="text-dim">&gt;</span>
+              <span className="text-muted-foreground">find the</span>
+              {ds ? (
+                <Combobox ariaLabel="Source neighbourhood" value={hood} onChange={setHood} options={hoodOpts} placeholder="neighbourhood" searchPlaceholder="any neighbourhood…" />
+              ) : <span className="text-dim">…</span>}
+              <span className="text-muted-foreground">of</span>
+              {ds ? (
+                <Combobox ariaLabel="Target city" value={city} onChange={setCity} options={cityOpts} placeholder="city" searchPlaceholder="city…" />
+              ) : <span className="text-dim">…</span>}
+              <button
+                type="submit" disabled={!ds || sameCity}
+                className="ml-auto bg-primary px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+              >
+                run
+              </button>
+            </form>
+            <div className="flex min-h-9 items-center border-t border-line px-3 py-2 text-[12px]">
+              {sameCity ? (
+                <span className="text-primary">pick a different city than the neighbourhood&apos;s own</span>
+              ) : top && topName ? (
+                <span className="text-muted-foreground">
+                  top match <span className="text-foreground">{topName}</span>
+                  <span className="num ml-2 text-primary">{top.score.toFixed(2)}</span>
+                  <span className="ml-1 text-dim">cosine</span>
+                </span>
+              ) : <span className="text-dim">—</span>}
+            </div>
           </div>
-        ))}
+
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-dim">
+            <span>try</span>
+            {QUICK.map(([h, c, l]) => (
+              <button key={l} onClick={() => go(h, c)} className="link text-muted-foreground">{l}</button>
+            ))}
+          </div>
+        </div>
+
+        <dl className="grid max-w-xl grid-cols-3 border-t border-line pt-4">
+          {[[ds?.cities.length, "cities"], [ds?.basket.length, "taste dims"], [ds?.hoods.length, "neighbourhoods"]].map(([n, l]) => (
+            <div key={l as string}>
+              <dt className="label">{l}</dt>
+              <dd className="num mt-1 text-[22px] tracking-tight">{n ?? "--"}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
+
+      <figure className="relative hidden border-l border-line lg:block">
+        <div className="absolute inset-0"><LandingGlobe arcs={arcs} /></div>
+        <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between border-t border-line bg-background/80 px-4 py-2 text-[11px] text-dim">
+          <span>fig. 1 — strongest twin per city pair</span>
+          <span className="num">{arcs.length} arcs</span>
+        </figcaption>
+        <span className="pointer-events-none absolute left-4 top-3 text-[11px] text-dim">globe / live</span>
+      </figure>
     </section>
   );
 }

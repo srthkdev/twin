@@ -1,74 +1,85 @@
 "use client";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeftRight, AlertTriangle } from "lucide-react";
-import { ScoreRing } from "@/components/score-ring";
 import { DivergingBars } from "./diverging-bars";
-import { Button } from "@/components/ui/button";
+import { Label, Meter } from "./meter";
 import { cn } from "@/lib/utils";
-import type { DataSet, TwinMatch } from "@/lib/types";
+import type { DataSet, Evals, TwinMatch } from "@/lib/types";
 import type { Mode } from "@/components/map/explore-map";
-import type { Evals } from "@/lib/types";
 
-export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, targetName, mode, onSwap, evals, loading }: {
+export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, targetName, mode, onSwap, evals }: {
   ds: DataSet; matches: TwinMatch[]; selected: string | null; onSelect: (id: string) => void; sourceName: string; targetName: string;
-  mode: Mode; onSwap: () => void; evals: Evals | null; loading: boolean;
+  mode: Mode; onSwap: () => void; evals: Evals | null; loading?: boolean;
 }) {
   const sel = matches.find((m) => m.hood === selected) ?? matches[0];
   const hood = (id: string) => ds.hoods.find((h) => h.id === id)!;
+  const max = Math.max(0.01, ...matches.map((m) => m.score));
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <div className="text-[10px] font-medium uppercase tracking-widest text-white/40">Cultural twins in</div>
-          <div className="text-xl font-semibold">{targetName}</div>
+    <div className="text-[12.5px]">
+      <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-4">
+        <div className="min-w-0">
+          <Label>twins</Label>
+          <h2 className="mt-2 truncate text-[15px] tracking-[-0.02em] text-foreground">
+            {sourceName.toLowerCase()} <span className="text-dim">→</span> {targetName.toLowerCase()}
+          </h2>
         </div>
-        <Button variant="outline" size="sm" onClick={onSwap} className="gap-1.5 border-white/15 bg-white/5" aria-label="Swap direction"><ArrowLeftRight className="size-3.5" /> Swap</Button>
+        <button onClick={onSwap} className="shrink-0 border border-line px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-line-strong hover:text-foreground" aria-label="Swap direction">
+          ⇄ swap
+        </button>
       </div>
 
       {mode === "raw" && (
-        <div className="rounded-2xl border border-amber-300/30 bg-amber-300/10 p-3.5 text-sm text-amber-100">
-          <div className="mb-1 flex items-center gap-1.5 font-semibold"><AlertTriangle className="size-4" /> Raw view</div>
-          Raw cosine spread across hoods: <span className="font-mono">{evals?.rawCollapse.raw_mean_cos_spread.toFixed(2) ?? "0.01"}</span> vs{" "}
-          <span className="font-mono">{evals?.rawCollapse.twin_mean_cos_spread.toFixed(2) ?? "0.60"}</span> after correction. Switch to Twin to see rankings that mean something.
+        <div className="border-b border-line bg-raised px-4 py-3 text-[11.5px] leading-relaxed text-muted-foreground">
+          <span className="text-foreground">raw view.</span> Raw scores barely separate neighbourhoods: average spread{" "}
+          <span className="num text-foreground">{evals?.rawCollapse.raw_mean_cos_spread.toFixed(2) ?? "–"}</span> vs{" "}
+          <span className="num text-primary">{evals?.rawCollapse.twin_mean_cos_spread.toFixed(2) ?? "–"}</span> corrected. The ranking below is the corrected one.
         </div>
       )}
 
-      <ul className="space-y-2" aria-label="Top twins">
-        {loading && Array.from({ length: 5 }).map((_, i) => <li key={i} className="h-[68px] animate-pulse rounded-2xl bg-white/[0.05]" />)}
-        {matches.map((m, i) => {
-          const h = hood(m.hood);
-          const active = sel?.hood === m.hood;
-          return (
-            <motion.li key={m.hood} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 * i, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-              <button onClick={() => onSelect(m.hood)} aria-pressed={active}
-                className={cn("group flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition",
-                  active ? "border-violet-400/60 bg-violet-500/10 glow-ring" : "border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.07]")}>
-                <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold", i === 0 ? "bg-gradient-accent text-black" : "bg-white/10 text-white/70")}>{i + 1}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold">{h.name}</span>
-                  <span className="block truncate text-xs text-white/50">{h.blurb ?? `Shares ${m.shared.slice(0, 2).map((s) => ds.basket[s.i]?.label).join(" & ")}`}</span>
-                </span>
-                <ScoreRing score={m.score} />
-              </button>
-            </motion.li>
-          );
-        })}
-      </ul>
+      <table className="w-full" aria-label="Top twins">
+        <thead>
+          <tr className="h-7 border-b border-line text-[10.5px] text-dim">
+            <th className="w-9 pl-4 text-left font-normal">#</th>
+            <th className="text-left font-normal">neighbourhood</th>
+            <th className="w-[88px] font-normal" />
+            <th className="w-14 pr-4 text-right font-normal">cos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {matches.map((m, i) => {
+            const h = hood(m.hood);
+            const active = sel?.hood === m.hood;
+            return (
+              <tr key={m.hood} onClick={() => onSelect(m.hood)} aria-selected={active}
+                className={cn("h-9 cursor-pointer border-b border-line transition-colors", active ? "bg-raised" : "hover:bg-accent")}>
+                <td className={cn("num pl-4", active ? "text-primary" : "text-dim")}>{i + 1}</td>
+                <td className="max-w-0 truncate pr-2">
+                  <button className={cn("truncate text-left", active ? "text-foreground" : "text-muted-foreground")} onClick={() => onSelect(m.hood)}>{h.name}</button>
+                </td>
+                <td className="text-[10px]"><Meter value={m.score} max={max} width={8} tone={active ? "accent" : "fg"} /></td>
+                <td className={cn("num pr-4 text-right", active ? "text-primary" : "text-muted-foreground")}>{m.score.toFixed(2)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
 
-      <AnimatePresence mode="wait">
-        {sel && (
-          <motion.div key={sel.hood} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }} className="space-y-5">
-            <section>
-              <h3 className="mb-3 text-sm font-semibold">Why they match</h3>
-              <DivergingBars dims={sel.shared} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} />
-            </section>
-            <section>
-              <h3 className="mb-3 text-sm font-semibold text-white/80">Where they differ</h3>
-              <DivergingBars dims={sel.diverge} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} />
-            </section>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {sel && (
+        <div key={sel.hood}>
+          {hood(sel.hood).blurb && (
+            <p className="border-b border-line px-4 py-3 text-[12px] leading-relaxed text-muted-foreground">
+              <span className="text-foreground">{hood(sel.hood).name}.</span> {hood(sel.hood).blurb}
+            </p>
+          )}
+          <section className="border-b border-line px-4 py-4">
+            <Label className="mb-1">shared</Label>
+            <DivergingBars dims={sel.shared} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} />
+          </section>
+          <section className="px-4 py-4">
+            <Label className="mb-1">different</Label>
+            <DivergingBars dims={sel.diverge} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} />
+          </section>
+        </div>
+      )}
     </div>
   );
 }

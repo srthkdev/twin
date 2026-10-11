@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import { ColumnLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { ColumnLayer, PathLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
 import { arcSegments, useDeckMap, type ArcSeg } from "./use-deck-map";
 import { colorAt, type PaletteName } from "@/lib/colors";
@@ -72,8 +72,8 @@ export default function ExploreMap(props: ExploreMapProps) {
       const top = cells.top[i].map((k) => p.basketLabels[k]).join(" · ");
       const val = p.mode === "raw" ? `raw density ${cells.d[i].toFixed(2)}` : `similarity ${sim[i].toFixed(2)}`;
       return {
-        html: `<div style="font-family:var(--font-geist-mono),monospace;font-size:11px;color:#9aa3b8">${cells.g[i]}</div><div style="font-weight:600;margin:2px 0">${val}</div><div style="color:#cbd5e1">${top}</div>${!isTgt ? '<div style="margin-top:4px;color:#67e8f9">Click to drop a pin</div>' : ""}`,
-        style: { background: "rgba(10,11,17,.92)", border: "1px solid rgba(255,255,255,.12)", borderRadius: "10px", padding: "8px 10px", color: "#fff", fontSize: "12px", backdropFilter: "blur(10px)" },
+        html: `<div style="font-family:var(--font-geist-mono),monospace;font-size:11px;color:#5f5c55">${cells.g[i]}</div><div style="font-weight:600;margin:2px 0">${val}</div><div style="color:#8d8a80">${top}</div>${!isTgt ? '<div style="margin-top:4px;color:#f0a03c">click to drop a pin</div>' : ""}`,
+        style: { background: "#141412", border: "1px solid #383631", borderRadius: "0", padding: "6px 8px", color: "#e6e3da", fontSize: "11.5px", fontFamily: "var(--font-geist-mono), monospace" },
       };
     },
   });
@@ -87,7 +87,7 @@ export default function ExploreMap(props: ExploreMapProps) {
   const srcCols = useMemo(() => {
     if (!props.srcCells || !props.srcSim) return null;
     const vals = props.mode === "raw" ? props.srcCells.d : props.srcSim;
-    return buildColumns(props.srcCells, vals, props.mode === "raw" ? "raw" : "src", 450);
+    return buildColumns(props.srcCells, vals, props.mode === "raw" ? "raw" : "twin", 650);
   }, [props.srcCells, props.srcSim, props.mode]);
   const colsRef = useRef({ tgtCols, srcCols });
   colsRef.current = { tgtCols, srcCols };
@@ -144,7 +144,7 @@ export default function ExploreMap(props: ExploreMapProps) {
     if (p.source) {
       const el = document.createElement("div");
       el.className = "pointer-events-none flex flex-col items-center";
-      el.innerHTML = `<div style="padding:3px 9px;border-radius:999px;background:rgba(139,92,246,.95);color:#fff;font:600 11px var(--font-geist-sans),sans-serif;box-shadow:0 0 24px rgba(139,92,246,.8);white-space:nowrap">${escapeHtml(p.source.name)}</div><div style="width:2px;height:10px;background:#a78bfa"></div><div style="width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 12px #a78bfa"></div>`;
+      el.innerHTML = `<div style="padding:2px 6px;background:#e6e3da;color:#0b0b0a;font:600 11px var(--font-geist-mono),monospace;white-space:nowrap">${escapeHtml(p.source.name.toLowerCase())}</div><div style="width:1px;height:12px;background:#e6e3da"></div><div style="width:7px;height:7px;background:#e6e3da"></div>`;
       markersRef.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([p.source.lon, p.source.lat]).addTo(map));
     }
     p.twins.forEach((t, idx) => {
@@ -153,7 +153,7 @@ export default function ExploreMap(props: ExploreMapProps) {
       el.setAttribute("aria-label", `Twin ${idx + 1}: ${t.hood.name}`);
       el.dataset.twin = t.hood.id; el.dataset.rank = String(idx + 1);
       el.className = "twin-marker group flex cursor-pointer flex-col items-center border-0 bg-transparent p-0";
-      el.innerHTML = `<div class="twin-label" style="padding:2px 8px;border-radius:999px;background:rgba(7,8,11,.82);border:1px solid rgba(255,255,255,.18);color:#fff;font:500 11px var(--font-geist-sans),sans-serif;white-space:nowrap;margin-bottom:4px;opacity:${idx === 0 ? 1 : 0.85}">${escapeHtml(t.hood.name)} <span style="font-family:var(--font-geist-mono),monospace;color:#67e8f9">${t.score.toFixed(2)}</span></div><div style="position:relative;width:26px;height:26px"><span style="position:absolute;inset:0;border-radius:50%;border:2px solid #22d3ee;animation:pulse-ring 2s ease-out infinite;animation-delay:${idx * 0.25}s"></span><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg,#8b5cf6,#22d3ee);color:#000;font:700 12px var(--font-geist-mono),monospace;box-shadow:0 0 18px rgba(34,211,238,.7)">${idx + 1}</span></div>`;
+      el.innerHTML = `<div class="twin-label" style="padding:2px 6px;background:#0b0b0a;border:1px solid #383631;color:#e6e3da;font:500 11px var(--font-geist-mono),monospace;white-space:nowrap;margin-bottom:3px">${escapeHtml(t.hood.name.toLowerCase())} <span style="color:#f0a03c">${t.score.toFixed(2)}</span></div><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font:600 11px var(--font-geist-mono),monospace;${idx === 0 ? "background:#f0a03c;color:#0b0b0a" : "background:#0b0b0a;color:#f0a03c;border:1px solid #f0a03c"}">${idx + 1}</div>`;
       el.addEventListener("click", (e) => { e.stopPropagation(); propsRef.current.onSelectTwin(t.hood.id); });
       markersRef.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([t.hood.lon, t.hood.lat]).addTo(map));
     });
@@ -166,7 +166,7 @@ export default function ExploreMap(props: ExploreMapProps) {
       el.style.zIndex = sel ? "5" : "1";
       const lab = el.querySelector<HTMLElement>(".twin-label");
       if (lab) lab.style.display = sel || el.dataset.rank === "1" ? "block" : "none";
-      el.style.filter = sel ? "drop-shadow(0 0 14px rgba(167,139,250,.95))" : "none";
+      el.style.filter = "none"; el.style.outline = sel ? "1px solid #e6e3da" : "none"; el.style.outlineOffset = "3px";
       el.style.transform = "";
     });
   }, [props.selectedTwin, twinKey, ready]);
@@ -194,22 +194,21 @@ export default function ExploreMap(props: ExploreMapProps) {
         }
       } else if (!p.targetCity) { a.arc = 0; a.reveal = 0; }
       const ease = (x: number) => 1 - Math.pow(1 - x, 3);
-      const tt = now / 1000;
       const top = p.twins[0];
       const layers = [];
       if (srcCols) {
         layers.push(new ColumnLayer({
-          id: "src-cells", data: srcCols as never, diskResolution: 6, radius: 340, extruded: true, pickable: true,
-          elevationScale: 1, material: { ambient: 0.6, diffuse: 0.5, shininess: 20 }, opacity: p.targetCity ? 0.55 : 0.95,
-          autoHighlight: true, highlightColor: [255, 255, 255, 90],
+          id: "src-cells", data: srcCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
+          elevationScale: 1, material: { ambient: 0.6, diffuse: 0.5, shininess: 20 }, opacity: p.targetCity ? 0.6 : 0.95,
+          autoHighlight: true, highlightColor: [230, 227, 218, 110],
           updateTriggers: { getFillColor: [p.mode, srcCols.lo], getElevation: [p.mode, srcCols.lo] },
         }));
       }
       if (tgtCols) {
         layers.push(new ColumnLayer({
-          id: "tgt-cells", data: tgtCols as never, diskResolution: 6, radius: 340, extruded: true, pickable: true,
-          elevationScale: ease(a.reveal) , material: { ambient: 0.55, diffuse: 0.6, shininess: 40, specularColor: [200, 220, 255] }, opacity: 0.1 + 0.9 * ease(a.reveal),
-          autoHighlight: true, highlightColor: [255, 255, 255, 80],
+          id: "tgt-cells", data: tgtCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
+          elevationScale: ease(a.reveal) , material: { ambient: 0.55, diffuse: 0.6, shininess: 40, specularColor: [255, 230, 200] }, opacity: 0.1 + 0.9 * ease(a.reveal),
+          autoHighlight: true, highlightColor: [230, 227, 218, 110],
           updateTriggers: { getFillColor: [p.mode, tgtCols.lo], getElevation: [p.mode, tgtCols.lo] },
         }));
       }
@@ -217,15 +216,7 @@ export default function ExploreMap(props: ExploreMapProps) {
         const from: [number, number] = [p.source.lon, p.source.lat];
         const to: [number, number] = [top.hood.lon, top.hood.lat];
         const segs = arcSegments(from, to, a.arc, 48, 255, 0.14);
-        layers.push(new PathLayer<ArcSeg>({ id: "arc", data: segs, getPath: (d) => d.path, getColor: (d) => d.color, widthUnits: "pixels", getWidth: 4, capRounded: true, jointRounded: true }));
-      }
-      if (p.targetCity && a.reveal > 0.6) {
-        layers.push(new ScatterplotLayer({
-          id: "twin-rings", data: p.twins, getPosition: (d: MapTwin) => [d.hood.lon, d.hood.lat], stroked: true, filled: false,
-          getLineColor: [34, 211, 238, 200], lineWidthUnits: "pixels", getLineWidth: 2, radiusUnits: "meters",
-          getRadius: 650, radiusScale: 1 + 0.45 * (0.5 + 0.5 * Math.sin(tt * 2.4)),
-          updateTriggers: { radiusScale: [Math.floor(tt * 30)] },
-        }));
+        layers.push(new PathLayer<ArcSeg>({ id: "arc", data: segs, getPath: (d) => d.path, getColor: (d) => d.color, widthUnits: "pixels", getWidth: 2.5, capRounded: true, jointRounded: true }));
       }
       try { overlay.setProps({ layers }); } catch { /* layer error shouldn't kill the loop */ }
     };
@@ -233,7 +224,7 @@ export default function ExploreMap(props: ExploreMapProps) {
     return () => cancelAnimationFrame(raf);
   }, [ready, overlayRef]);
 
-  return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} className="bg-[#07080b]" />;
+  return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} className="bg-background" />;
 }
 
 function escapeHtml(s: string) {

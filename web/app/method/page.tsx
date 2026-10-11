@@ -3,51 +3,71 @@ import { MethodDiagram } from "@/components/method-diagram";
 export const metadata = { title: "Method — Twin" };
 
 const LIMITS = [
-  ["Coverage gaps", "Cells with sparse Qloo coverage are dropped (a 70% coverage filter removes places like Compton or Santa Monica in the LA probe). Hoods near those gaps rely on fewer cells."],
-  ["Basket bias", "Fingerprints only know what the basket contains. Koreatown's Korean-food signal reached just the 51st percentile because the baseline basket is not neutral."],
-  ["Ground truth is editorial", "Evaluation pairs come from published comparisons. They are opinions, not measurements, and the pair count is small."],
-  ["Taste is not demographics", "Twin matches what places over-index on, not who lives there. Two hoods can share taste with very different incomes or histories."],
+  ["The labels are editorial", "Published neighbourhood comparisons are opinions, not measurements, and there are only 31 of them — 24 involve New York."],
+  ["Affluence is under-weighted", "Rich areas over-index on many items at once, so subtracting the baseline removes part of their signal. Luxury ↔ income turns negative after correction."],
+  ["Coverage is uneven", "Mexico City and Paris return sparse data for many Western basket items, so their twins rest on less evidence."],
+  ["Taste is not demographics", "Twin matches what a place over-indexes on, not who lives there. Two twins can differ in income, age and history."],
 ];
 
 export default function MethodPage() {
   return (
-    <main className="mx-auto max-w-4xl px-4 pb-24 pt-28 sm:pt-32">
-      <p className="font-mono text-xs uppercase tracking-[0.2em] text-cyan-300">Method</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-6xl">Subtract the crowd, <span className="text-gradient">keep the culture.</span></h1>
-      <p className="mt-5 max-w-2xl text-lg text-white/65">
-        Qloo&apos;s heatmaps say how strongly a place over-indexes for an artist, brand or tag. But that affinity correlates <span className="font-mono text-white">0.97</span> with
-        popularity, so busy places look like everything. Twin removes that shared baseline before comparing places.
+    <main className="mx-auto max-w-4xl px-5 pb-24 pt-24 sm:px-8 sm:pt-28">
+      <p className="label text-primary">method</p>
+      <h1 className="mt-3 text-balance text-[clamp(32px,5vw,56px)] font-medium leading-[1.04] tracking-[-0.05em]">
+        Subtract the crowd, <span className="text-primary">keep the culture.</span>
+      </h1>
+      <p className="mt-5 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
+        Qloo&apos;s heatmaps say how strongly a place over-indexes on an artist, brand or kind of venue. Raw affinity tracks Qloo&apos;s
+        popularity score at <span className="num text-foreground">r = 0.97</span>, so busy places look like everything. Twin removes that shared
+        baseline before comparing places.
       </p>
 
-      <div className="glass mt-10 rounded-3xl p-4 sm:p-8"><MethodDiagram /></div>
+      <div className="panel mt-10 p-4 sm:p-6"><MethodDiagram /></div>
 
-      <section className="mt-14 space-y-8">
+      <section className="mt-16 flex flex-col gap-14">
         <div>
-          <h2 className="text-2xl font-semibold">The correction</h2>
-          <ol className="mt-4 space-y-3 text-white/70">
-            <li><span className="font-mono text-cyan-300">1.</span> For each of the 100 basket items, rank every cell in a city by affinity and convert to a percentile <span className="font-mono">r(c,i)</span>.</li>
-            <li><span className="font-mono text-cyan-300">2.</span> Subtract the cell&apos;s mean percentile over the whole basket — its density baseline.</li>
-            <li><span className="font-mono text-cyan-300">3.</span> Z-score each item within the city so every dimension has equal weight.</li>
-            <li><span className="font-mono text-cyan-300">4.</span> A neighbourhood vector is the mean fingerprint of cells within 1.3 km of its centroid.</li>
+          <h2 className="text-[22px] font-medium tracking-[-0.03em]">The correction</h2>
+          <ol className="mt-5 space-y-3 text-[13px] leading-relaxed text-muted-foreground">
+            <li><span className="num text-primary">1.</span> One Qloo heatmap per basket item — 116 artists, brands, films and place types — per city, on ~1.2 × 0.6 km geohash cells.</li>
+            <li><span className="num text-primary">2.</span> Rank every cell by affinity for each item and convert to a percentile <span className="text-foreground">r(c,i)</span>.</li>
+            <li><span className="num text-primary">3.</span> Subtract the cell&apos;s mean percentile over the whole basket — its popularity baseline.</li>
+            <li><span className="num text-primary">4.</span> Z-score each item within the city so a city-wide strength isn&apos;t mistaken for a match.</li>
+            <li><span className="num text-primary">5.</span> A neighbourhood is the mean fingerprint of cells within 1.3 km of its centroid; twins are ranked by cosine.</li>
           </ol>
         </div>
-        <div className="glass rounded-2xl p-6">
-          <div className="mb-3 text-[10px] uppercase tracking-widest text-white/40">Core formula</div>
-          <div className="overflow-x-auto font-mono text-base leading-loose sm:text-lg">
-            <div>v<sub>c,i</sub> = z<sub>i</sub>( r<sub>c,i</sub> − <span className="text-amber-300">(1/N) Σ<sub>j</sub> r<sub>c,j</sub></span> )</div>
-            <div className="mt-2">sim(A,B) = <span className="text-violet-300">v<sub>A</sub></span> · <span className="text-cyan-300">v<sub>B</sub></span> / ( ‖v<sub>A</sub>‖ ‖v<sub>B</sub>‖ )</div>
+
+        <div className="panel p-6">
+          <div className="label mb-3">core formula</div>
+          <div className="overflow-x-auto text-[15px] leading-loose sm:text-[17px]">
+            <div>v<sub>c,i</sub> = z<sub>i</sub>( r<sub>c,i</sub> − <span className="text-primary">(1/N) Σ<sub>j</sub> r<sub>c,j</sub></span> )</div>
+            <div className="mt-2">sim(A,B) = v<sub>A</sub> · v<sub>B</sub> / ( ‖v<sub>A</sub>‖ ‖v<sub>B</sub>‖ )</div>
           </div>
-          <p className="mt-3 text-sm text-white/50">The amber term is the density baseline. Without it, every pair of neighbourhoods scores about 1.00.</p>
+          <p className="mt-3 text-[12px] text-dim">The amber term is the popularity baseline. Without it, cross-city similarities average 0.95; with it, 0.16.</p>
         </div>
+
         <div>
-          <h2 className="text-2xl font-semibold">What it finds</h2>
-          <p className="mt-3 text-white/70">Silver Lake maps to Neukölln (Reuterkiez) at <span className="font-mono text-white">0.77</span> with Kreuzberg SO36 at <span className="font-mono text-white">0.72</span>, sharing record stores, Tame Impala, Phoebe Bridgers, Frank Ocean, Peggy Gou and Aesop. Raw heatmaps send every LA neighbourhood to Mitte or Kreuzberg at ~1.00.</p>
+          <h2 className="text-[22px] font-medium tracking-[-0.03em]">What it finds</h2>
+          <p className="mt-5 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
+            Silver Lake&apos;s closest Berlin neighbourhoods are Kreuzberg (SO36) and Neukölln, sharing vintage clothing, record stores, Peggy Gou and Aesop.
+            On raw scores every LA neighbourhood maps to the same central Berlin cells.
+          </p>
         </div>
+
         <div>
-          <h2 className="text-2xl font-semibold">Limitations</h2>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+          <h2 className="text-[22px] font-medium tracking-[-0.03em]">The agent</h2>
+          <p className="mt-5 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
+            The fingerprints answer &ldquo;which place is like this one&rdquo;. The agent adds live Qloo calls for what comes next —
+            <span className="text-foreground"> local_scene</span> (venues near a neighbourhood, steered by the source&apos;s taste),
+            <span className="text-foreground"> audience</span> (age and gender skew) and <span className="text-foreground">cross_domain</span> (brands for fans of an artist).
+            It runs on the local Codex CLI or a key you bring, and the same tools ship as an MCP server.
+          </p>
+        </div>
+
+        <div>
+          <h2 className="text-[22px] font-medium tracking-[-0.03em]">Limitations</h2>
+          <dl className="mt-5 grid gap-3 sm:grid-cols-2">
             {LIMITS.map(([t, b]) => (
-              <div key={t} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><dt className="font-semibold">{t}</dt><dd className="mt-1 text-sm text-white/60">{b}</dd></div>
+              <div key={t} className="panel p-4"><dt className="text-[13px] text-foreground">{t}</dt><dd className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{b}</dd></div>
             ))}
           </dl>
         </div>

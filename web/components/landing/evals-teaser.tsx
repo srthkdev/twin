@@ -1,42 +1,63 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowUpRight } from "lucide-react";
 import { loadEvals } from "@/lib/data";
-import type { Evals, MethodKey } from "@/lib/types";
-import { AnimatedNumber } from "@/components/animated-number";
-import { Skeleton } from "@/components/ui/skeleton";
+import type { Evals } from "@/lib/types";
 
-const ORDER: { k: MethodKey; label: string; color: string }[] = [
-  { k: "twin", label: "Twin", color: "#8b5cf6" },
-  { k: "llm", label: "LLM only", color: "#22d3ee" },
-  { k: "raw", label: "Raw Qloo", color: "#f59e0b" },
-];
+const f2 = (x?: number) => (x == null ? "--" : x.toFixed(2));
 
+/** Three findings, stated plainly, including the one that doesn't flatter us. */
 export function EvalsTeaser() {
   const [ev, setEv] = useState<Evals | null>(null);
   useEffect(() => { loadEvals().then(setEv).catch(() => {}); }, []);
+  const c = ev?.census;
+  const row = (city: string, id: string) => c?.rows.find((r) => r.city === city && r.id === id);
+  const latin = row("los-angeles", "H01"), soul = row("new-york", "H12");
+
+  const findings = [
+    {
+      k: "bias",
+      claim: "raw Qloo says every neighbourhood is the same",
+      a: { v: f2(ev?.rawCollapse.raw_mean_cos), l: "mean cross-city cosine, raw" },
+      b: { v: f2(ev?.rawCollapse.twin_mean_cos), l: "after correction" },
+      note: "Raw affinity follows a popularity baseline; subtracting it is what makes neighbourhoods distinguishable at all.",
+    },
+    {
+      k: "census",
+      claim: "the corrected maps track the census",
+      a: { v: f2(latin?.rhoCorrected), l: "latin artists ↔ % hispanic, LA (raw " + f2(latin?.rhoRaw) + ")" },
+      b: { v: f2(soul?.rhoCorrected), l: "soul food ↔ % black, NYC (raw " + f2(soul?.rhoRaw) + ")" },
+      note: c ? `Spearman ρ across cells. Corrected beats raw on ${c.summary.correctedBeatsRaw} of ${c.summary.n} pre-registered tests; it is worse on affluence.` : "",
+    },
+    {
+      k: "llm",
+      claim: "an LLM already knows the famous twins",
+      a: { v: f2(ev?.methods.llm.mrr), l: "MRR, Claude with no data" },
+      b: { v: f2(ev?.methods.twin.hit3), l: "Twin hit@3 from data alone (random " + f2(ev?.methods.random.hit3) + ")" },
+      note: "On published pairs the model wins — it has read the same blogs. Twin's agent pairs both: the LLM reasons, Qloo measures.",
+    },
+  ];
+
   return (
-    <div className="glass rounded-3xl p-6 sm:p-8">
-      <div className="grid gap-6 sm:grid-cols-3">
-        {ORDER.map((o) => (
-          <div key={o.k}>
-            <div className="mb-3 flex items-center gap-2 text-sm text-white/60"><span className="size-2 rounded-full" style={{ background: o.color }} />{o.label}</div>
-            {ev ? (
-              <>
-                <div className="font-mono text-5xl font-medium tabular-nums"><AnimatedNumber value={ev.methods[o.k].hit3} /></div>
-                <div className="mt-1 text-xs uppercase tracking-widest text-white/40">hit@3 · MRR <span className="font-mono">{ev.methods[o.k].mrr.toFixed(2)}</span></div>
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full transition-all duration-1000" style={{ width: `${ev.methods[o.k].hit3 * 100}%`, background: o.color }} /></div>
-              </>
-            ) : <Skeleton className="h-16 w-full bg-white/10" />}
+    <div className="border-t border-line">
+      {findings.map((x, i) => (
+        <div key={x.k} className="grid gap-4 border-b border-line py-6 md:grid-cols-[3rem_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <span className="num text-dim">{String(i + 1).padStart(2, "0")}</span>
+          <div>
+            <p className="text-[15px] text-foreground">{x.claim}</p>
+            <p className="mt-2 max-w-[48ch] text-[12px] leading-relaxed text-muted-foreground">{x.note}</p>
           </div>
-        ))}
-      </div>
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
-        <p className="max-w-xl text-sm text-white/60">Held-out test pairs, ground truth sourced from published neighbourhood comparisons and committed before any model ran.</p>
-        <Link href="/evals" className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:border-cyan-300/60 hover:bg-white/5">
-          See the full evals <ArrowUpRight className="size-4" />
-        </Link>
+          {[x.a, x.b].map((m, j) => (
+            <div key={j}>
+              <div className={`num text-[34px] leading-none tracking-tight ${j === 0 ? "text-foreground" : "text-primary"}`}>{m.v}</div>
+              <div className="mt-2 text-[11px] text-dim">{m.l}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+      <div className="flex items-center justify-between pt-4 text-[12px]">
+        <span className="text-dim">ground truth and hypotheses were committed before any result was computed</span>
+        <Link href="/evals" className="link text-muted-foreground">all evals →</Link>
       </div>
     </div>
   );

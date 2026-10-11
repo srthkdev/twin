@@ -1,23 +1,23 @@
-export function LogoMark({ size = 28 }: { size?: number }) {
+/**
+ * The mark is two geohash cells on a 2×2 grid, lit on the diagonal — the same glyph as ▚.
+ * Two places, one taste: the twin pair the whole product is about.
+ */
+export function LogoMark({ size = 18, className }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="tw-g" x1="2" y1="4" x2="30" y2="28" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#8b5cf6" />
-          <stop offset="1" stopColor="#22d3ee" />
-        </linearGradient>
-      </defs>
-      <circle cx="12" cy="16" r="9" stroke="url(#tw-g)" strokeWidth="2" />
-      <circle cx="20" cy="16" r="9" stroke="url(#tw-g)" strokeWidth="2" strokeOpacity="0.55" />
-      <path d="M16 8.2a9 9 0 0 1 0 15.6 9 9 0 0 1 0-15.6Z" fill="url(#tw-g)" />
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden className={className}>
+      <rect x="0.5" y="0.5" width="8.5" height="8.5" fill="var(--primary)" />
+      <rect x="11" y="11" width="8.5" height="8.5" fill="var(--primary)" />
+      <rect x="11.5" y="1" width="7.5" height="7.5" stroke="var(--line-strong)" />
+      <rect x="1" y="11.5" width="7.5" height="7.5" stroke="var(--line-strong)" />
     </svg>
   );
 }
+
 export function Logo() {
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex items-center gap-2.5">
       <LogoMark />
-      <span className="text-[17px] font-semibold tracking-tight">Twin</span>
+      <span className="text-[14px] font-semibold tracking-[-0.02em] text-foreground">twin</span>
     </span>
   );
 }

@@ -2,8 +2,6 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, ChevronUp, Command as CommandIcon, MessageSquare, Plane } from "lucide-react";
 import { useDataset } from "@/hooks/use-dataset";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { loadCells, loadEvals } from "@/lib/data";
@@ -17,16 +15,16 @@ import { ModeToggle } from "./mode-toggle";
 import { SourcePanel, type SourcePin } from "./source-panel";
 import { TwinsPanel } from "./twins-panel";
 import { CommandPalette } from "./command-palette";
-import { AgentDrawer } from "./agent-drawer";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AgentPanel } from "@/components/agent/agent-panel";
 
 const ExploreMap = dynamic(() => import("@/components/map/explore-map"), {
   ssr: false,
-  loading: () => <div className="absolute inset-0 grid place-items-center bg-[#07080b] text-sm text-white/40">Loading globe…</div>,
+  loading: () => <div className="absolute inset-0 grid place-items-center bg-background text-[12px] text-dim">loading globe…</div>,
 });
 
 const DEFAULT_FROM = "los-angeles-silver-lake";
+type RightTab = "twins" | "agent";
+type MobileTab = "from" | RightTab;
 
 export function ExploreClient() {
   const sp = useSearchParams();
@@ -41,10 +39,9 @@ export function ExploreClient() {
   const [tgtCells, setTgtCells] = useState<PackedCells | null>(null);
   const [evals, setEvals] = useState<Evals | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(false);
   const [flying, setFlying] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(true);
-  const [tab, setTab] = useState<"source" | "twins">("source");
+  const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" ? "agent" : "twins");
+  const [mobileTab, setMobileTab] = useState<MobileTab>("from");
 
   useEffect(() => { loadEvals().then(setEvals).catch(() => {}); }, []);
 
@@ -54,7 +51,6 @@ export function ExploreClient() {
   const sourceCity = ds?.cities.find((c) => c.id === sourceCityId) ?? null;
   const targetCity = toCity ? ds?.cities.find((c) => c.id === toCity) ?? null : null;
 
-  // load cells
   useEffect(() => {
     if (!sourceCityId) return;
     let alive = true;
@@ -70,7 +66,6 @@ export function ExploreClient() {
     return () => { alive = false; };
   }, [toCity]);
 
-  // URL sync (no re-render)
   useEffect(() => {
     if (!ds) return;
     const u = new URL(window.location.href);
@@ -99,7 +94,10 @@ export function ExploreClient() {
     setPin(null); setFromId(id);
     setToCity((t) => (t && ds?.hoods.find((h) => h.id === id)?.city === t ? null : t));
   }, [ds]);
-  const pickCity = useCallback((id: string | null) => { setToCity(id); if (id) { setTab("twins"); setSheetOpen(true); } }, []);
+  const pickCity = useCallback((id: string | null) => {
+    setToCity(id);
+    if (id) { setRight("twins"); setMobileTab("twins"); }
+  }, []);
 
   const onPickSourceCell = useCallback((i: number) => {
     if (!srcCells || !ds) return;
@@ -107,9 +105,9 @@ export function ExploreClient() {
     const vec = neighbourhoodVector(srcCells, lon, lat);
     const near = ds.hoods.filter((h) => h.city === srcCells.city)
       .map((h) => ({ h, d: Math.hypot((h.lon - lon) * Math.cos((lat * Math.PI) / 180), h.lat - lat) })).sort((a, b) => a.d - b.d)[0]?.h;
-    const top = vec.map((x, k) => [x, k] as const).sort((a, b) => b[0] - a[0]).slice(0, 6).map((x) => x[1]);
-    setPin({ kind: "pin", city: srcCells.city, lon, lat, vec, top, label: `Pin ${srcCells.g[i]}${near ? ` · near ${near.name}` : ""}` });
-    setTab("source");
+    const top = vec.map((x, k) => [x, k] as const).sort((a, b) => b[0] - a[0]).slice(0, 7).map((x) => x[1]);
+    setPin({ kind: "pin", city: srcCells.city, lon, lat, vec, top, label: `cell ${srcCells.g[i]}${near ? ` near ${near.name}` : ""}` });
+    setMobileTab("from");
   }, [srcCells, ds]);
 
   const swap = useCallback(() => {
@@ -121,99 +119,104 @@ export function ExploreClient() {
   }, [ds, toCity, selected, matches, sourceCityId]);
 
   const onAgentAction = useCallback((a: AgentAction) => {
-    if (a.type === "select") {
-      setPin(null); setFromId(a.from); setToCity(a.to); setTab("twins");
-      setTimeout(() => a.twin && setSelected(a.twin), 50);
+    if (!ds) return;
+    if (a.type === "select" || a.type === "showTwins") {
+      setPin(null); setFromId(a.from); setToCity(a.to);
+      if (a.twin) setTimeout(() => setSelected(a.twin!), 60);
+    } else if (a.type === "flyTo") {
+      const h = ds.hoods.find((x) => x.id === a.hood);
+      if (!h) return;
+      if (h.city === toCity) setSelected(h.id); else { setPin(null); setFromId(h.id); }
+    } else if (a.type === "highlightCells") {
+      // Show where the item clusters: make the strongest neighbourhood for it the source.
+      const best = ds.hoods.filter((h) => h.city === a.city).sort((x, y) => (y.v[a.item] ?? 0) - (x.v[a.item] ?? 0))[0];
+      if (best) { setPin(null); setFromId(best.id); setToCity((t) => (t === a.city ? null : t)); }
     }
-  }, []);
+  }, [ds, toCity]);
 
-  if (error) return <div className="grid min-h-dvh place-items-center text-red-300">Failed to load data: {error}</div>;
+  if (error) return <div className="grid min-h-dvh place-items-center text-destructive">failed to load data: {error}</div>;
   if (!ds || !sourceHood || !sourceVec) {
-    return <div className="grid min-h-dvh place-items-center"><div className="flex items-center gap-3 text-white/50"><span className="size-2 animate-ping rounded-full bg-cyan-300" /> Loading taste data…</div></div>;
+    return <div className="grid min-h-dvh place-items-center text-[12px] text-dim"><span className="cursor-block">loading taste data</span></div>;
   }
 
-  const sourcePoint = { lon: pin?.lon ?? sourceHood.lon, lat: pin?.lat ?? sourceHood.lat, name: pin ? pin.label.split(" · ")[0] : sourceHood.name, cityId: sourceCityId };
-  const sourceName = pin ? "Your pin" : sourceHood.name;
+  const sourcePoint = { lon: pin?.lon ?? sourceHood.lon, lat: pin?.lat ?? sourceHood.lat, name: pin ? "pin" : sourceHood.name, cityId: sourceCityId };
+  const sourceName = pin ? "your pin" : sourceHood.name;
 
   const sourceUI = <SourcePanel ds={ds} source={sourceHood} pin={pin} toCity={toCity} sourceCityId={sourceCityId} onPickHood={pickHood} onPickCity={pickCity} />;
   const twinsUI = targetCity ? (
-    <TwinsPanel ds={ds} matches={matches} selected={selected} onSelect={setSelected} sourceName={sourceName} targetName={targetCity.name} mode={mode} onSwap={swap} evals={evals} loading={false} />
+    <TwinsPanel ds={ds} matches={matches} selected={selected} onSelect={setSelected} sourceName={sourceName} targetName={targetCity.name} mode={mode} onSwap={swap} evals={evals} />
   ) : (
-    <div className="grid place-items-center gap-3 py-10 text-center text-sm text-white/50"><Plane className="size-8 text-violet-300" />Choose a target city to fly there and see the twins.</div>
+    <div className="px-4 py-6 text-[12px] leading-relaxed text-muted-foreground">
+      <div className="label mb-2">twins</div>
+      pick a city under <span className="text-foreground">twin in</span> — the camera flies there and the five closest neighbourhoods
+      to <span className="text-foreground">{sourceName.toLowerCase()}</span> light up.
+    </div>
   );
+  const agentUI = <AgentPanel context={{ fromHood: pin ? null : fromId, toCity }} onAction={onAgentAction} className="h-full" />;
 
-  return (
-    <main className="relative h-dvh w-full overflow-hidden bg-[#07080b]">
+  const map = (
+    <div className="relative h-full min-h-0 overflow-hidden">
       <ExploreMap
         source={sourcePoint} sourceCity={sourceCity} targetCity={targetCity} srcCells={srcCells} tgtCells={tgtCells}
         srcSim={srcSim} tgtSim={tgtSim} mode={mode} twins={mapTwins} selectedTwin={selected} basketLabels={ds.basket.map((b) => b.label)}
         onPickSourceCell={onPickSourceCell} onSelectTwin={setSelected} onFlightState={setFlying}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[#07080b]/80 to-transparent" />
-
-      <div className="pointer-events-none absolute inset-x-0 top-[72px] z-20 flex flex-col items-center gap-2 px-3 lg:top-[84px]">
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3">
         <div className="pointer-events-auto"><ModeToggle mode={mode} onChange={setMode} /></div>
-        <AnimatePresence>
-          {mode === "raw" && (
-            <motion.div key="raw" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-              className="glass pointer-events-auto flex max-w-xl items-center gap-2 rounded-2xl border-amber-300/30 px-4 py-2.5 text-sm text-amber-100">
-              <AlertTriangle className="size-4 shrink-0 text-amber-300" /> Raw affinity ≈ popularity — every neighbourhood looks the same.
-            </motion.div>
-          )}
-          {flying && (
-            <motion.div key="fly" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="glass pointer-events-none flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs text-white/70">
-              <Plane className="size-3.5 text-cyan-300" /> Flying to {targetCity?.name}…
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="border border-line bg-background/90 px-2 py-1 text-[11px] text-muted-foreground">
+          {flying ? <span className="cursor-block">flying to {targetCity?.name.toLowerCase()}</span>
+            : mode === "raw" ? <span>raw affinity — mostly <span className="text-foreground">how busy</span> a cell is</span>
+              : <span>{sourceCity?.name.toLowerCase()}{targetCity ? <> <span className="text-dim">→</span> {targetCity.name.toLowerCase()}</> : ""}</span>}
+        </div>
       </div>
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 border border-line bg-background/90 px-2 py-1 text-[10.5px] text-dim">
+        <span>{mode === "raw" ? "quiet" : "unlike"}</span>
+        <span className="h-1.5 w-28" style={{ background: gradientCss(mode === "raw" ? "raw" : "twin") }} />
+        <span>{mode === "raw" ? "busy" : `like ${sourceName.toLowerCase()}`}</span>
+      </div>
+    </div>
+  );
 
+  const tabBtn = (id: string, label: string, active: boolean, onClick: () => void, disabled = false) => (
+    <button key={id} role="tab" aria-selected={active} disabled={disabled} onClick={onClick}
+      className={cn("relative h-full px-4 text-[12px] transition-colors disabled:opacity-40", active ? "text-foreground" : "text-dim hover:text-muted-foreground")}>
+      {label}
+      {active && <span className="absolute inset-x-3 -bottom-px h-px bg-primary" />}
+    </button>
+  );
+
+  return (
+    <main className="fixed inset-x-0 bottom-0 top-11 bg-background">
       {desktop ? (
-        <>
-          <motion.aside initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}
-            className="glass absolute bottom-4 left-4 top-[84px] z-20 w-[340px] overflow-y-auto rounded-3xl p-4" aria-label="Source neighbourhood">
-            {sourceUI}
-          </motion.aside>
-          {targetCity && (
-            <motion.aside initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.1 }}
-              className="glass absolute bottom-4 right-4 top-[84px] z-20 w-[380px] overflow-y-auto rounded-3xl p-4" aria-label="Twin results">
-              {twinsUI}
-            </motion.aside>
-          )}
-        </>
+        <div className="grid h-full grid-cols-[300px_minmax(0,1fr)_380px]">
+          <aside className="min-h-0 overflow-hidden border-r border-line" aria-label="Source neighbourhood">{sourceUI}</aside>
+          {map}
+          <aside className="flex min-h-0 flex-col border-l border-line" aria-label="Twins and agent">
+            <div role="tablist" className="flex h-10 shrink-0 items-stretch border-b border-line">
+              {tabBtn("twins", "twins", right === "twins", () => setRight("twins"))}
+              {tabBtn("agent", "agent", right === "agent", () => setRight("agent"))}
+              <button onClick={() => setCmdOpen(true)} className="ml-auto px-4 text-[11.5px] text-dim transition-colors hover:text-foreground" aria-label="Open search (Command K)">
+                search <span className="ml-1 text-line-strong">⌘K</span>
+              </button>
+            </div>
+            <div className={cn("min-h-0 flex-1 overflow-y-auto", right !== "twins" && "hidden")}>{twinsUI}</div>
+            <div className={cn("min-h-0 flex-1", right !== "agent" && "hidden")}>{agentUI}</div>
+          </aside>
+        </div>
       ) : (
-        <section aria-label="Controls" className={cn("glass absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-3xl transition-[height] duration-300", sheetOpen ? "h-[48dvh]" : "h-[96px]")}>
-          <button onClick={() => setSheetOpen((o) => !o)} className="flex w-full flex-col items-center gap-2 pt-2" aria-expanded={sheetOpen} aria-label={sheetOpen ? "Collapse panel" : "Expand panel"}>
-            <span className="h-1 w-10 rounded-full bg-white/25" />
-            <ChevronUp className={cn("size-4 text-white/50 transition", sheetOpen && "rotate-180")} />
-          </button>
-          <Tabs value={tab} onValueChange={(v) => { setTab(v as "source" | "twins"); setSheetOpen(true); }} className="px-4">
-            <TabsList className="w-full bg-white/[0.05]">
-              <TabsTrigger value="source" className="flex-1">Source</TabsTrigger>
-              <TabsTrigger value="twins" className="flex-1" disabled={!targetCity}>Twins</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <div className="flex-1 overflow-y-auto px-4 pb-24 pt-3">{tab === "source" || !targetCity ? sourceUI : twinsUI}</div>
-        </section>
+        <div className="flex h-full flex-col">
+          <div className="h-[42dvh] shrink-0 border-b border-line">{map}</div>
+          <div role="tablist" className="flex h-10 shrink-0 items-stretch border-b border-line">
+            {tabBtn("from", "from", mobileTab === "from", () => setMobileTab("from"))}
+            {tabBtn("twins", "twins", mobileTab === "twins", () => setMobileTab("twins"), !targetCity)}
+            {tabBtn("agent", "agent", mobileTab === "agent", () => setMobileTab("agent"))}
+          </div>
+          <div className={cn("min-h-0 flex-1 overflow-y-auto", mobileTab !== "from" && "hidden")}>{sourceUI}</div>
+          <div className={cn("min-h-0 flex-1 overflow-y-auto", mobileTab !== "twins" && "hidden")}>{twinsUI}</div>
+          <div className={cn("min-h-0 flex-1", mobileTab !== "agent" && "hidden")}>{agentUI}</div>
+        </div>
       )}
-
-      <div className={cn("pointer-events-none absolute z-10 hidden items-center gap-2 text-[10px] uppercase tracking-widest text-white/50 sm:flex", desktop ? "bottom-6 left-[372px]" : "bottom-[110px] left-4")}>
-        <span>{mode === "raw" ? "quiet" : "less like"}</span>
-        <span className="h-1.5 w-40 rounded-full" style={{ background: gradientCss(mode === "raw" ? "raw" : "twin") }} />
-        <span>{mode === "raw" ? "busy" : `more like ${sourceName}`}</span>
-      </div>
-
-      <div className={cn("absolute z-30 flex items-center gap-2", desktop ? "bottom-5" : "right-3 top-[124px]")} style={desktop ? { right: targetCity ? 412 : 20 } : undefined}>
-        <Button onClick={() => setCmdOpen(true)} variant="outline" className="glass h-10 gap-2 rounded-full border-white/15 px-3 text-xs" aria-label="Open search (Command K)">
-          <CommandIcon className="size-3.5" /> <span className="hidden sm:inline">Search</span> <kbd className="hidden rounded bg-white/10 px-1.5 font-mono text-[10px] sm:inline">⌘K</kbd>
-        </Button>
-        <Button onClick={() => setAgentOpen(true)} className="bg-gradient-accent h-10 gap-2 rounded-full px-4 font-semibold text-black shadow-[0_0_30px_-4px_rgba(34,211,238,.7)]" aria-label="Open Twin agent">
-          <MessageSquare className="size-4" /> Ask Twin
-        </Button>
-      </div>
-
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} ds={ds} sourceCity={sourceCityId} onPickHood={pickHood} onPickCity={pickCity} />
-      <AgentDrawer open={agentOpen} onOpenChange={setAgentOpen} context={{ fromHood: pin ? null : fromId, toCity }} onAction={onAgentAction} />
     </main>
   );
 }

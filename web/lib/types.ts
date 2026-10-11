@@ -37,7 +37,19 @@ export interface Evals {
   basketSweep: { size: number; mrr: number }[];
   radiusSweep: { km: number; mrr: number }[];
   sanity: { city: string; hood: string; item: string; pct: number; raw_pct: number }[];
-  rawCollapse: { twin_mean_cos_spread: number; raw_mean_cos_spread: number };
+  rawCollapse: { twin_mean_cos_spread: number; raw_mean_cos_spread: number; twin_mean_cos?: number; raw_mean_cos?: number };
+  census?: Census;
+}
+
+export interface CensusRow {
+  city: string; label: string; items: string[]; variable: string; expected: "+" | "-";
+  rhoCorrected: number; ciCorrected: [number, number]; rhoRaw: number; ciRaw: [number, number]; rhoDensity: number; n: number; id?: string;
+}
+export interface Census {
+  acsYear: number; cities: string[]; preregisteredCommit: string;
+  summary: { n: number; correctSignCorrected: number; correctSignRaw: number; correctedBeatsRaw: number; meanAbsRhoCorrected: number; meanAbsRhoRaw: number; [k: string]: number };
+  rows: CensusRow[];
+  scatter: Record<string, [number, number, number][]>;
 }
 
 /** Packed cells for fast loops. */

@@ -1,14 +1,15 @@
 export type RGBA = [number, number, number, number];
 const mix = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
 
+// Corrected similarity: warm dark → amber → bone. Raw density: greys only, so "raw" never looks like signal.
 const TWIN_STOPS: [number, number[]][] = [
-  [0, [28, 24, 70]], [0.35, [88, 56, 214]], [0.62, [176, 84, 247]], [0.82, [34, 211, 238]], [1, [236, 254, 255]],
+  [0, [34, 32, 28]], [0.45, [92, 70, 40]], [0.72, [200, 128, 46]], [0.9, [240, 160, 60]], [1, [246, 232, 205]],
 ];
 const RAW_STOPS: [number, number[]][] = [
-  [0, [60, 28, 12]], [0.4, [154, 62, 14]], [0.7, [249, 115, 22]], [1, [253, 230, 138]],
+  [0, [30, 30, 28]], [0.5, [80, 78, 72]], [1, [170, 166, 156]],
 ];
 const SRC_STOPS: [number, number[]][] = [
-  [0, [20, 20, 40]], [0.5, [60, 50, 140]], [1, [167, 139, 250]],
+  [0, [26, 26, 24]], [0.6, [70, 68, 62]], [1, [150, 146, 136]],
 ];
 
 function ramp(stops: [number, number[]][], t: number) {
@@ -23,9 +24,11 @@ function ramp(stops: [number, number[]][], t: number) {
 export type PaletteName = "twin" | "raw" | "src";
 export function colorAt(p: PaletteName, t: number): RGBA {
   const c = ramp(p === "twin" ? TWIN_STOPS : p === "raw" ? RAW_STOPS : SRC_STOPS, t);
-  return [c[0], c[1], c[2], Math.round(55 + 200 * Math.min(1, t * 1.25))];
+  return [c[0], c[1], c[2], Math.round(70 + 185 * Math.min(1, t * 1.2))];
 }
 export function gradientCss(p: PaletteName) {
   const stops = Array.from({ length: 8 }, (_, i) => { const c = colorAt(p, i / 7); return `rgb(${c[0] | 0} ${c[1] | 0} ${c[2] | 0})`; });
   return `linear-gradient(90deg, ${stops.join(",")})`;
 }
+/** Text ramp for legends: the same scale as characters. */
+export const SHADE = " ░▒▓█";

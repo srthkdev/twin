@@ -53,15 +53,16 @@ export function useDeckMap(opts: DeckMapOptions) {
       map.setProjection({ type: "globe" });
       try {
         map.setSky({
-          "sky-color": "#070a1f",
-          "horizon-color": "#3b2a8c",
-          "fog-color": "#07080b",
+          "sky-color": "#0b0b0a",
+          "horizon-color": "#2a2621",
+          "fog-color": "#0b0b0a",
           "sky-horizon-blend": 0.6,
           "horizon-fog-blend": 0.5,
           "fog-ground-blend": 0.25,
-          "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 8, 0],
+          "atmosphere-blend": 0,
         });
       } catch { /* sky unsupported */ }
+      warmBasemap(map);
     });
     mapRef.current = map;
     overlayRef.current = overlay;
@@ -75,6 +76,26 @@ export function useDeckMap(opts: DeckMapOptions) {
   }, []);
 
   return { containerRef, mapRef, overlayRef, ready };
+}
+
+/** Re-ink CARTO dark-matter in Twin's warm greys so the map sits in the same palette as the UI. */
+function warmBasemap(map: maplibregl.Map) {
+  for (const l of map.getStyle().layers ?? []) {
+    const id = l.id;
+    try {
+      if (l.type === "background") map.setPaintProperty(id, "background-color", "#11110f");
+      else if (l.type === "fill" && /water/.test(id)) map.setPaintProperty(id, "fill-color", "#0b0b0a");
+      else if (l.type === "fill" && /building/.test(id)) map.setPaintProperty(id, "fill-color", "#191815");
+      else if (l.type === "fill") map.setPaintProperty(id, "fill-color", "#141411");
+      else if (l.type === "line" && /water/.test(id)) map.setPaintProperty(id, "line-color", "#0b0b0a");
+      else if (l.type === "line" && /boundary|admin/.test(id)) map.setPaintProperty(id, "line-color", "#3a3833");
+      else if (l.type === "line") map.setPaintProperty(id, "line-color", "#22211d");
+      else if (l.type === "symbol") {
+        map.setPaintProperty(id, "text-color", "#6f6c64");
+        map.setPaintProperty(id, "text-halo-color", "#0b0b0a");
+      }
+    } catch { /* layer without that paint property */ }
+  }
 }
 
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -103,7 +124,7 @@ export function haversineKm(a: [number, number], b: [number, number]): number {
 }
 
 export interface ArcSeg { path: [number, number, number][]; color: [number, number, number, number] }
-/** Great-circle arc with altitude, split in coloured segments (violet -> cyan) from t=0 to tEnd. Works on globe and mercator. */
+/** Great-circle arc with altitude, split in segments that brighten from bone to amber, from t=0 to tEnd. Works on globe and mercator. */
 export function arcSegments(a: [number, number], b: [number, number], tEnd = 1, n = 40, alpha = 255, heightFrac = 0.16): ArcSeg[] {
   const km = haversineKm(a, b);
   const h = km * 1000 * heightFrac;
@@ -113,7 +134,7 @@ export function arcSegments(a: [number, number], b: [number, number], tEnd = 1, 
   for (let i = 0; i < m; i++) {
     const t0 = (i / n), t1 = Math.min(tEnd, (i + 1) / n);
     const c = (t0 + t1) / 2;
-    segs.push({ path: [pt(t0), pt(t1)], color: [Math.round(167 + (103 - 167) * c), Math.round(139 + (232 - 139) * c), Math.round(250 + (249 - 250) * c), alpha] });
+    segs.push({ path: [pt(t0), pt(t1)], color: [Math.round(230 + (240 - 230) * c), Math.round(227 + (160 - 227) * c), Math.round(218 + (60 - 218) * c), alpha] });
   }
   return segs;
 }

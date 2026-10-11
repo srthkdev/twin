@@ -5,3 +5,8 @@ node_modules/
 __pycache__/
 .DS_Store
 .vercel
+.env*.local
+pipeline/raw_*.json
+probe/fp_*.json
+probe/hm_la.json
+pipeline/*.log

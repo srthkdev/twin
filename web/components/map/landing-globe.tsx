@@ -12,9 +12,9 @@ export default function LandingGlobe({ arcs }: { arcs: GlobeArc[] }) {
     if (!ready) return;
     const map = mapRef.current!, overlay = overlayRef.current!;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const narrow = window.innerWidth < 640;
-    map.setZoom(narrow ? 1.0 : window.innerWidth > 1600 ? 2.6 : 2.25);
-    map.setPadding({ top: Math.round(window.innerHeight * (narrow ? 0.7 : 0.74)), bottom: 0, left: 0, right: 0 });
+    // Fit the whole globe inside its frame: at zoom z the globe is ~512·2^z/π px across.
+    const box = map.getContainer();
+    map.setZoom(Math.log2((Math.min(box.clientWidth, box.clientHeight) * 0.86 * Math.PI) / 512));
     map.getStyle().layers.forEach((l) => { if (l.type === "symbol") map.setLayoutProperty(l.id, "visibility", "none"); });
     const hubs = Array.from(new Map(arcs.flatMap((a) => [[a.from.join(), a.from], [a.to.join(), a.to]] as [string, [number, number]][])).values());
     const baseSegs = arcs.flatMap((a) => arcSegments(a.from, a.to, 1, 40, 70));
@@ -37,11 +37,11 @@ export default function LandingGlobe({ arcs }: { arcs: GlobeArc[] }) {
             updateTriggers: { getPath: [Math.floor(t * 30)], getColor: [Math.floor(t * 30)] },
           }),
           new ScatterplotLayer<[number, number]>({
-            id: "hubs", data: hubs, getPosition: (d) => d, getFillColor: [255, 255, 255, 230],
+            id: "hubs", data: hubs, getPosition: (d) => d, getFillColor: [230, 227, 218, 230],
             radiusUnits: "pixels", getRadius: 2.6, radiusScale: 1,
           }),
           new ScatterplotLayer<[number, number]>({
-            id: "hubs-halo", data: hubs, getPosition: (d) => d, getFillColor: [103, 232, 249, 40],
+            id: "hubs-halo", data: hubs, getPosition: (d) => d, getFillColor: [240, 160, 60, 46],
             radiusUnits: "pixels", getRadius: 9, radiusScale: reduce ? 1 : 1 + 0.35 * Math.sin(t * 2),
             updateTriggers: { radiusScale: [Math.floor(t * 30)] },
           }),
@@ -53,5 +53,5 @@ export default function LandingGlobe({ arcs }: { arcs: GlobeArc[] }) {
     return () => cancelAnimationFrame(raf);
   }, [ready, arcs, mapRef, overlayRef]);
 
-  return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} className="bg-[#07080b]" aria-hidden />;
+  return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} className="bg-background" aria-hidden />;
 }

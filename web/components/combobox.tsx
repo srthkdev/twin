@@ -1,6 +1,5 @@
 "use client";
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -21,26 +20,31 @@ export function Combobox({ value, onChange, options, placeholder, searchPlacehol
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          type="button" role="combobox" aria-haspopup="listbox" aria-controls="combo-list" aria-expanded={open} aria-label={ariaLabel}
+          type="button" role="combobox" aria-haspopup="listbox" aria-controls={`${ariaLabel}-list`} aria-expanded={open} aria-label={ariaLabel}
           className={cn(
-            "group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2 text-left font-semibold text-white outline-none transition hover:border-violet-400/60 hover:bg-white/10 hover:shadow-[0_0_30px_-8px_rgba(139,92,246,.9)] focus-visible:border-cyan-300/70",
+            "inline-flex items-baseline gap-1.5 border-b border-dashed border-line-strong pb-px text-left text-foreground outline-none transition-colors hover:border-primary hover:text-primary focus-visible:border-primary",
+            open && "border-primary text-primary",
             className,
           )}
         >
-          <span className={cn("truncate", !sel && "text-muted-foreground")}>{sel?.label ?? placeholder}</span>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50 transition group-hover:opacity-100" />
+          <span className={cn("truncate", !sel && "text-muted-foreground")}>{sel?.label.toLowerCase() ?? placeholder}</span>
+          <span className="text-[10px] text-dim">▾</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="glass w-[min(320px,90vw)] border-white/10 bg-[#0d0f16]/95 p-0 text-white">
-        <Command>
-          <CommandInput placeholder={searchPlaceholder ?? "Search…"} />
+      <PopoverContent align="start" className="w-[min(300px,90vw)] rounded-none border-line-strong bg-popover p-0 shadow-none">
+        <Command className="rounded-none bg-transparent">
+          <CommandInput placeholder={searchPlaceholder ?? "search…"} />
           <CommandList className="max-h-72">
-            <CommandEmpty>No match.</CommandEmpty>
+            <CommandEmpty>no match</CommandEmpty>
             {groups.map(([g, opts]) => (
               <CommandGroup key={g} heading={g || undefined}>
                 {opts.map((o) => (
-                  <CommandItem key={o.value} value={`${o.label} ${o.group ?? ""} ${(o.keywords ?? []).join(" ")}`} onSelect={() => { onChange(o.value); setOpen(false); }}>
-                    <Check className={cn("size-4", o.value === value ? "opacity-100 text-cyan-300" : "opacity-0")} />
+                  <CommandItem
+                    key={o.value} value={`${o.label} ${o.group ?? ""} ${(o.keywords ?? []).join(" ")}`}
+                    onSelect={() => { onChange(o.value); setOpen(false); }}
+                    className="rounded-none"
+                  >
+                    <span className={cn("w-3 text-primary", o.value !== value && "opacity-0")}>›</span>
                     {o.label}
                   </CommandItem>
                 ))}
