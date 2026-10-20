@@ -1,5 +1,5 @@
 "use client";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { stepLabel } from "./result-cards";
 
@@ -22,6 +22,15 @@ export function Spinner({ className }: { className?: string }) {
   const [i, setI] = useState(0);
   useEffect(() => { const t = setInterval(() => setI((x) => (x + 1) % SPIN.length), 80); return () => clearInterval(t); }, []);
   return <span aria-hidden className={cn("inline-block w-3 text-primary", className)}>{SPIN[i]}</span>;
+}
+/** The "working" indicator: three amber blocks in a wave and a shimmering label. CSS only, no timers. */
+export function Pulse({ label, children, className }: { label: string; children?: ReactNode; className?: string }) {
+  return (
+    <span role="status" className={cn("inline-flex items-center gap-2.5 text-[12px]", className)}>
+      <span aria-hidden className="wave inline-flex h-4 items-end gap-[3px]"><i /><i /><i /></span>
+      <span className="shimmer">{label}</span>{children}
+    </span>
+  );
 }
 export function Elapsed({ from, to }: { from: number; to?: number }) {
   const [now, setNow] = useState(() => Date.now());

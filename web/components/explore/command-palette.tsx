@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import type { DataSet } from "@/lib/types";
 
 export function CommandPalette({ open, onOpenChange, ds, sourceCity, onPickHood, onPickCity }: {
@@ -14,6 +14,7 @@ export function CommandPalette({ open, onOpenChange, ds, sourceCity, onPickHood,
   const run = (fn: () => void) => { fn(); onOpenChange(false); };
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange} title="Search" description="Search neighbourhoods and cities" className="rounded-none border border-line-strong bg-popover font-mono shadow-none sm:max-w-xl">
+      <Command className="rounded-none bg-transparent">
       <CommandInput placeholder="neighbourhood or city…" />
       <CommandList className="max-h-[360px]">
         <CommandEmpty>no match</CommandEmpty>
@@ -30,6 +31,7 @@ export function CommandPalette({ open, onOpenChange, ds, sourceCity, onPickHood,
           </CommandGroup>
         ))}
       </CommandList>
+      </Command>
     </CommandDialog>
   );
 }

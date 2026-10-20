@@ -7,7 +7,7 @@ import { Markdown } from "@/lib/markdown";
 import type { AgentAction } from "@/lib/agent/types";
 import type { TwinUIMessage } from "@/lib/agent/ai";
 import { AgentSettingsPanel } from "./agent-settings";
-import { Elapsed, Spinner, ToolTrace, type ToolStep } from "./tool-trace";
+import { Elapsed, Pulse, ToolTrace, type ToolStep } from "./tool-trace";
 import { ResultCard, hasCard } from "./result-cards";
 import { emptySettings, loadSettings, saveSettings, type AgentSettings, type Health } from "./settings";
 
@@ -32,6 +32,16 @@ function saveMarkdown(filename: string, markdown: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** The conversation survives tab switches, panel collapses and reloads (this browser only). */
+const CHAT_KEY = "twin-chat-v1";
+interface SavedChat { messages: TwinUIMessage[]; files: Record<string, { filename: string; markdown: string }[]>; times: [string, { start: number; end?: number }][] }
+function loadChat(): SavedChat | null {
+  try { const raw = localStorage.getItem(CHAT_KEY); return raw ? (JSON.parse(raw) as SavedChat) : null; } catch { return null; }
+}
+function saveChat(c: SavedChat) {
+  try { if (c.messages.length) localStorage.setItem(CHAT_KEY, JSON.stringify(c)); else localStorage.removeItem(CHAT_KEY); } catch { /* storage full or blocked */ }
+}
+
 const SUGGEST = [
   "Find the Silver Lake of Berlin",
   "I love Silver Lake. I'm moving to Neukölln — where do I actually go?",
@@ -42,6 +52,14 @@ const SUGGEST = [
 ];
 
 /** Split the model's closing "Next: a · b" line off the answer so it can render as buttons. */
+function friendlyError(raw: string): string {
+  let msg = raw;
+  try { msg = (JSON.parse(raw) as { error?: string }).error ?? raw; } catch { /* plain text */ }
+  if (/rate|429|too many/i.test(msg)) return msg.length < 160 ? msg : "Too many questions in a short time. Wait a minute, or add your own OpenRouter key in settings.";
+  if (/fetch|network|failed to/i.test(msg)) return "Lost the connection to the agent. Retry?";
+  return msg.length < 200 ? msg : "The model didn't answer this time. Retry — it falls back to another free model.";
+}
+
 function splitNext(text: string): { body: string; next: string[] } {
   const m = text.match(/\n*\**Next:?\**:?\s*(.+)\s*$/i);
   if (!m) return { body: text, next: [] };
@@ -56,8 +74,8 @@ function Thinking({ text, done, since }: { text: string; done: boolean; since: n
   return (
     <details className="group my-1.5" open={!done ? true : undefined}>
       <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] text-dim [&::-webkit-details-marker]:hidden">
-        {done ? <span className="inline-block w-3 text-center">◇</span> : <Spinner />}
-        <span>{done ? "thought for " : "thinking "}<Elapsed from={since} to={end} /></span>
+        {done ? <><span className="inline-block w-3 text-center">◇</span><span>thought for <Elapsed from={since} to={end} /></span></>
+          : <Pulse label="thinking"><span className="text-[11px] text-dim"><Elapsed from={since} /></span></Pulse>}
       </summary>
       {!done ? (
         <div className="relative ml-5 mt-1 h-[2.9em] overflow-hidden border-l border-line pl-2 text-[11px] leading-[1.45] text-dim [mask-image:linear-gradient(to_bottom,transparent,black_45%)]">
@@ -134,7 +152,7 @@ const MessageView = memo(function MessageView({ m, live, times, progress, files,
           </div>
         );
       })}
-      {waiting && <p className="mt-1 flex items-center gap-2 text-[11px] text-dim"><Spinner />{m.parts.length ? "writing" : "planning"}</p>}
+      {waiting && <p className="mt-2"><Pulse label={m.parts.length ? "writing" : "planning"} /></p>}
       {files?.map((f) => (
         <button key={f.filename} type="button" onClick={() => onSave(f)}
           className="mt-2 flex w-full items-center justify-between border border-primary/60 px-2.5 py-2 text-left text-[11.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
@@ -187,7 +205,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     },
   }), []);
 
-  const { messages, sendMessage, status, stop, error } = useChat<TwinUIMessage>({
+  const { messages, sendMessage, status, stop, error, setMessages, regenerate, clearError } = useChat<TwinUIMessage>({
     transport,
     onData: (part) => {
       const p = part as { type: string; data: unknown };
@@ -217,7 +235,24 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     fetch("/api/agent/health").then((r) => r.json() as Promise<Health>).then(setHealth).catch(() => {});
     return () => { window.speechSynthesis?.cancel(); };
   }, []);
+  useEffect(() => {
+    const chat = loadChat();
+    if (!chat?.messages.length) return;
+    times.current = new Map(chat.times);
+    setFiles(chat.files ?? {});
+    setMessages(chat.messages);
+  }, [setMessages]);
   useEffect(() => { saveSettings(settings); }, [settings]);
+  // persist only between answers, never mid-stream
+  useEffect(() => {
+    if (status !== "ready" && status !== "error") return;
+    const ids = new Set(messages.flatMap((m) => m.parts.map((p, i) => (isToolUIPart(p) ? p.toolCallId : `${m.id}:r${i}`))));
+    saveChat({ messages: messages.slice(-30), files, times: [...times.current].filter(([k]) => ids.has(k)) });
+  }, [messages, status, files]);
+  const newChat = useCallback(() => {
+    if (busyRef.current) return;
+    setMessages([]); setFiles({}); setProgress({}); clearError(); times.current.clear(); saveChat({ messages: [], files: {}, times: [] });
+  }, [setMessages, clearError]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, progress]);
   useEffect(() => {
     const t = taRef.current;
@@ -289,6 +324,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
           <button type="button" onClick={() => setSpeak((s) => { if (s) window.speechSynthesis?.cancel(); return !s; })} aria-pressed={speak} className={cn("transition-colors hover:text-foreground", speak && "text-primary")}>
             voice {speak ? "on" : "off"}
           </button>
+          {messages.length > 0 && <button type="button" onClick={newChat} disabled={busy} className="transition-colors hover:text-foreground disabled:opacity-40">new chat</button>}
           <button type="button" onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings} className="transition-colors hover:text-foreground">
             {showSettings ? "close" : "settings"}
           </button>
@@ -319,7 +355,13 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
             )}
           </div>
         ))}
-        {error && <p className="border border-destructive/50 px-2.5 py-2 text-[11.5px] text-destructive">{error.message.replace(/^.*?"error":"?|"?}$/g, "")}</p>}
+        {status === "submitted" && messages[lastIdx]?.role === "user" && <p><Pulse label="planning" /></p>}
+        {error && (
+          <div className="flex items-start justify-between gap-3 border border-destructive/50 px-2.5 py-2 text-[11.5px] text-destructive">
+            <span>{friendlyError(error.message)}</span>
+            <button type="button" onClick={() => { clearError(); void regenerate(); }} className="shrink-0 border border-destructive/60 px-1.5 text-[11px] transition-colors hover:bg-destructive hover:text-background">retry</button>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 

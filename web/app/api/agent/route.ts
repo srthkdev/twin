@@ -12,7 +12,7 @@ export const maxDuration = 300;
 interface Body { messages: TwinUIMessage[]; context?: AgentContext; model?: string }
 
 // Server-key budget per client: each question can be up to 8 model calls on a free tier.
-const WINDOW_MS = 10 * 60_000, MAX_PER_WINDOW = 12;
+const WINDOW_MS = 10 * 60_000, MAX_PER_WINDOW = 20;
 const hits = new Map<string, number[]>();
 function allow(ip: string) {
   const now = Date.now(), h = (hits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
@@ -36,11 +36,14 @@ export async function POST(req: Request) {
   if (!apiKey) return NextResponse.json({ error: "No OpenRouter key on the server — add your own in agent settings." }, { status: 400 });
   if (!userKey) {
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "local";
-    if (!allow(ip)) return NextResponse.json({ error: "Demo limit reached (12 questions per 10 minutes). Add your own OpenRouter key in settings to keep going." }, { status: 429 });
+    if (!allow(ip)) return NextResponse.json({ error: "Demo limit reached (20 questions per 10 minutes). Add your own OpenRouter key in settings to keep going." }, { status: 429 });
   }
 
   const ds = await loadServerDataSet();
-  const messages = body.messages.slice(-16);
+  // history: keep answers and finished tool results; drop old reasoning and transient parts (cheaper, and some providers reject them)
+  const messages = body.messages.slice(-16).map((m, i, all) => i === all.length - 1 ? m : {
+    ...m, parts: m.parts.filter((p) => p.type !== "reasoning" && !p.type.startsWith("data-")),
+  }).filter((m) => m.parts.length);
   const ctx = contextLine(body.context);
   const primary = body.model && OPENROUTER_MODELS.includes(body.model) ? body.model : OPENROUTER_MODELS[0];
   const meta: RunMeta = { qlooLive: 0, qlooCached: 0 };
@@ -48,7 +51,7 @@ export async function POST(req: Request) {
 
   const stream = createUIMessageStream<TwinUIMessage>({
     execute: async ({ writer }) => {
-      const modelMessages = await convertToModelMessages(messages);
+      const modelMessages = await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true });
       if (ctx) {
         const last = [...modelMessages].reverse().find((m) => m.role === "user");
         if (last && typeof last.content === "string") last.content = ctx + last.content;
@@ -60,6 +63,8 @@ export async function POST(req: Request) {
         messages: modelMessages,
         tools: aiTools(ds, writer, meta),
         stopWhen: isStepCount(8),
+        // the last step must be an answer, never another tool call
+        prepareStep: ({ stepNumber }) => (stepNumber >= 7 ? { toolChoice: "none" as const } : undefined),
         temperature: 0.4,
         providerOptions: fallbackOptions(primary),
         onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; },
