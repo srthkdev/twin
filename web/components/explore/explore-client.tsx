@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDataset } from "@/hooks/use-dataset";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { loadCells, loadEvals } from "@/lib/data";
+import { coreHoods, isLive, loadCells, loadCore, loadEvals } from "@/lib/data";
 import { cellSimilarities, neighbourhoodVector, rankHoods } from "@/lib/similarity";
 import { gradientCss } from "@/lib/colors";
 import { cn } from "@/lib/utils";
-import type { Evals, Hood, PackedCells, TwinMatch } from "@/lib/types";
+import type { City, CoreFile, DataSet, Evals, Hood, OpportunityResult, PackedCells, TwinMatch } from "@/lib/types";
 import type { AgentAction } from "@/lib/agent/types";
 import type { Mode, MapTwin } from "@/components/map/explore-map";
 import { ModeToggle } from "./mode-toggle";
@@ -28,7 +28,7 @@ type MobileTab = "from" | RightTab;
 
 export function ExploreClient() {
   const sp = useSearchParams();
-  const { ds, error } = useDataset();
+  const { ds: baseDs, error, refresh } = useDataset();
   const desktop = useMediaQuery("(min-width: 1024px)", true);
   const [fromId, setFromId] = useState(sp.get("from") ?? DEFAULT_FROM);
   const [toCity, setToCity] = useState<string | null>(sp.get("to"));
@@ -42,29 +42,58 @@ export function ExploreClient() {
   const [flying, setFlying] = useState(false);
   const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" ? "agent" : "twins");
   const [mobileTab, setMobileTab] = useState<MobileTab>("from");
+  const [opp, setOpp] = useState<OpportunityResult | null>(null);
+  const [cores, setCores] = useState<Record<string, CoreFile>>({});
 
   useEffect(() => { loadEvals().then(setEvals).catch(() => {}); }, []);
 
+  // Live cities only have the 40 core dims, so any pair that includes one is compared on core vectors on both sides.
+  const rawHood = baseDs?.hoods.find((h) => h.id === fromId) ?? baseDs?.hoods[0] ?? null;
+  const sourceCityId = pin?.city ?? rawHood?.city ?? "";
+  const srcLive = isLive(baseDs?.cities.find((c) => c.id === sourceCityId));
+  const tgtLive = isLive(toCity ? baseDs?.cities.find((c) => c.id === toCity) : null);
+  const coreMode = srcLive || tgtLive;
+  const coreIds = useMemo(() => (coreMode ? [sourceCityId, toCity].filter((x): x is string => !!x) : []), [coreMode, sourceCityId, toCity]);
+  useEffect(() => {
+    coreIds.forEach((id) => loadCore(id).then((f) => setCores((c) => (c[id] === f ? c : { ...c, [id]: f }))).catch(() => {}));
+  }, [coreIds]);
+  const coreReady = coreMode && coreIds.every((id) => cores[id]);
+
+  const ds: DataSet | null = useMemo(() => {
+    if (!baseDs) return null;
+    if (!coreMode) return baseDs;
+    const hoods = coreReady ? coreIds.flatMap((id) => coreHoods(cores[id], id)) : baseDs.hoods;
+    return { ...baseDs, basket: coreReady || srcLive ? (baseDs.coreBasket ?? baseDs.basket) : baseDs.basket, hoods, twins: {} };
+  }, [baseDs, coreMode, coreReady, coreIds, cores, srcLive]);
+
   const sourceHood: Hood | null = useMemo(() => ds?.hoods.find((h) => h.id === fromId) ?? ds?.hoods[0] ?? null, [ds, fromId]);
-  const sourceCityId = pin?.city ?? sourceHood?.city ?? "";
-  const sourceVec = pin?.vec ?? sourceHood?.v ?? null;
   const sourceCity = ds?.cities.find((c) => c.id === sourceCityId) ?? null;
   const targetCity = toCity ? ds?.cities.find((c) => c.id === toCity) ?? null : null;
+  const oppCity = opp ? ds?.cities.find((c) => c.id === opp.city) ?? null : null;
 
   useEffect(() => {
     if (!sourceCityId) return;
     let alive = true;
     setSrcCells(null);
-    loadCells(sourceCityId).then((c) => alive && setSrcCells(c)).catch(() => {});
+    loadCells(sourceCityId, coreMode).then((c) => alive && setSrcCells(c)).catch(() => {});
     return () => { alive = false; };
-  }, [sourceCityId]);
+  }, [sourceCityId, coreMode]);
   useEffect(() => {
     if (!toCity) { setTgtCells(null); return; }
     let alive = true;
     setTgtCells(null);
-    loadCells(toCity).then((c) => alive && setTgtCells(c)).catch(() => {});
+    loadCells(toCity, coreMode).then((c) => alive && setTgtCells(c)).catch(() => {});
     return () => { alive = false; };
-  }, [toCity]);
+  }, [toCity, coreMode]);
+
+  // A dropped pin keeps only its location; its vector is re-derived from whichever cells (116 or 40 dims) are loaded.
+  const livePin: SourcePin | null = useMemo(() => {
+    if (!pin) return null;
+    if (!srcCells || srcCells.city !== pin.city) return { ...pin, vec: [], top: [] };
+    const vec = neighbourhoodVector(srcCells, pin.lon, pin.lat);
+    return { ...pin, vec, top: vec.map((x, k) => [x, k] as const).sort((a, b) => b[0] - a[0]).slice(0, 7).map((x) => x[1]) };
+  }, [pin, srcCells]);
+  const sourceVec = livePin ? (livePin.vec.length ? livePin.vec : null) : sourceHood?.v ?? null;
 
   useEffect(() => {
     if (!ds) return;
@@ -74,14 +103,14 @@ export function ExploreClient() {
     window.history.replaceState(null, "", u.toString());
   }, [ds, fromId, toCity]);
 
-  const srcSim = useMemo(() => (srcCells && sourceVec ? cellSimilarities(srcCells, sourceVec) : null), [srcCells, sourceVec]);
-  const tgtSim = useMemo(() => (tgtCells && sourceVec ? cellSimilarities(tgtCells, sourceVec) : null), [tgtCells, sourceVec]);
+  const srcSim = useMemo(() => (srcCells && sourceVec && sourceVec.length === srcCells.dim ? cellSimilarities(srcCells, sourceVec) : null), [srcCells, sourceVec]);
+  const tgtSim = useMemo(() => (tgtCells && sourceVec && sourceVec.length === tgtCells.dim ? cellSimilarities(tgtCells, sourceVec) : null), [tgtCells, sourceVec]);
 
   const matches: TwinMatch[] = useMemo(() => {
     if (!ds || !toCity || !sourceVec) return [];
-    if (!pin) { const pre = ds.twins[fromId]?.[toCity]; if (pre?.length) return pre.slice(0, 5); }
+    if (!pin && !coreMode) { const pre = ds.twins[fromId]?.[toCity]; if (pre?.length) return pre.slice(0, 5); }
     return rankHoods(sourceVec, ds.hoods, toCity, 5);
-  }, [ds, toCity, sourceVec, pin, fromId]);
+  }, [ds, toCity, sourceVec, pin, fromId, coreMode]);
 
   useEffect(() => { setSelected(matches[0]?.hood ?? null); }, [matches]);
 
@@ -102,11 +131,9 @@ export function ExploreClient() {
   const onPickSourceCell = useCallback((i: number) => {
     if (!srcCells || !ds) return;
     const lon = srcCells.lon[i], lat = srcCells.lat[i];
-    const vec = neighbourhoodVector(srcCells, lon, lat);
     const near = ds.hoods.filter((h) => h.city === srcCells.city)
       .map((h) => ({ h, d: Math.hypot((h.lon - lon) * Math.cos((lat * Math.PI) / 180), h.lat - lat) })).sort((a, b) => a.d - b.d)[0]?.h;
-    const top = vec.map((x, k) => [x, k] as const).sort((a, b) => b[0] - a[0]).slice(0, 7).map((x) => x[1]);
-    setPin({ kind: "pin", city: srcCells.city, lon, lat, vec, top, label: `cell ${srcCells.g[i]}${near ? ` near ${near.name}` : ""}` });
+    setPin({ kind: "pin", city: srcCells.city, lon, lat, vec: [], top: [], label: `cell ${srcCells.g[i]}${near ? ` near ${near.name}` : ""}` });
     setMobileTab("from");
   }, [srcCells, ds]);
 
@@ -118,9 +145,24 @@ export function ExploreClient() {
     setPin(null); setFromId(target); setToCity(back);
   }, [ds, toCity, selected, matches, sourceCityId]);
 
-  const onAgentAction = useCallback((a: AgentAction) => {
+  const cityAdded = useCallback((city: City) => {
+    void refresh().then(() => {
+      if (city.id !== sourceCityId) pickCity(city.id);
+    });
+  }, [refresh, sourceCityId, pickCity]);
+
+  const onAgentAction = useCallback((act: AgentAction) => {
     if (!ds) return;
-    if (a.type === "select" || a.type === "showTwins") {
+    // addCity / opportunity come from the v2 backend; typed locally so this compiles either way.
+    const a = act as AgentAction | { type: "addCity"; city: City } | { type: "opportunity"; city: string; cells: OpportunityResult["cells"] };
+    if (a.type === "addCity") {
+      cityAdded(a.city);
+    } else if (a.type === "opportunity") {
+      if (!ds.cities.some((c) => c.id === a.city)) void refresh();
+      setOpp({ city: a.city, cells: a.cells });
+      setMode("opportunity");
+      if (a.city !== sourceCityId) { setToCity(a.city); setRight("twins"); setMobileTab("twins"); }
+    } else if (a.type === "select" || a.type === "showTwins") {
       setPin(null); setFromId(a.from); setToCity(a.to);
       if (a.twin) setTimeout(() => setSelected(a.twin!), 60);
     } else if (a.type === "flyTo") {
@@ -132,7 +174,7 @@ export function ExploreClient() {
       const best = ds.hoods.filter((h) => h.city === a.city).sort((x, y) => (y.v[a.item] ?? 0) - (x.v[a.item] ?? 0))[0];
       if (best) { setPin(null); setFromId(best.id); setToCity((t) => (t === a.city ? null : t)); }
     }
-  }, [ds, toCity]);
+  }, [ds, toCity, sourceCityId, cityAdded, refresh]);
 
   if (error) return <div className="grid min-h-dvh place-items-center text-destructive">failed to load data: {error}</div>;
   if (!ds || !sourceHood || !sourceVec) {
@@ -142,7 +184,7 @@ export function ExploreClient() {
   const sourcePoint = { lon: pin?.lon ?? sourceHood.lon, lat: pin?.lat ?? sourceHood.lat, name: pin ? "pin" : sourceHood.name, cityId: sourceCityId };
   const sourceName = pin ? "your pin" : sourceHood.name;
 
-  const sourceUI = <SourcePanel ds={ds} source={sourceHood} pin={pin} toCity={toCity} sourceCityId={sourceCityId} onPickHood={pickHood} onPickCity={pickCity} />;
+  const sourceUI = <SourcePanel ds={ds} source={sourceHood} pin={livePin} toCity={toCity} sourceCityId={sourceCityId} onPickHood={pickHood} onPickCity={pickCity} onCityAdded={cityAdded} />;
   const twinsUI = targetCity ? (
     <TwinsPanel ds={ds} matches={matches} selected={selected} onSelect={setSelected} sourceName={sourceName} targetName={targetCity.name} mode={mode} onSwap={swap} evals={evals} />
   ) : (
@@ -158,21 +200,22 @@ export function ExploreClient() {
     <div className="relative h-full min-h-0 overflow-hidden">
       <ExploreMap
         source={sourcePoint} sourceCity={sourceCity} targetCity={targetCity} srcCells={srcCells} tgtCells={tgtCells}
-        srcSim={srcSim} tgtSim={tgtSim} mode={mode} twins={mapTwins} selectedTwin={selected} basketLabels={ds.basket.map((b) => b.label)}
+        srcSim={srcSim} tgtSim={tgtSim} mode={mode} twins={mapTwins} selectedTwin={selected} basketLabels={ds.basket.map((b) => b.label)} opportunity={opp} opportunityCity={oppCity}
         onPickSourceCell={onPickSourceCell} onSelectTwin={setSelected} onFlightState={setFlying}
       />
       <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3">
-        <div className="pointer-events-auto"><ModeToggle mode={mode} onChange={setMode} /></div>
+        <div className="pointer-events-auto"><ModeToggle mode={mode} onChange={setMode} hasOpportunity={!!opp} /></div>
         <div className="border border-line bg-background/90 px-2 py-1 text-[11px] text-muted-foreground">
           {flying ? <span className="cursor-block">flying to {targetCity?.name.toLowerCase()}</span>
+            : mode === "opportunity" ? <span>{oppCity?.name.toLowerCase()} <span className="text-dim">·</span> demand without <span className="text-foreground">supply</span></span>
             : mode === "raw" ? <span>raw affinity — mostly <span className="text-foreground">how busy</span> a cell is</span>
               : <span>{sourceCity?.name.toLowerCase()}{targetCity ? <> <span className="text-dim">→</span> {targetCity.name.toLowerCase()}</> : ""}</span>}
         </div>
       </div>
       <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 border border-line bg-background/90 px-2 py-1 text-[10.5px] text-dim">
-        <span>{mode === "raw" ? "quiet" : "unlike"}</span>
-        <span className="h-1.5 w-28" style={{ background: gradientCss(mode === "raw" ? "raw" : "twin") }} />
-        <span>{mode === "raw" ? "busy" : `like ${sourceName.toLowerCase()}`}</span>
+        <span>{mode === "raw" ? "quiet" : mode === "opportunity" ? "saturated" : "unlike"}</span>
+        <span className="h-1.5 w-28" style={{ background: gradientCss(mode === "raw" ? "raw" : mode === "opportunity" ? "opp" : "twin") }} />
+        <span>{mode === "raw" ? "busy" : mode === "opportunity" ? "underserved" : `like ${sourceName.toLowerCase()}`}</span>
       </div>
     </div>
   );

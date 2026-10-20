@@ -2,16 +2,34 @@
 import { useMemo, useState } from "react";
 import { TraitList } from "./trait-chip";
 import { Label } from "./meter";
-import { CITY_CODES } from "@/lib/groups";
+import { addCity, cityCode } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import type { City, DataSet, Hood } from "@/lib/types";
 
 export interface SourcePin { kind: "pin"; city: string; lon: number; lat: number; label: string; top: number[]; vec: number[] }
 
-export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, sourceCityId }: {
+export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, onCityAdded, sourceCityId }: {
   ds: DataSet; source: Hood | null; pin: SourcePin | null; toCity: string | null; sourceCityId: string;
-  onPickHood: (id: string) => void; onPickCity: (id: string | null) => void;
+  onPickHood: (id: string) => void; onPickCity: (id: string | null) => void; onCityAdded: (city: City) => void;
 }) {
+  const [newCity, setNewCity] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
+  const submitCity = async () => {
+    const name = newCity.trim();
+    if (!name || adding) return;
+    setAdding(true); setAddError(null); setProgress("starting");
+    try {
+      const c = await addCity(name, (p) => setProgress(`${p.stage}${p.total ? ` ${p.done}/${p.total}` : ""}`));
+      setNewCity("");
+      onCityAdded(c);
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Could not add city");
+    } finally {
+      setAdding(false); setProgress(null);
+    }
+  };
   const [browse, setBrowse] = useState<string>(sourceCityId);
   const [prev, setPrev] = useState(sourceCityId);
   const [q, setQ] = useState("");
@@ -33,7 +51,7 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, s
           {ds.cities.map((c) => (
             <button key={c.id} role="tab" aria-selected={browse === c.id && !q} onClick={() => { setBrowse(c.id); setQ(""); }}
               className={cn("transition-colors", browse === c.id && !q ? "text-foreground underline decoration-primary underline-offset-4" : "text-dim hover:text-muted-foreground")}>
-              {CITY_CODES[c.id] ?? c.name}
+              {cityCode(c)}
             </button>
           ))}
         </div>
@@ -56,7 +74,7 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, s
                 className={cn("flex w-full items-center gap-2 px-4 py-[3px] text-left transition-colors", active ? "bg-raised text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
                 <span className={cn("w-2", active ? "text-primary" : "text-transparent")}>›</span>
                 <span className="flex-1 truncate">{h.name}</span>
-                {q && <span className="text-[10.5px] text-dim">{CITY_CODES[h.city]}</span>}
+                {q && <span className="text-[10.5px] text-dim">{cityCode(city(h.city) ?? { id: h.city, name: h.city })}</span>}
               </button>
             </li>
           );
@@ -70,7 +88,7 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, s
           <Label>{pin ? "pin" : "profile"}</Label>
           <h2 className="mt-2 text-[17px] leading-tight tracking-[-0.02em] text-foreground">{pin ? pin.label : source?.name}</h2>
           <div className="mt-1 text-[11px] text-dim">
-            {city(sourceCityId)?.name.toLowerCase()}{pin ? " · 1.3 km blend around the pin" : source ? ` · ${source.cells} cells` : ""}
+            {city(sourceCityId)?.name.toLowerCase()}{pin ? " · 1.3 km blend around the pin" : source?.cells ? ` · ${source.cells} cells` : ""}
           </div>
           {!pin && source?.blurb && <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">{source.blurb}</p>}
           <div className="mt-4"><Label className="mb-1">over-indexes on</Label><TraitList dims={topDims} vec={vec} basket={ds.basket} /></div>
@@ -89,7 +107,7 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, s
                   <button onClick={() => onPickCity(on ? null : c.id)} aria-pressed={on}
                     className={cn("grid w-full grid-cols-[2.6rem_minmax(0,1fr)_auto] items-baseline gap-2 border-l-2 py-1.5 pl-2 pr-1 text-left transition-colors",
                       on ? "border-primary bg-raised" : "border-transparent hover:bg-accent")}>
-                    <span className={cn("text-[11px]", on ? "text-primary" : "text-dim")}>{CITY_CODES[c.id]}</span>
+                    <span className={cn("text-[11px]", on ? "text-primary" : "text-dim")}>{cityCode(c)}</span>
                     <span className="truncate text-muted-foreground"><span className="text-foreground">{c.name.toLowerCase()}</span>{name && <span className="text-dim"> → {name}</span>}</span>
                     {top && <span className="num text-[11px] text-muted-foreground">{top.score.toFixed(2)}</span>}
                   </button>
@@ -97,6 +115,15 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, s
               );
             })}
           </ul>
+          <form onSubmit={(e) => { e.preventDefault(); void submitCity(); }} className="mt-3">
+            <label className="flex items-center gap-2 border border-line bg-background px-2 py-1.5 focus-within:border-line-strong">
+              <span className="text-dim">+</span>
+              <input value={newCity} onChange={(e) => setNewCity(e.target.value)} disabled={adding} placeholder="add city"
+                className="w-full bg-transparent text-[12px] text-foreground outline-none placeholder:text-dim disabled:opacity-60" aria-label="Add a city" />
+            </label>
+            {progress && <p className="cursor-block mt-1.5 text-[11px] text-dim" aria-live="polite">{progress}</p>}
+            {addError && <p className="mt-1.5 text-[11px] leading-relaxed text-destructive">{addError}</p>}
+          </form>
           <p className="mt-4 text-[11px] leading-relaxed text-dim">click any cell of {city(sourceCityId)?.name.toLowerCase()} on the map to use that exact block as the source.</p>
         </section>
       </div>
