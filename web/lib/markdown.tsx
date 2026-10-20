@@ -17,12 +17,15 @@ function inline(text: string, key = 0, onLink?: LinkHandler): ReactNode[] {
     if (m[2]) out.push(<strong key={k} className="font-medium text-foreground">{inline(m[2], i, onLink)}</strong>);
     else if (m[3]) out.push(<em key={k} className="text-foreground/90">{inline(m[3], i, onLink)}</em>);
     else if (m[4]) out.push(<code key={k} className="border border-line bg-card px-1 text-[0.92em] text-foreground">{m[4]}</code>);
-    else if (m[5] && onLink && /^(hood|geo):/.test(m[6])) out.push(
-      <button key={k} type="button" onClick={() => onLink(m![6])} title="show on map"
+    else if (m[5] && onLink && /^(hood|geo):/.test(m[6])) {
+      const href = m[6];
+      out.push(
+      <button key={k} type="button" onClick={() => onLink(href)} title="show on map"
         className="inline border-b border-dashed border-primary/70 text-foreground transition-colors hover:border-solid hover:text-primary">
         {m[5]}<span aria-hidden className="ml-0.5 text-[0.8em] text-primary">◎</span>
       </button>,
-    );
+      );
+    }
     else if (m[5] && /^(hood|geo):/.test(m[6])) out.push(<span key={k} className="text-foreground">{m[5]}</span>);
     else if (m[5]) out.push(<a key={k} href={m[6]} className="link text-foreground" target={m[6].startsWith("http") ? "_blank" : undefined} rel="noreferrer">{m[5]}{m[6].startsWith("http") && <span aria-hidden className="ml-0.5 text-[0.8em] text-dim">↗</span>}</a>);
     last = m.index + m[0].length;
