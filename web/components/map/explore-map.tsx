@@ -6,11 +6,11 @@ import type { PickingInfo } from "@deck.gl/core";
 import { arcSegments, useDeckMap, type ArcSeg } from "./use-deck-map";
 import { colorAt, type PaletteName } from "@/lib/colors";
 import { normalizeRobust } from "@/lib/similarity";
-import type { City, Hood, PackedCells } from "@/lib/types";
+import type { City, Hood, OpportunityResult, PackedCells } from "@/lib/types";
 
 export interface MapTwin { hood: Hood; score: number }
 export interface SourcePoint { lon: number; lat: number; name: string; cityId: string }
-export type Mode = "twin" | "raw";
+export type Mode = "twin" | "raw" | "opportunity";
 
 export interface ExploreMapProps {
   source: SourcePoint | null;
@@ -24,6 +24,8 @@ export interface ExploreMapProps {
   twins: MapTwin[];
   selectedTwin: string | null;
   basketLabels: string[];
+  opportunity: OpportunityResult | null;
+  opportunityCity: City | null;
   onPickSourceCell: (i: number) => void;
   onSelectTwin: (id: string) => void;
   onFlightState?: (flying: boolean) => void;
@@ -48,6 +50,19 @@ function buildColumns(cells: PackedCells, vals: Float32Array, pal: PaletteName, 
   return { length: n, attributes: { getPosition: { value: pos, size: 2 }, getElevation: { value: elev, size: 1 }, getFillColor: { value: fill, size: 4 } }, t, lo, hi };
 }
 
+function buildOppColumns(res: OpportunityResult, maxElev: number): ColumnData {
+  const n = res.cells.length;
+  const max = Math.max(1e-6, ...res.cells.map((c) => c.score));
+  const pos = new Float64Array(n * 2), elev = new Float32Array(n), fill = new Uint8ClampedArray(n * 4), t = new Float32Array(n);
+  res.cells.forEach((c, i) => {
+    t[i] = Math.min(1, Math.max(0, c.score / max));
+    pos[i * 2] = c.lon; pos[i * 2 + 1] = c.lat;
+    fill.set(colorAt("opp", t[i]), i * 4);
+    elev[i] = 25 + t[i] * maxElev;
+  });
+  return { length: n, attributes: { getPosition: { value: pos, size: 2 }, getElevation: { value: elev, size: 1 }, getFillColor: { value: fill, size: 4 } }, t };
+}
+
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export default function ExploreMap(props: ExploreMapProps) {
@@ -64,12 +79,20 @@ export default function ExploreMap(props: ExploreMapProps) {
     getTooltip: (info: PickingInfo) => {
       const p = propsRef.current;
       if (info.index < 0 || !info.layer) return null;
+      if (info.layer.id === "opp-cells") {
+        const c = p.opportunity?.cells[info.index];
+        if (!c) return null;
+        return {
+          html: `<div style="font-family:var(--font-geist-mono),monospace;font-size:11px;color:#5f5c55">${c.g}</div><div style="font-weight:600;margin:2px 0">score ${c.score.toFixed(2)}</div><div style="color:#8d8a80">demand z ${c.demand.toFixed(2)} · supply ${c.supply}</div>`,
+          style: { background: "#141412", border: "1px solid #383631", borderRadius: "0", padding: "6px 8px", color: "#e6e3da", fontSize: "11.5px", fontFamily: "var(--font-geist-mono), monospace" },
+        };
+      }
       const isTgt = info.layer.id === "tgt-cells";
       const cells = isTgt ? p.tgtCells : p.srcCells;
       const sim = isTgt ? p.tgtSim : p.srcSim;
       if (!cells || !sim) return null;
       const i = info.index;
-      const top = cells.top[i].map((k) => p.basketLabels[k]).join(" · ");
+      const top = cells.top[i].map((k) => p.basketLabels[k] ?? "").join(" · ");
       const val = p.mode === "raw" ? `raw density ${cells.d[i].toFixed(2)}` : `similarity ${sim[i].toFixed(2)}`;
       return {
         html: `<div style="font-family:var(--font-geist-mono),monospace;font-size:11px;color:#5f5c55">${cells.g[i]}</div><div style="font-weight:600;margin:2px 0">${val}</div><div style="color:#8d8a80">${top}</div>${!isTgt ? '<div style="margin-top:4px;color:#f0a03c">click to drop a pin</div>' : ""}`,
@@ -89,8 +112,19 @@ export default function ExploreMap(props: ExploreMapProps) {
     const vals = props.mode === "raw" ? props.srcCells.d : props.srcSim;
     return buildColumns(props.srcCells, vals, props.mode === "raw" ? "raw" : "twin", 650);
   }, [props.srcCells, props.srcSim, props.mode]);
-  const colsRef = useRef({ tgtCols, srcCols });
-  colsRef.current = { tgtCols, srcCols };
+  const oppCols = useMemo(() => (props.opportunity?.cells.length ? buildOppColumns(props.opportunity, 1500) : null), [props.opportunity]);
+  const colsRef = useRef({ tgtCols, srcCols, oppCols });
+  colsRef.current = { tgtCols, srcCols, oppCols };
+
+  // opportunity result: fly to its city
+  const oppKey = props.opportunity && props.opportunityCity ? `${props.opportunityCity.id}|${props.opportunity.cells.length}|${props.opportunity.cells[0]?.g}` : "";
+  useEffect(() => {
+    const map = mapRef.current;
+    const c = propsRef.current.opportunityCity;
+    if (!ready || !map || !oppKey || !c) return;
+    const o = { center: c.center, zoom: c.zoom + 0.5, pitch: 55, bearing: -18 };
+    if (reducedMotion()) map.jumpTo(o); else map.flyTo({ ...o, duration: 3200, essential: true });
+  }, [ready, oppKey, mapRef]);
 
   // camera choreography
   const sourceKey = props.source ? `${props.source.cityId}|${props.source.lon}|${props.source.lat}` : "";
@@ -183,7 +217,7 @@ export default function ExploreMap(props: ExploreMapProps) {
       lastDraw = now;
       const a = anim.current;
       const p = propsRef.current;
-      const { tgtCols, srcCols } = colsRef.current;
+      const { tgtCols, srcCols, oppCols } = colsRef.current;
       // arc: draws during the first ~3.4 s of the flight
       if (p.targetCity && p.source && !reduce) {
         const e = (now - a.flightStart) / 1000;
@@ -196,7 +230,14 @@ export default function ExploreMap(props: ExploreMapProps) {
       const ease = (x: number) => 1 - Math.pow(1 - x, 3);
       const top = p.twins[0];
       const layers = [];
-      if (srcCols) {
+      if (p.mode === "opportunity" && oppCols) {
+        layers.push(new ColumnLayer({
+          id: "opp-cells", data: oppCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
+          elevationScale: 1, material: { ambient: 0.55, diffuse: 0.6, shininess: 40, specularColor: [255, 230, 200] }, opacity: 0.95,
+          autoHighlight: true, highlightColor: [230, 227, 218, 110],
+        }));
+      }
+      if (srcCols && p.mode !== "opportunity") {
         layers.push(new ColumnLayer({
           id: "src-cells", data: srcCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
           elevationScale: 1, material: { ambient: 0.6, diffuse: 0.5, shininess: 20 }, opacity: p.targetCity ? 0.6 : 0.95,
@@ -204,7 +245,7 @@ export default function ExploreMap(props: ExploreMapProps) {
           updateTriggers: { getFillColor: [p.mode, srcCols.lo], getElevation: [p.mode, srcCols.lo] },
         }));
       }
-      if (tgtCols) {
+      if (tgtCols && p.mode !== "opportunity") {
         layers.push(new ColumnLayer({
           id: "tgt-cells", data: tgtCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
           elevationScale: ease(a.reveal) , material: { ambient: 0.55, diffuse: 0.6, shininess: 40, specularColor: [255, 230, 200] }, opacity: 0.1 + 0.9 * ease(a.reveal),
@@ -212,7 +253,7 @@ export default function ExploreMap(props: ExploreMapProps) {
           updateTriggers: { getFillColor: [p.mode, tgtCols.lo], getElevation: [p.mode, tgtCols.lo] },
         }));
       }
-      if (p.source && top && p.targetCity && a.arc > 0) {
+      if (p.source && top && p.targetCity && a.arc > 0 && p.mode !== "opportunity") {
         const from: [number, number] = [p.source.lon, p.source.lat];
         const to: [number, number] = [top.hood.lon, top.hood.lat];
         const segs = arcSegments(from, to, a.arc, 48, 255, 0.14);
