@@ -67,9 +67,9 @@ import { z } from "zod";
 import type { AgentAction } from "./types";
 import type { CellsFile } from "../types";
 import { BASKET_KEYS, loadCellsFile, loadDataSet } from "./node-data";
-import { QlooError, fmtHours, newStats, qlooConfigured, qlooGet, qlooResolveTag, type QlooStats } from "./qloo";
+import { QlooError, fmtHours, newStats, qlooGet, qlooResolveTag, type QlooStats } from "./qloo";
 
-import { TOOLS_V2 } from "./tools-v2";
+import { TOOLS_V2, liveWhere } from "./tools-v2";
 import { CORE_BASKET, allCities, findCityAny, loadCore } from "./city-live";
 import { geocode } from "./net";
 import { ToolError, defineTool, type ToolContext, type ToolDef, type ToolOutput } from "./tool-kit";
@@ -77,9 +77,6 @@ export type { ToolContext, ToolDef, ToolOutput };
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
-const CITY_QUERY: Record<string, string> = {
-  "los-angeles": "Los Angeles County", "new-york": "New York City", london: "London", berlin: "Berlin", "mexico-city": "Mexico City", paris: "Paris and suburbs",
-};
 
 function resolveCity(ds: DataSet, text: string): string {
   if (ds.cities.some((c) => c.id === text)) return text;
@@ -94,6 +91,9 @@ function resolveHood(ds: DataSet, text: string): Hood {
   if (!h) throw new ToolError(`Unknown neighbourhood "${text}". Use search_hoods to find a valid hood_id.`);
   return h;
 }
+const maybe = <T,>(f: () => T): T | null => { try { return f(); } catch { return null; } };
+/** Hand a call for a live-added city (or a free-text place) to the tool that covers every city. */
+const delegate = (name: string, args: unknown, ctx: ToolContext) => toolByName(name)!.run(args as never, ctx);
 const label = (ds: DataSet, i: number) => ds.basket[i]?.label ?? `#${i}`;
 const hoodName = (ds: DataSet, id: string) => ds.hoods.find((h) => h.id === id)?.name ?? id;
 
@@ -202,9 +202,11 @@ const find_twins = defineTool({
     target_city: z.string().describe("target city id or name, e.g. 'berlin'"),
     k: z.number().int().min(1).max(5).optional().describe("number of twins (default 3)"),
   }),
-  async run({ hood_id, target_city, k }, { ds }) {
-    const h = resolveHood(ds, hood_id);
-    const city = resolveCity(ds, target_city);
+  async run({ hood_id, target_city, k }, ctx) {
+    const { ds } = ctx;
+    const h0 = maybe(() => resolveHood(ds, hood_id)), c0 = maybe(() => resolveCity(ds, target_city));
+    if (!h0 || !c0) return delegate("twins_anywhere", { source: hood_id, target_city, k }, ctx);
+    const h = h0, city = c0;
     if (city === h.city) throw new ToolError(`${h.name} is already in ${city}; choose a different target city.`);
     const tw = findTwins(ds, h.id, city, k ?? 3);
     const rows = twinRows(ds, h.v, tw, city);
@@ -221,8 +223,11 @@ const explain_match = defineTool({
   name: "explain_match",
   description: "Explain why two neighbourhoods are (or are not) similar: shared high traits and the biggest divergences, with z-score values (z = how far above/below the city's typical level; ~1 is notable, >2 strong).",
   schema: z.object({ hood_a: z.string(), hood_b: z.string() }),
-  async run({ hood_a, hood_b }, { ds }) {
-    const a = resolveHood(ds, hood_a), b = resolveHood(ds, hood_b);
+  async run({ hood_a, hood_b }, ctx) {
+    const { ds } = ctx;
+    const a0 = maybe(() => resolveHood(ds, hood_a)), b0 = maybe(() => resolveHood(ds, hood_b));
+    if (!a0 || !b0) return delegate("compare_taste", { a: hood_a, b: hood_b }, ctx);
+    const a = a0, b = b0;
     const ex = explainMatch(ds, a.id, b.id)!;
     const all = ds.hoods.filter((h) => h.city === b.city).map((h) => cosine(a.v, h.v)).sort((x, y) => x - y);
     const data = {
@@ -240,8 +245,11 @@ const taste_profile = defineTool({
   name: "taste_profile",
   description: "A neighbourhood's measured taste fingerprint: strongest and weakest traits (z-scores vs its own city, density-corrected) and the strongest trait per group.",
   schema: z.object({ hood_id: z.string() }),
-  async run({ hood_id }, { ds }) {
-    const h = resolveHood(ds, hood_id);
+  async run({ hood_id }, ctx) {
+    const { ds } = ctx;
+    const h0 = maybe(() => resolveHood(ds, hood_id));
+    if (!h0) return delegate("scene", { place: hood_id }, ctx);
+    const h = h0;
     const idx = h.v.map((x, i) => [x, i] as const).sort((p, q) => q[0] - p[0]);
     const fmt = ([z, i]: readonly [number, number]) => ({ trait: label(ds, i), group: ds.basket[i]?.group, kind: ds.basket[i]?.kind, z: r2(z) });
     const groups = [...new Set(ds.basket.map((b) => b.group))];
@@ -265,13 +273,24 @@ const where_in_city = defineTool({
     item_or_group: z.string().describe("e.g. 'Peso Pluma', 'Vegan restaurants', 'nightlife'"),
     k: z.number().int().min(1).max(8).optional(),
   }),
-  async run({ city, item_or_group, k }, { ds, stats }) {
-    const cityId = resolveCity(ds, city);
+  async run({ city, item_or_group, k }, { ds, stats, progress }) {
     const kk = k ?? 5;
-    const cf = await cellStats(ds, cityId);
+    const cityId0 = maybe(() => resolveCity(ds, city));
     const res = resolveItem(ds, item_or_group);
+    if (!cityId0 || !res) {
+      // live-added city, or a taste outside the basket: live Qloo heatmap, corrected against the city's cells
+      const w = await liveWhere(city, item_or_group, kk, { stats, progress });
+      const lead = w.top_hoods[0];
+      return {
+        data: { city: w.city.name, query: w.sig.name, source: "live Qloo heatmap, popularity-corrected against this city's cells", cells_with_signal: w.present, top_hoods: w.top_hoods, top_cells: w.top_cells },
+        summary: `${w.sig.name} in ${w.city.name}: ${w.top_hoods.slice(0, 3).map((x) => x.name).join(", ")}`,
+        uiActions: lead ? [{ type: "focus", lat: lead.lat, lon: lead.lon }] : [],
+      };
+    }
+    const cityId = cityId0;
+    const cf = await cellStats(ds, cityId);
     const dSorted = cf.cells.map((c) => c.d).sort((a, b) => a - b);
-    if (res) {
+    {
       const vals = cf.cells.map((c) => avg(c.v, res.dims));
       const order = vals.map((v, i) => [v, i] as const).sort((a, b) => b[0] - a[0]);
       const topCells = order.slice(0, kk).map(([v, i]) => {
@@ -302,31 +321,6 @@ const where_in_city = defineTool({
         uiActions: res.kind === "item" ? [{ type: "highlightCells", city: cityId, item: res.dims[0], label: res.name }] : lead ? [{ type: "flyTo", hood: lead.h.id }] : [],
       };
     }
-    // Live fallback for items outside the basket.
-    if (!qlooConfigured()) throw new ToolError(`"${item_or_group}" is not in the basket and Qloo live access is not configured.`);
-    const q = CITY_QUERY[cityId];
-    const ent = await resolveEntity(item_or_group, stats);
-    const r = await qlooGet<{ results?: { heatmap?: { location: { geohash: string; latitude: number; longitude: number }; query: { affinity: number } }[] } }>(
-      "/v2/insights", { "filter.type": "urn:heatmap", "filter.location.query": q, "signal.interests.entities": ent.id }, stats, 45000);
-    const hm = r.results?.heatmap ?? [];
-    const acc = new Map<string, { s: number; n: number }>();
-    for (const x of hm) { const g = x.location.geohash.slice(0, 6); const a = acc.get(g) ?? { s: 0, n: 0 }; a.s += x.query.affinity; a.n++; acc.set(g, a); }
-    const rows = cf.cells.filter((c) => acc.has(c.g)).map((c) => ({ c, aff: acc.get(c.g)!.s / acc.get(c.g)!.n }));
-    if (rows.length < 20) throw new ToolError(`Qloo has too little heatmap data for "${ent.name}" in ${cityId}.`);
-    const affSorted = rows.map((x) => x.aff).sort((a, b) => a - b), dS = rows.map((x) => x.c.d).sort((a, b) => a - b);
-    const scored = rows.map((x) => ({ ...x, lift: pctRank(affSorted, x.aff) - pctRank(dS, x.c.d) })).sort((a, b) => b.lift - a.lift);
-    const top = scored.slice(0, kk).map(({ c, aff, lift }) => ({
-      geohash: c.g, lat: c.lat, lon: c.lon, near: nearestHood(ds, cityId, c.lat, c.lon)?.h.name, raw_affinity: r2(aff), raw_affinity_percentile: r2(pctRank(affSorted, aff) * 100), density_percentile: r2(pctRank(dS, c.d) * 100), density_corrected_lift: r2(lift),
-    }));
-    const rawTop = [...rows].sort((a, b) => b.aff - a.aff).slice(0, kk).map((x) => ({ near: nearestHood(ds, cityId, x.c.lat, x.c.lon)?.h.name, raw_affinity: r2(x.aff), density_percentile: r2(pctRank(dS, x.c.d) * 100) }));
-    const hoodScore = new Map<string, number[]>();
-    for (const s of scored.slice(0, 40)) { const n = nearestHood(ds, cityId, s.c.lat, s.c.lon)?.h; if (n) hoodScore.set(n.id, [...(hoodScore.get(n.id) ?? []), s.lift]); }
-    const topHoods = [...hoodScore.entries()].map(([id, a]) => ({ hood_id: id, name: hoodName(ds, id), cells_in_top40: a.length })).sort((a, b) => b.cells_in_top40 - a.cells_in_top40).slice(0, kk);
-    return {
-      data: { city: cityId, query: ent.name, kind: "item", source: "LIVE Qloo heatmap (item not in basket); single-item correction = affinity percentile minus density percentile, approximate", top_hoods_by_cell_count: topHoods, top_cells: top, naive_raw_top_cells: rawTop, caveat: "Raw top cells are mostly just busy areas; trust the corrected ranking more." },
-      summary: `live heatmap ${ent.name} in ${cityId}: ${topHoods.slice(0, 3).map((x) => x.name).join(", ")}`,
-      uiActions: topHoods[0] ? [{ type: "flyTo", hood: topHoods[0].hood_id }] : [],
-    };
   },
 });
 
@@ -505,7 +499,13 @@ const cross_domain = defineTool({
     take: z.number().int().min(1).max(8).optional(),
   }),
   live: true,
-  async run({ item_label, target_kind, location, take }, { ds, stats }) {
+  async run({ item_label, target_kind, location, take }, ctx) {
+    const { ds, stats } = ctx;
+    if (target_kind === "place" && !location) {
+      // Qloo needs a location for places; "places like Silver Lake" means places there that match its taste
+      if (maybe(() => resolveHood(ds, item_label))) return delegate("local_scene", { hood_id: item_label, taste_of: item_label, kinds: ["place"] }, ctx);
+      throw new ToolError("Places need a location: pass a neighbourhood or city as `location`.");
+    }
     const ent = await resolveEntity(item_label, stats);
     const params: Record<string, string | number> = { "filter.type": KIND_TYPE[target_kind], "signal.interests.entities": ent.id, take: take ?? 6 };
     let where: string | null = null, hood: Hood | null = null;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream } from "ai";
+import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type ToolSet } from "ai";
 import { loadServerDataSet } from "@/lib/agent/server-data";
 import { OPENROUTER_MODELS, aiTools, fallbackOptions, openrouter, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
@@ -57,23 +57,41 @@ export async function POST(req: Request) {
         if (last && typeof last.content === "string") last.content = ctx + last.content;
         else if (last && Array.isArray(last.content)) last.content = [{ type: "text", text: ctx }, ...last.content] as typeof last.content;
       }
-      const result = streamText({
-        model: openrouter(apiKey)(primary),
-        instructions: SYSTEM_PROMPT,
-        messages: modelMessages,
-        tools: aiTools(ds, writer, meta),
-        stopWhen: isStepCount(8),
-        // the last step must be an answer, never another tool call
-        prepareStep: ({ stepNumber }) => (stepNumber >= 7 ? { toolChoice: "none" as const } : undefined),
-        temperature: 0.4,
-        providerOptions: fallbackOptions(primary),
-        onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; },
-      });
-      writer.merge(toUIMessageStream({
-        stream: result.stream,
-        messageMetadata: ({ part }) => (part.type === "finish" ? { ...meta, ms: Date.now() - t0 } : undefined),
-        onError: (e) => (e instanceof Error ? e.message.replace(/sk-[A-Za-z0-9_-]+/g, "[key]").slice(0, 300) : "agent failed"),
-      }));
+      // Free models occasionally stall or fail before saying anything. Then the same turn moves to the next model
+      // silently; once anything is on screen, an error is reported as is.
+      const order = [primary, ...OPENROUTER_MODELS.filter((m) => m !== primary)];
+      for (let i = 0; i < order.length; i++) {
+        const last = i === order.length - 1;
+        const result = streamText({
+          model: openrouter(apiKey)(order[i]),
+          instructions: SYSTEM_PROMPT,
+          messages: modelMessages,
+          tools: aiTools(ds, writer, meta),
+          stopWhen: isStepCount(8),
+          // the last step must be an answer, never another tool call
+          prepareStep: ({ stepNumber }) => (stepNumber >= 7 ? { toolChoice: "none" as const } : undefined),
+          timeout: { firstChunkMs: 30_000, chunkMs: 45_000 },
+          temperature: 0.4,
+          providerOptions: fallbackOptions(order[i]),
+          onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; },
+        });
+        let shown = false, retry = false;
+        const parts = toUIMessageStream<ToolSet, TwinUIMessage>({
+          stream: result.stream,
+          sendStart: i === 0,
+          messageMetadata: ({ part }) => (part.type === "finish" ? { ...meta, ms: Date.now() - t0 } : undefined),
+          onError: (e) => (e instanceof Error ? e.message.replace(/sk-[A-Za-z0-9_-]+/g, "[key]").slice(0, 300) : "agent failed"),
+        });
+        const reader = parts.getReader();
+        for (let r = await reader.read(); !r.done; r = await reader.read()) {
+          const chunk = r.value;
+          if (chunk.type === "error" && !shown && !last) { retry = true; void reader.cancel(); break; }
+          if (chunk.type !== "start" && chunk.type !== "start-step" && chunk.type !== "finish-step") shown = true;
+          writer.write(chunk);
+        }
+        if (!retry) break;
+        console.warn(`[agent] ${order[i]} failed before answering; trying ${order[i + 1]}`);
+      }
     },
   });
 

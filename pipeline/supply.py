@@ -98,7 +98,16 @@ COPY (
     print(f"{city}: {len(cells)} cells · " + ", ".join(f"{k} {t}" for k, t in zip(names, tot) if k in ("bar", "wine_bar", "cafe", "record_store", "art_gallery", "restaurant")), flush=True)
 
 
+def write_kinds():
+    """The kind -> Overture category map, so the agent can match free text ("specialty coffee") to a kind."""
+    dest = WEB / "public/data/supply/kinds.json"
+    json.dump({k: ([v.replace("%_", "")] if isinstance(v, str) else v) for k, v in KINDS.items()}, open(dest, "w"), indent=0)
+
+
 if __name__ == "__main__":
+    write_kinds()
+    if sys.argv[1:2] == ["--kinds-only"]:
+        sys.exit(0)
     cities = sys.argv[1:] or [p.stem for p in (WEB / "public/data/core").glob("*.json")] + [p.name for p in (WEB / ".cache/twin/cities").glob("*") if p.is_dir()]
     for c in cities:
         run(c)

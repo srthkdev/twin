@@ -27,6 +27,15 @@ export async function loadSupply(cityId: string): Promise<Supply | null> {
   return s;
 }
 
+let kindsMem: Record<string, string[]> | null = null;
+/** kind -> the Overture categories it counts (written by pipeline/supply.py). */
+export async function loadKindCategories(): Promise<Record<string, string[]>> {
+  if (kindsMem) return kindsMem;
+  try { kindsMem = JSON.parse(await readFile(join(process.env.TWIN_WEB_ROOT ?? process.cwd(), "public", "data", "supply", "kinds.json"), "utf8")); }
+  catch { kindsMem = {}; }
+  return kindsMem!;
+}
+
 /** Venue counts per kind within `radiusM` of a point (sums the 1 km cells whose centre is inside the radius). */
 export function supplyAround(s: Supply, lat: number, lon: number, radiusM: number, kinds: string[]) {
   const idx = kinds.map((k) => s.kinds.indexOf(k));

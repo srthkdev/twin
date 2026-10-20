@@ -1,0 +1,94 @@
+{
+"bar": [
+"bar",
+"pub",
+"cocktail_bar",
+"wine_bar",
+"beer_bar",
+"dive_bar",
+"gastropub",
+"sports_bar",
+"tapas_bar",
+"hotel_bar",
+"gay_bar"
+],
+"wine_bar": [
+"wine_bar"
+],
+"cocktail_bar": [
+"cocktail_bar"
+],
+"cafe": [
+"cafe",
+"coffee_shop"
+],
+"nightclub": [
+"dance_club",
+"nightlife_venue"
+],
+"music_venue": [
+"music_venue"
+],
+"record_store": [
+"vinyl_record_store",
+"music_and_dvd_store"
+],
+"art_gallery": [
+"art_gallery"
+],
+"bookstore": [
+"bookstore"
+],
+"vintage": [
+"second_hand_store",
+"second_hand_clothing_store"
+],
+"boutique": [
+"fashion_boutique"
+],
+"gym": [
+"gym",
+"sport_or_fitness_facility"
+],
+"yoga": [
+"yoga_studio"
+],
+"bakery": [
+"bakery"
+],
+"vegan": [
+"vegan_restaurant"
+],
+"ramen": [
+"ramen_restaurant"
+],
+"sushi": [
+"sushi_restaurant"
+],
+"mexican": [
+"mexican_restaurant",
+"taco_restaurant"
+],
+"korean": [
+"korean_restaurant"
+],
+"gay_bar": [
+"gay_bar"
+],
+"comedy_club": [
+"comedy_club"
+],
+"cinema": [
+"movie_theater"
+],
+"tattoo": [
+"tattoo",
+"tattoo_and_piercing"
+],
+"brewery": [
+"brewery"
+],
+"restaurant": [
+"restaurant"
+]
+}

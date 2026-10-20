@@ -13,7 +13,7 @@ import { cosine, hav, slug } from "./geo";
 import { geocode } from "./net";
 import { BASKET_KEYS } from "./node-data";
 import { osmAround, osmSupplyGrid } from "./osm";
-import { OSM_FALLBACK, SUPPLY_KINDS, loadSupply, supplyAround, type SupplyKind } from "./supply";
+import { OSM_FALLBACK, SUPPLY_KINDS, loadKindCategories, loadSupply, supplyAround, type SupplyKind } from "./supply";
 import { fmtHours, qlooCompare, qlooGet, qlooResolveTag, qlooScene, qlooSearchEntity, qlooTrend } from "./qloo";
 import { ToolError, defineTool, r2, r3, type ToolDef } from "./tool-kit";
 import type { AgentAction, OpportunityCell } from "./types";
@@ -24,8 +24,15 @@ const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 const CORE_LABEL = new Map(CORE_BASKET.map((c) => [c.id, c.label]));
 const coreLabels = (core: CoreFile) => core.items.map((id) => CORE_LABEL.get(id) ?? id);
 
-async function cityOrThrow(text: string): Promise<{ city: CityMeta; core: CoreFile }> {
-  const city = await findCityAny(text);
+/** A fingerprinted city by name. With `ctx`, a city that isn't fingerprinted yet is built live first (the user named it). */
+async function cityOrThrow(text: string, ctx?: Pick<ToolCtx, "stats" | "progress">): Promise<{ city: CityMeta; core: CoreFile }> {
+  let city = await findCityAny(text);
+  if (!city && ctx) {
+    ctx.progress(`fingerprinting ${text} from qloo (first time only)`);
+    city = await ensureCity(text, { stats: ctx.stats, onProgress: (p) => ctx.progress(`${text}: ${p.stage} ${p.done}/${p.total}`) }).catch((e) => {
+      throw new ToolError(`Couldn't fingerprint "${text}": ${e instanceof Error ? e.message : "unknown error"}`);
+    });
+  }
   if (!city) throw new ToolError(`"${text}" has not been fingerprinted yet. Call add_city("${text}") first (≈40 Qloo calls, then cached).`);
   const core = await loadCore(city.id);
   if (!core) throw new ToolError(`No fingerprint data for ${city.name}.`);
@@ -60,6 +67,56 @@ async function tasteSignal(text: string, as: "place_type" | "entity", stats: Too
   return { key: "signal.interests.entities", val: e.id, name: e.name };
 }
 type ToolCtx = Parameters<ToolDef["run"]>[1];
+
+const words = (t: string) => new Set(norm(t.replace(/_/g, " ")).split(" ").map((w) => w.replace(/s$/, "")).filter((w) => w.length > 2));
+/** Best venue kind sharing words with `t`, scored by how much of the kind (or one of its categories) the text covers; the kind's own name counts double. */
+async function overlap(t: string): Promise<SupplyKind | undefined> {
+  const cats = await loadKindCategories(), tw = words(t);
+  const hits = (x: string) => { const xw = [...words(x)]; return xw.length ? xw.filter((w) => tw.has(w)).length / xw.length : 0; };
+  return SUPPLY_KINDS.map((k) => ({ k, n: 2 * hits(k) + Math.max(0, ...(cats[k] ?? []).map(hits)), width: (cats[k] ?? []).length }))
+    .filter((x) => x.n).sort((a, b) => b.n - a.n || a.width - b.width)[0]?.k;
+}
+/**
+ * The Overture venue kind for free text: an exact kind, a kind or Overture category sharing a word with the text
+ * ("specialty coffee" -> coffee_shop -> cafe), or one sharing a word with the Qloo place type the text resolves to.
+ */
+export async function supplyKindFor(text: string, stats?: ToolCtx["stats"]): Promise<SupplyKind | null> {
+  if ((SUPPLY_KINDS as readonly string[]).includes(text)) return text as SupplyKind;
+  const direct = await overlap(text);
+  if (direct || !stats) return direct ?? null;
+  const tag = await qlooResolveTag(text, stats).catch(() => null);
+  return tag ? (await overlap(tag.name)) ?? (await overlap(tag.id.split(":").pop() ?? "")) ?? null : null;
+}
+
+/**
+ * Where a taste concentrates in any fingerprinted city: live Qloo heatmap for the taste (a place type / tag when it reads
+ * like one, else an entity), popularity-corrected against the city's cells, rolled up to neighbourhoods.
+ */
+export async function liveWhere(cityText: string, taste: string, k: number, ctx: Pick<ToolCtx, "stats" | "progress">) {
+  const { city, core } = await cityOrThrow(cityText, ctx);
+  const where = await qlooQueryFor(city.id);
+  let sig = await tasteSignal(taste, "place_type", ctx.stats).catch(() => tasteSignal(taste, "entity", ctx.stats));
+  ctx.progress(`qloo heatmap for ${sig.name} in ${city.name}`);
+  let heat = await fetchHeat(where, sig.key, sig.val, ctx.stats);
+  let { z, present } = correctItem(core, heat);
+  if (present < 50) {
+    const kind = await supplyKindFor(taste, ctx.stats);
+    const broad = kind ? await qlooResolveTag(kind.replace(/_/g, " "), ctx.stats) : null;
+    if (broad && broad.id !== sig.val) {
+      ctx.progress(`"${sig.name}" is thin in Qloo; using ${broad.name}`);
+      sig = { key: "signal.interests.tags", val: broad.id, name: broad.name };
+      heat = await fetchHeat(where, sig.key, sig.val, ctx.stats);
+      ({ z, present } = correctItem(core, heat));
+    }
+  }
+  if (present < 20) throw new ToolError(`Qloo has too little data for "${sig.name}" in ${city.name}.`);
+  const idx = core.cells.map((_, i) => i).filter((i) => heat.has(core.cells[i].g)).sort((a, b) => z[b] - z[a]);
+  const top_cells = idx.slice(0, k).map((i) => { const c = core.cells[i]; return { lat: c.lat, lon: c.lon, near: nearestCoreHood(core, c.lat, c.lon)?.h.name, corrected_z: r2(z[i]) }; });
+  const hoods = new Map<string, { n: number; h: CoreHood }>();
+  for (const i of idx.slice(0, 30)) { const n = nearestCoreHood(core, core.cells[i].lat, core.cells[i].lon); if (n && n.m < 2500) hoods.set(n.h.id, { n: (hoods.get(n.h.id)?.n ?? 0) + 1, h: n.h }); }
+  const top_hoods = [...hoods.values()].sort((a, b) => b.n - a.n).slice(0, k).map(({ n, h }) => ({ hood_id: h.id, name: h.name, lat: h.lat, lon: h.lon, cells_in_top30: n }));
+  return { city, sig, present, top_hoods, top_cells };
+}
 
 // ───────────── geography ─────────────
 const add_city = defineTool({
@@ -96,8 +153,8 @@ const twins_anywhere = defineTool({
     target_city: z.string(),
     k: z.number().int().min(1).max(10).optional(),
   }),
-  async run({ source, target_city, k }, { ds }) {
-    const tgt = await cityOrThrow(target_city);
+  async run({ source, target_city, k }, { ds, stats, progress }) {
+    const tgt = await cityOrThrow(target_city, { stats, progress });
     let srcVec: number[] | null = null, srcName = source, srcCity: CityMeta | null = null, srcHoodId: string | null = null;
     for (const c of await allCities()) {
       const core = await loadCore(c.id);
@@ -200,7 +257,10 @@ const trend = defineTool({
     const e = await qlooSearchEntity(item, stats);
     if (!e) throw new ToolError(`Qloo found no entity "${item}".`);
     const type = e.types.find((t) => TREND_TYPES.includes(t));
-    if (!type) throw new ToolError(`Qloo trends cover artists, brands, films, shows, books, podcasts and people — "${e.name}" is ${e.types[0] ?? "something else"}.`);
+    if (!type) return {
+      data: { item, trackable: false, note: `Qloo trends cover artists, brands, films, shows, books, podcasts and people. "${item}" is a place or taste, so use where_in_city or opportunity for where it's strong instead.` },
+      summary: `${item}: not trackable over time (Qloo trends cover artists, brands and media)`,
+    };
     const pts = await qlooTrend(e.id, type, months ?? 6, stats);
     if (!pts.length) throw new ToolError(`No trend data for ${e.name}.`);
     const first = pts[0], last = pts[pts.length - 1], d = r2(last.percentile - first.percentile);
@@ -219,11 +279,13 @@ const opportunity = defineTool({
     city: z.string(),
     taste: z.string().describe("what people should love, e.g. 'wine bar', 'natural wine', 'Peggy Gou', 'ramen'"),
     taste_is: z.enum(["place_type", "entity"]).optional().describe("place_type (default) for venue genres/cuisines, entity for an artist/brand"),
-    supply_kind: z.enum(SUPPLY_KINDS).describe("venue kind to count as existing supply"),
+    supply_kind: z.string().optional().describe(`venue kind to count as existing supply, one of: ${SUPPLY_KINDS.join(", ")}. Inferred from the taste if omitted.`),
   }),
   live: true,
-  async run({ city, taste, taste_is, supply_kind }, { stats, progress }) {
-    const { city: c, core } = await cityOrThrow(city);
+  async run({ city, taste, taste_is, supply_kind: kindText }, { stats, progress }) {
+    const supply_kind = (kindText && (await supplyKindFor(kindText, stats))) || (await supplyKindFor(taste, stats));
+    if (!supply_kind) throw new ToolError(`No venue kind in the supply data matches "${kindText || taste}". Pass supply_kind, one of: ${SUPPLY_KINDS.join(", ")}.`);
+    const { city: c, core } = await cityOrThrow(city, { stats, progress });
     progress(`qloo demand for ${taste} in ${c.name}`);
     const where = await qlooQueryFor(c.id);
     let sig = await tasteSignal(taste, taste_is ?? "place_type", stats);
@@ -277,15 +339,16 @@ const opportunity = defineTool({
 const tour = defineTool({
   name: "tour",
   description: "Tour planning for an artist across cities: Qloo corrected affinity per 1 km cell in each city (where the fans actually are), the strongest neighbourhoods, and Qloo live-music venues near them. Cities must be fingerprinted (built-in or add_city).",
-  schema: z.object({ artist: z.string(), cities: z.array(z.string()).min(1).max(5) }),
+  schema: z.object({ artist: z.string(), cities: z.array(z.string()).min(1).max(6).optional().describe("default: every fingerprinted city (up to 6)") }),
   live: true,
-  async run({ artist, cities }, { stats, progress }) {
+  async run({ artist, cities: asked }, { stats, progress }) {
+    const cities = asked?.length ? asked : (await allCities()).slice(0, 6).map((c) => c.id);
     const sig = await tasteSignal(artist, "entity", stats);
     const venueTag = await qlooResolveTag("live music venue", stats);
     const out: unknown[] = [];
     for (const name of cities) {
       try {
-        const { city, core } = await cityOrThrow(name);
+        const { city, core } = await cityOrThrow(name, { stats, progress });
         progress(`${sig.name} in ${city.name}`);
         const heat = await fetchHeat(await qlooQueryFor(city.id), sig.key, sig.val, stats);
         const { z: zz, present, reach, aff } = correctItem(core, heat);
@@ -350,9 +413,12 @@ const venue_supply = defineTool({
     place: z.string().optional().describe("place name/address (geocoded) — or pass lat/lon"),
     lat: z.number().optional(), lon: z.number().optional(),
     radius_m: z.number().min(300).max(3000).optional(),
-    kinds: z.array(z.enum(SUPPLY_KINDS)).min(1).max(6),
+    kinds: z.array(z.string()).max(6).optional().describe(`any of: ${SUPPLY_KINDS.join(", ")}. Omit to get the most common kinds there.`),
   }),
-  async run({ place, lat, lon, radius_m, kinds }) {
+  async run({ place, lat, lon, radius_m, kinds: asked }, { stats }) {
+    const mapped = asked?.length ? (await Promise.all(asked.map((k) => supplyKindFor(k, stats)))).filter((k): k is SupplyKind => !!k) : [];
+    const all = !mapped.length;
+    const kinds = all ? [...SUPPLY_KINDS] : [...new Set(mapped)];
     let la = lat, lo = lon, where = place ?? `${lat},${lon}`;
     if (la == null || lo == null) {
       if (!place) throw new ToolError("Pass a place or lat/lon.");
@@ -365,9 +431,11 @@ const venue_supply = defineTool({
     const pre = city ? await loadSupply(city.id) : null;
     if (pre) {
       const r = supplyAround(pre, la, lo, Math.max(radius, 700), kinds);
-      return { data: { where, radius_m: radius, source: `${pre.source} ${pre.release}`, counts: r.counts, cells: r.cells, note: "counts are a lower bound" }, summary: kinds.map((k) => `${r.counts[k]} ${k}`).join(", ") };
+      const shown = all ? kinds.filter((k) => r.counts[k] > 0).sort((a, b) => r.counts[b] - r.counts[a]).slice(0, 8) : kinds;
+      const counts = Object.fromEntries(shown.map((k) => [k, r.counts[k]]));
+      return { data: { where, radius_m: radius, source: `${pre.source} ${pre.release}`, counts, cells: r.cells, note: "counts are a lower bound" }, summary: shown.map((k) => `${r.counts[k]} ${k}`).join(", ") || "no venues counted" };
     }
-    const rows = await osmAround(la, lo, radius, kinds.map((k) => OSM_FALLBACK[k]));
+    const rows = await osmAround(la, lo, radius, kinds.slice(0, 6).map((k) => OSM_FALLBACK[k]));
     return { data: { where, radius_m: radius, source: "OpenStreetMap (live)", kinds: rows }, summary: rows.map((r) => `${r.count} ${r.kind}`).join(", ") };
   },
 });
