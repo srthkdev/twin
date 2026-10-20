@@ -30,6 +30,9 @@ export async function POST(req: Request) {
   let body: Body;
   try { body = (await req.json()) as Body; } catch { return NextResponse.json({ error: "invalid json" }, { status: 400 }); }
 
+  // Record/replay exist for development and making demo videos; production always runs the real agent.
+  const devTools = process.env.NODE_ENV !== "production" || process.env.TWIN_ALLOW_REPLAY === "1";
+  if (!devTools) { body.replay = undefined; body.record = undefined; }
   if (body.replay) {
     const s = await replayStream(body.replay, Math.min(8, Math.max(0.5, body.speed ?? 1)));
     if (!s) return NextResponse.json({ error: `no recording named ${body.replay}` }, { status: 404 });
