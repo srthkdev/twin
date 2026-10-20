@@ -12,7 +12,8 @@ import {
 import { cosine, hav, slug } from "./geo";
 import { geocode } from "./net";
 import { BASKET_KEYS } from "./node-data";
-import { osmAround, osmSupplyGrid, OSM_KIND_NAMES } from "./osm";
+import { osmAround, osmSupplyGrid } from "./osm";
+import { OSM_FALLBACK, SUPPLY_KINDS, loadSupply, supplyAround, type SupplyKind } from "./supply";
 import { fmtHours, qlooCompare, qlooGet, qlooResolveTag, qlooScene, qlooSearchEntity, qlooTrend } from "./qloo";
 import { ToolError, defineTool, r2, r3, type ToolDef } from "./tool-kit";
 import type { AgentAction, OpportunityCell } from "./types";
@@ -213,12 +214,12 @@ const trend = defineTool({
 // ───────────── demand vs supply ─────────────
 const opportunity = defineTool({
   name: "opportunity",
-  description: "Where to open something: Qloo DEMAND for a taste (corrected heatmap, per 1 km cell) against OpenStreetMap SUPPLY (how many venues of that kind physically exist there). High score = people here over-index on the taste but few such venues exist. Paints the map.",
+  description: "Where to open something: Qloo DEMAND for a taste (corrected heatmap, per 1 km cell) against physical SUPPLY (how many venues of that kind exist there, from Overture Maps Places). High score = people here over-index on the taste but few such venues exist. Paints the map.",
   schema: z.object({
     city: z.string(),
     taste: z.string().describe("what people should love, e.g. 'wine bar', 'natural wine', 'Peggy Gou', 'ramen'"),
     taste_is: z.enum(["place_type", "entity"]).optional().describe("place_type (default) for venue genres/cuisines, entity for an artist/brand"),
-    supply_kind: z.string().describe(`OSM venue kind to count: ${OSM_KIND_NAMES.join(", ")}; or 'cuisine:ramen'; or a raw tag like 'amenity=bar'`),
+    supply_kind: z.enum(SUPPLY_KINDS).describe("venue kind to count as existing supply"),
   }),
   live: true,
   async run({ city, taste, taste_is, supply_kind }, { stats, progress }) {
@@ -231,21 +232,34 @@ const opportunity = defineTool({
     const lats = core.cells.map((x) => x.lat).sort((a, b) => a - b), lons = core.cells.map((x) => x.lon).sort((a, b) => a - b);
     const q = (a: number[], p: number) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
     const bbox: [number, number, number, number] = [q(lats, 0.03), q(lons, 0.03), q(lats, 0.97), q(lons, 0.97)];
-    progress(`openstreetmap supply: ${supply_kind}`);
-    const grid = await osmSupplyGrid(bbox, supply_kind, (d, t) => progress(`openstreetmap tiles ${d}/${t}`));
-    const rows = core.cells.map((cell, i) => {
-      const r = Math.floor((cell.lat - grid.s) / grid.step), col = Math.floor((cell.lon - grid.w) / grid.step);
-      const inGrid = r >= 0 && r < grid.rows && col >= 0 && col < grid.cols && grid.tilesOk[r * grid.cols + col];
-      return { cell, demand: dz[i], supply: grid.counts.get(cell.g) ?? 0, ok: inGrid && heat.has(cell.g) };
-    }).filter((x) => x.ok);
-    if (rows.length < 30) throw new ToolError("OpenStreetMap supply data is unavailable for most of the city right now (Overpass busy). Try again shortly.");
+    const pre = await loadSupply(c.id);
+    let supplyOf: (g: string, lat: number, lon: number) => number | null, supplySource: string;
+    if (pre) {
+      const ki = pre.kinds.indexOf(supply_kind);
+      supplyOf = (g) => pre.cells[g]?.[ki] ?? 0;
+      supplySource = `${pre.source} ${pre.release}`;
+    } else {
+      progress(`no precomputed supply for ${c.name}; asking OpenStreetMap`);
+      const lats = core.cells.map((x) => x.lat).sort((a, b) => a - b), lons = core.cells.map((x) => x.lon).sort((a, b) => a - b);
+      const q = (a: number[], p: number) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
+      const bbox: [number, number, number, number] = [q(lats, 0.03), q(lons, 0.03), q(lats, 0.97), q(lons, 0.97)];
+      const grid = await osmSupplyGrid(bbox, OSM_FALLBACK[supply_kind as SupplyKind], (d, t) => progress(`openstreetmap tiles ${d}/${t}`));
+      supplyOf = (g, lat, lon) => {
+        const r = Math.floor((lat - grid.s) / grid.step), col = Math.floor((lon - grid.w) / grid.step);
+        return r >= 0 && r < grid.rows && col >= 0 && col < grid.cols && grid.tilesOk[r * grid.cols + col] ? grid.counts.get(g) ?? 0 : null;
+      };
+      supplySource = "OpenStreetMap (live)";
+    }
+    const rows = core.cells.map((cell, i) => ({ cell, demand: dz[i], supply: supplyOf(cell.g, cell.lat, cell.lon) }))
+      .filter((x): x is { cell: typeof x.cell; demand: number; supply: number } => x.supply !== null && heat.has(x.cell.g));
+    if (rows.length < 30) throw new ToolError("Venue supply data is unavailable for most of the city right now. Try again shortly.");
     const sz = zs(rows.map((x) => Math.log1p(x.supply)));
     const cells: OpportunityCell[] = rows.map((x, i) => ({ g: x.cell.g, lon: x.cell.lon, lat: x.cell.lat, demand: r2(x.demand), supply: x.supply, score: r2(x.demand - sz[i]) }));
     const best = cells.filter((x) => x.demand > 0.5).sort((a, b) => b.score - a.score).slice(0, 10)
       .map((x) => ({ ...x, near: nearestCoreHood(core, x.lat, x.lon)?.h.name }));
     const totalSupply = rows.reduce((s, x) => s + x.supply, 0);
     return {
-      data: { city: c.name, taste: sig.name, supply_kind, cells_scored: rows.length, venues_counted: totalSupply, top_opportunities: best, how: "score = Qloo demand z − z(log(1 + OSM venue count)); OSM is incomplete in places, treat supply as a lower bound" },
+      data: { city: c.name, taste: sig.name, supply_kind, supply_source: supplySource, cells_scored: rows.length, venues_counted: totalSupply, top_opportunities: best, how: "score = Qloo demand z − z(log(1 + venue count)); open map data misses some venues, treat supply as a lower bound" },
       summary: `${best.length} gaps for ${sig.name} in ${c.name} (${totalSupply} existing ${supply_kind} counted)`,
       uiActions: [{ type: "opportunity", city: c.id, kind: supply_kind, taste: sig.name, cells }],
     };
@@ -321,14 +335,14 @@ const wiki = defineTool({
   },
 });
 
-const osm_venues = defineTool({
-  name: "osm_venues",
-  description: `OpenStreetMap: how many venues of a kind PHYSICALLY exist around a place, with names (supply / reality check). Not a recommender — use Qloo (local_scene) to pick what to go to. Kinds: ${OSM_KIND_NAMES.join(", ")}, 'cuisine:x', or a raw OSM tag.`,
+const venue_supply = defineTool({
+  name: "venue_supply",
+  description: "Physical reality check: how many venues of each kind EXIST around a place (Overture Maps Places, precomputed per city; live OpenStreetMap for other cities). Counts only — use Qloo (local_scene) to pick where to go.",
   schema: z.object({
     place: z.string().optional().describe("place name/address (geocoded) — or pass lat/lon"),
     lat: z.number().optional(), lon: z.number().optional(),
-    radius_m: z.number().min(200).max(3000).optional(),
-    kinds: z.array(z.string()).min(1).max(5),
+    radius_m: z.number().min(300).max(3000).optional(),
+    kinds: z.array(z.enum(SUPPLY_KINDS)).min(1).max(6),
   }),
   async run({ place, lat, lon, radius_m, kinds }) {
     let la = lat, lo = lon, where = place ?? `${lat},${lon}`;
@@ -338,8 +352,15 @@ const osm_venues = defineTool({
       if (!g) throw new ToolError(`Could not place "${place}".`);
       la = g.lat; lo = g.lon; where = g.display;
     }
-    const rows = await osmAround(la, lo, radius_m ?? 1000, kinds);
-    return { data: { where, radius_m: radius_m ?? 1000, source: "OpenStreetMap (community data; counts are a lower bound)", kinds: rows }, summary: rows.map((r) => `${r.count} ${r.kind}`).join(", ") };
+    const radius = radius_m ?? 1000;
+    const city = (await allCities()).find((c) => hav(la!, lo!, c.center[1], c.center[0]) < 80_000);
+    const pre = city ? await loadSupply(city.id) : null;
+    if (pre) {
+      const r = supplyAround(pre, la, lo, Math.max(radius, 700), kinds);
+      return { data: { where, radius_m: radius, source: `${pre.source} ${pre.release}`, counts: r.counts, cells: r.cells, note: "counts are a lower bound" }, summary: kinds.map((k) => `${r.counts[k]} ${k}`).join(", ") };
+    }
+    const rows = await osmAround(la, lo, radius, kinds.map((k) => OSM_FALLBACK[k]));
+    return { data: { where, radius_m: radius, source: "OpenStreetMap (live)", kinds: rows }, summary: rows.map((r) => `${r.count} ${r.kind}`).join(", ") };
   },
 });
 
@@ -357,4 +378,4 @@ const brief = defineTool({
   },
 });
 
-export const TOOLS_V2: ToolDef[] = [add_city, geocode_tool, twins_anywhere, scene, compare_taste, trend, opportunity, tour, web_search, read_page, wiki, osm_venues, brief];
+export const TOOLS_V2: ToolDef[] = [add_city, geocode_tool, twins_anywhere, scene, compare_taste, trend, opportunity, tour, web_search, read_page, wiki, venue_supply, brief];

@@ -79,21 +79,22 @@ export async function geocode(query: string, limit = 1): Promise<GeoHit[]> {
 }
 
 // ── Overpass with mirror fallback ──
-export const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
+export const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
 export interface OsmEl { type: "node" | "way" | "relation"; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }
 
 export async function overpass(query: string, o: { ttlMs?: number; timeoutMs?: number } = {}): Promise<OsmEl[]> {
-  return diskCached<OsmEl[]>("overpass", query, o.ttlMs ?? 3 * 86400_000, async () => {
+  return diskCached<OsmEl[]>("overpass", query, o.ttlMs ?? 30 * 86400_000, async () => {
     const errs: string[] = [];
     for (const base of OVERPASS) {
       try {
-        const r = await httpText(base, { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" }, timeoutMs: o.timeoutMs ?? 25000 });
+        const r = await httpText(base, { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" }, timeoutMs: o.timeoutMs ?? 14000 });
         if (r.status !== 200) { errs.push(`${new URL(base).host} HTTP ${r.status}`); continue; }
         const j = JSON.parse(r.text) as { elements?: OsmEl[]; remark?: string };
         if (j.remark && /timed out|out of memory/i.test(j.remark) && !(j.elements?.length)) { errs.push(`${new URL(base).host} ${j.remark.slice(0, 60)}`); continue; }
         return j.elements ?? [];
       } catch (e) { errs.push(`${new URL(base).host}: ${e instanceof Error ? e.message : "failed"}`.slice(0, 120)); }
     }
-    throw new ToolError(`Overpass unavailable (${errs.join("; ")})`);
+    console.warn("overpass failed:", errs.join("; "));
+    throw new ToolError(`OpenStreetMap (Overpass) is busy right now — ${OVERPASS.length} servers timed out. Try again in a minute.`);
   });
 }

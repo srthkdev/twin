@@ -42,7 +42,21 @@ const SUGGEST = [
   "What's the vibe of Shimokitazawa, Tokyo?",
 ];
 
-type Group = { kind: "text"; text: string } | { kind: "tools"; steps: ToolStep[] };
+/** The model's reasoning: one dim line while it streams, expandable afterwards. */
+function Thinking({ text, done }: { text: string; done: boolean }) {
+  const tail = text.trim().split(/\n+/).pop() ?? "";
+  return (
+    <details className="group my-1.5 text-[11px] text-dim">
+      <summary className="flex cursor-pointer list-none gap-2 [&::-webkit-details-marker]:hidden">
+        <span className="shrink-0 border border-line-strong px-1 text-[9.5px] uppercase tracking-wider">think</span>
+        <span className={cn("min-w-0 flex-1 truncate", !done && "cursor-block")}>{done ? `${text.trim().split(/\s+/).length} words of reasoning` : tail.slice(-120)}</span>
+      </summary>
+      <p className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap border-l border-line pl-2 leading-relaxed">{text.trim()}</p>
+    </details>
+  );
+}
+
+type Group = { kind: "text"; text: string } | { kind: "tools"; steps: ToolStep[] } | { kind: "thinking"; text: string; done: boolean };
 
 export function AgentPanel({ context, onAction, className }: {
   context: { fromHood: string | null; toCity: string | null };
@@ -145,6 +159,9 @@ export function AgentPanel({ context, onAction, className }: {
         };
         const last = out[out.length - 1];
         if (last?.kind === "tools") last.steps.push(step); else out.push({ kind: "tools", steps: [step] });
+      } else if (p.type === "reasoning" && p.text.trim()) {
+        const last = out[out.length - 1];
+        if (last?.kind === "thinking") { last.text += p.text; last.done = p.state === "done"; } else out.push({ kind: "thinking", text: p.text, done: p.state === "done" });
       } else if (p.type === "text" && p.text.trim()) {
         const last = out[out.length - 1];
         if (last?.kind === "text") last.text += p.text; else out.push({ kind: "text", text: p.text });
@@ -199,7 +216,9 @@ export function AgentPanel({ context, onAction, className }: {
               <div>
                 {groups(m).map((g, j) => g.kind === "text"
                   ? <div key={j} className="break-words"><Markdown source={g.text} variant="chat" /></div>
-                  : <ToolTrace key={j} steps={g.steps} />)}
+                  : g.kind === "thinking"
+                    ? <Thinking key={j} text={g.text} done={g.done} />
+                    : <ToolTrace key={j} steps={g.steps} />)}
                 {busy && i === messages.length - 1 && !m.parts.some((p) => isToolUIPart(p) && (p.state === "input-available" || p.state === "input-streaming")) && (
                   <p className="cursor-block mt-1 text-[11px] text-dim">{m.parts.length ? "thinking" : "planning"}</p>
                 )}

@@ -10,10 +10,10 @@ export interface ToolStep {
 /** Where each tool's answer comes from — shown as a badge so it's obvious Qloo is doing the taste work. */
 const SOURCE: Record<string, string> = {
   local_scene: "qloo", audience: "qloo", cross_domain: "qloo", scene: "qloo", compare_taste: "qloo", trend: "qloo",
-  tour: "qloo", opportunity: "qloo+osm", add_city: "qloo+osm",
+  tour: "qloo", opportunity: "qloo+overture", add_city: "qloo+osm",
   find_twins: "twin", explain_match: "twin", taste_profile: "twin", where_in_city: "twin", pin_twins: "twin",
   twins_anywhere: "twin", list_cities: "twin", search_hoods: "twin",
-  osm_venues: "osm", geocode: "osm", web_search: "web", read_page: "web", wiki: "wiki", brief: "brief",
+  venue_supply: "overture", geocode: "osm", web_search: "web", read_page: "web", wiki: "wiki", brief: "brief",
 };
 
 const SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";

@@ -19,7 +19,13 @@ export function openrouter(apiKey: string) {
   });
 }
 /** OpenRouter routes to the next model itself when one is rate-limited or down (`models` = fallback list). */
-export const fallbackOptions = (primary: string) => ({ openrouter: { models: [primary, ...OPENROUTER_MODELS.filter((m) => m !== primary)].slice(0, 3) } });
+export const fallbackOptions = (primary: string) => ({
+  openrouter: {
+    models: [primary, ...OPENROUTER_MODELS.filter((m) => m !== primary)].slice(0, 3),
+    // Tool-heavy turns don't need long hidden reasoning; low effort roughly halves answer time.
+    reasoning: { effort: "low" },
+  },
+});
 
 export interface RunMeta { model?: string; qlooLive: number; qlooCached: number; ms?: number }
 export type TwinUIMessage = UIMessage<RunMeta>;

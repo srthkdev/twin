@@ -24,3 +24,17 @@ export function cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
   for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return d / (Math.sqrt(na * nb) || 1);
 }
+
+/** Centre of a geohash cell as [lat, lon]. */
+export function geohashCenter(g: string): [number, number] {
+  let even = true, lat = [-90, 90], lon = [-180, 180];
+  for (const ch of g) {
+    const v = B32.indexOf(ch);
+    for (let b = 4; b >= 0; b--) {
+      const bit = (v >> b) & 1, r = even ? lon : lat, m = (r[0] + r[1]) / 2;
+      if (bit) r[0] = m; else r[1] = m;
+      even = !even;
+    }
+  }
+  return [(lat[0] + lat[1]) / 2, (lon[0] + lon[1]) / 2];
+}

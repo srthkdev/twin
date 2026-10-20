@@ -50,7 +50,7 @@ const elLL = (e: OsmEl): [number, number] | null => (e.lat != null && e.lon != n
 export async function osmAround(lat: number, lon: number, radius: number, kinds: string[]): Promise<{ kind: string; osm_tags: string; count: number; named: VenueRow[] }[]> {
   const specs = kinds.map((k) => ({ k, s: osmKind(k) }));
   const body = specs.flatMap(({ s }) => s.filters.map((f) => `nwr(around:${Math.round(radius)},${lat},${lon})${f};`)).join("");
-  const els = await overpass(`[out:json][timeout:30];(${body});out center tags 1800;`, { ttlMs: 24 * 3600_000 });
+  const els = await overpass(`[out:json][timeout:30];(${body});out center tags 1800;`, { ttlMs: 30 * 86400_000 });
   return specs.map(({ k, s }) => {
     const m = els.filter((e) => e.tags && s.test(e.tags));
     const named: VenueRow[] = [];
@@ -76,7 +76,7 @@ export async function osmSupplyGrid(bbox: [number, number, number, number], kind
       const r = Math.floor(i / cols), c = i % cols;
       const a = Math.round((s + r * step) * 1e4) / 1e4, b = Math.round((w + c * step) * 1e4) / 1e4, cc = Math.round((s + (r + 1) * step) * 1e4) / 1e4, d = Math.round((w + (c + 1) * step) * 1e4) / 1e4;
       try {
-        const els = await overpass(`[out:json][timeout:30];(${spec.filters.map((f) => `nwr(${a},${b},${cc},${d})${f};`).join("")});out center qt;`, { ttlMs: 7 * 86400_000 });
+        const els = await overpass(`[out:json][timeout:30];(${spec.filters.map((f) => `nwr(${a},${b},${cc},${d})${f};`).join("")});out center qt;`, { ttlMs: 30 * 86400_000 });
         for (const el of els) {
           const id = `${el.type}/${el.id}`, ll = elLL(el);
           if (seen.has(id) || !ll) continue;
