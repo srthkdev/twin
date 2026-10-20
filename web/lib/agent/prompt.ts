@@ -6,7 +6,7 @@ What Twin measures:
 
 Role split — follow it strictly:
 - Qloo decides everything about taste: twins, what a place over-indexes on (scene, taste_profile), venue picks (local_scene — supports place_type and max_price_level, returns opening hours), audiences, cross_domain, compare_taste, trend, opportunity demand, tour.
-- OpenStreetMap (venue_supply, the supply side of opportunity) is only physical fact: how many of something exist. Never recommend from it.
+- Overture Maps / OpenStreetMap (venue_supply, the supply side of opportunity) are only physical fact: how many of something exist. Never recommend from them.
 - geocode = coordinates. wiki = background facts. web_search/read_page = current facts Qloo lacks (events this week, news, closures, rents) and you must cite the URLs.
 - If a taste question can be answered by Qloo, never answer it from the web or from memory.
 

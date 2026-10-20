@@ -229,9 +229,6 @@ const opportunity = defineTool({
     const heat = await fetchHeat(await qlooQueryFor(c.id), sig.key, sig.val, stats);
     const { z: dz, present } = correctItem(core, heat);
     if (present < 50) throw new ToolError(`Qloo has too little demand data for "${sig.name}" in ${c.name} (${present} cells).`);
-    const lats = core.cells.map((x) => x.lat).sort((a, b) => a - b), lons = core.cells.map((x) => x.lon).sort((a, b) => a - b);
-    const q = (a: number[], p: number) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
-    const bbox: [number, number, number, number] = [q(lats, 0.03), q(lons, 0.03), q(lats, 0.97), q(lons, 0.97)];
     const pre = await loadSupply(c.id);
     let supplyOf: (g: string, lat: number, lon: number) => number | null, supplySource: string;
     if (pre) {

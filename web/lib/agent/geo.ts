@@ -27,7 +27,8 @@ export function cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
 
 /** Centre of a geohash cell as [lat, lon]. */
 export function geohashCenter(g: string): [number, number] {
-  let even = true, lat = [-90, 90], lon = [-180, 180];
+  let even = true;
+  const lat = [-90, 90], lon = [-180, 180];
   for (const ch of g) {
     const v = B32.indexOf(ch);
     for (let b = 4; b >= 0; b--) {
