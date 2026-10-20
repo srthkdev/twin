@@ -13,7 +13,7 @@ const SOURCE: Record<string, string> = {
 };
 const params = (t: (typeof TOOLS)[number]) => {
   const s = jsonSchemaOf(t) as { properties?: Record<string, { description?: string; type?: string; enum?: string[] }>; required?: string[] };
-  return Object.entries(s.properties ?? {}).map(([k, v]) => `\`${k}\`${s.required?.includes(k) ? "" : "?"}`).join(", ") || "—";
+  return Object.entries(s.properties ?? {}).map(([k]) => `\`${k}\`${s.required?.includes(k) ? "" : "?"}`).join(", ") || "—";
 };
 const rows = TOOLS.map((t) => `| \`${t.name}\` | ${SOURCE[t.name] ?? "—"} | ${params(t)} | ${t.description.replace(/\|/g, "/").replace(/\n/g, " ")} |`).join("\n");
 const md = `# Twin agent — tools and instructions

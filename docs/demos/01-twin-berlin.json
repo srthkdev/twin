@@ -1,9 +1,0 @@
-{ "name": "01-twin-berlin",
-  "url": "http://localhost:3000/explore?from=los-angeles-silver-lake&tab=agent&replay=1&speed=4",
-  "steps": [
-    {"wait": 7000},
-    {"click": "text=Find the Silver Lake of Berlin"},
-    {"wait": 9000, "shot": "mid"},
-    {"waitFor": "text=qloo 4 live", "timeout": 90000},
-    {"wait": 5000, "shot": "end"}
-  ] }

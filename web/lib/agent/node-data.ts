@@ -1,6 +1,5 @@
 // Node-side data loader (no "server-only" so the MCP server can reuse it under tsx).
 import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { CellsFile, DataSet } from "../types";
 import basketKeys from "./data/basket-keys.json";
@@ -11,9 +10,7 @@ function root() {
   const base = process.env.TWIN_WEB_ROOT ?? process.cwd();
   return join(base, "public");
 }
-function dataDir() {
-  return existsSync(join(root(), "data", "meta.json")) ? "data" : "data-mock";
-}
+const dataDir = () => "data";
 
 let dsP: Promise<DataSet> | null = null;
 export function loadDataSet(): Promise<DataSet> {

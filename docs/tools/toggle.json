@@ -1,4 +1,0 @@
-[{"preload": 16000},
- {"at": 0.1, "js": "document.querySelectorAll('nextjs-portal').forEach(e => e.remove())"},
- {"at": 1.2, "js": "[...document.querySelectorAll('[role=radio]')].find(b => /raw/.test(b.textContent))?.click()"},
- {"at": 4.2, "js": "[...document.querySelectorAll('[role=radio]')].find(b => /corrected/.test(b.textContent))?.click()"}]

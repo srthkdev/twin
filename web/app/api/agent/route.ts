@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream } from "ai";
 import { loadServerDataSet } from "@/lib/agent/server-data";
-import { OPENROUTER_MODELS, aiTools, fallbackOptions, openrouter, recorder, replayStream, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
+import { OPENROUTER_MODELS, aiTools, fallbackOptions, openrouter, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
 import type { AgentContext } from "@/lib/agent/types";
 
@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-interface Body { messages: TwinUIMessage[]; context?: AgentContext; model?: string; record?: string; replay?: string; speed?: number }
+interface Body { messages: TwinUIMessage[]; context?: AgentContext; model?: string }
 
 // Server-key budget per client: each question can be up to 8 model calls on a free tier.
 const WINDOW_MS = 10 * 60_000, MAX_PER_WINDOW = 12;
@@ -23,21 +23,12 @@ function allow(ip: string) {
 
 /**
  * POST /api/agent — AI SDK UI message stream.
- * `replay: name` streams a stored recording (no model or Qloo calls); `record: name` saves this run for replay.
  * The OpenRouter key is the server's, or the visitor's own via the `x-agent-key` header (never stored or logged).
  */
 export async function POST(req: Request) {
   let body: Body;
   try { body = (await req.json()) as Body; } catch { return NextResponse.json({ error: "invalid json" }, { status: 400 }); }
 
-  // Record/replay exist for development and making demo videos; production always runs the real agent.
-  const devTools = process.env.NODE_ENV !== "production" || process.env.TWIN_ALLOW_REPLAY === "1";
-  if (!devTools) { body.replay = undefined; body.record = undefined; }
-  if (body.replay) {
-    const s = await replayStream(body.replay, Math.min(8, Math.max(0.5, body.speed ?? 1)));
-    if (!s) return NextResponse.json({ error: `no recording named ${body.replay}` }, { status: 404 });
-    return createUIMessageStreamResponse({ stream: s });
-  }
   if (!Array.isArray(body.messages) || !body.messages.length) return NextResponse.json({ error: "messages required" }, { status: 400 });
 
   const userKey = req.headers.get("x-agent-key")?.trim();
@@ -81,7 +72,5 @@ export async function POST(req: Request) {
     },
   });
 
-  const recordName = body.record?.trim();
-  const question = (messages[messages.length - 1]?.parts ?? []).map((p) => (p.type === "text" ? p.text : "")).join(" ");
-  return createUIMessageStreamResponse({ stream: recordName ? stream.pipeThrough(recorder(recordName, question, body.context)) : stream });
+  return createUIMessageStreamResponse({ stream });
 }

@@ -30,9 +30,6 @@ function saveMarkdown(filename: string, markdown: string) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-/** Recording names are derived from the question, so `?replay=1` can play back what `?record=1` captured. */
-export const recordingName = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-const urlFlag = (k: string) => (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get(k) : null);
 
 const SUGGEST = [
   "Find the Silver Lake of Berlin",
@@ -77,19 +74,15 @@ export function AgentPanel({ context, onAction, className }: {
   const endRef = useRef<HTMLDivElement>(null);
   const live = useRef({ settings, context, onAction });
   live.current = { settings, context, onAction };
-  const lastQuestion = useRef("");
 
   const transport = useMemo(() => new DefaultChatTransport<TwinUIMessage>({
     api: "/api/agent",
     prepareSendMessagesRequest: ({ messages }) => {
       const { settings: s, context: ctx } = live.current;
-      const name = recordingName(lastQuestion.current);
       return {
         headers: s.key ? { "x-agent-key": s.key } : undefined,
         body: {
           messages, context: ctx, model: s.model || undefined,
-          ...(urlFlag("record") ? { record: name } : {}),
-          ...(urlFlag("replay") ? { replay: name, speed: Number(urlFlag("speed") ?? 1) } : {}),
         },
       };
     },
@@ -139,7 +132,6 @@ export function AgentPanel({ context, onAction, className }: {
   const send = (text: string) => {
     const t = text.trim();
     if (!t || busy) return;
-    lastQuestion.current = t;
     setInput("");
     void sendMessage({ text: t });
   };
@@ -194,7 +186,7 @@ export function AgentPanel({ context, onAction, className }: {
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-background font-mono text-xs text-foreground", className)}>
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11px]">
-        <span className="text-dim">model <span className="text-muted-foreground">{modelLabel || "…"}</span>{urlFlag("replay") && <span className="ml-2 text-primary">replay</span>}{urlFlag("record") && <span className="ml-2 text-primary">● rec</span>}</span>
+        <span className="text-dim">model <span className="text-muted-foreground">{modelLabel || "…"}</span></span>
         <button type="button" onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings} className="text-dim hover:text-foreground">
           [{showSettings ? "close" : "settings"}]
         </button>

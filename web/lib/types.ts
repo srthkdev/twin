@@ -9,7 +9,6 @@ export interface Meta {
   basketSize: number;
   qlooCalls: number;
   cities: string[];
-  mock?: boolean;
 }
 export interface BasketItem { i: number; id: string; label: string; kind: BasketKind; group: BasketGroup }
 export interface City {

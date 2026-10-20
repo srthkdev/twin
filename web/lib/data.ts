@@ -1,24 +1,9 @@
 import { CITY_CODES } from "./groups";
 import type { BasketItem, CellsFile, City, CoreFile, DataSet, Evals, Hood, Meta, PackedCells, TwinsFile } from "./types";
 
-/** Real data lives in /data; if its meta.json is missing we fall back to /data-mock. */
-let basePromise: Promise<string> | null = null;
+/** Precomputed pipeline output lives in /public/data. */
 export function getBase(): Promise<string> {
-  if (!basePromise) {
-    basePromise = (async () => {
-      try {
-        const r = await fetch("/data/meta.json", { cache: "no-cache" });
-        if (r.ok) {
-          const j = await r.json();
-          if (j && Array.isArray(j.cities)) return "/data";
-        }
-      } catch {
-        /* fall through */
-      }
-      return "/data-mock";
-    })();
-  }
-  return basePromise;
+  return Promise.resolve("/data");
 }
 
 const cache = new Map<string, Promise<unknown>>();
@@ -171,6 +156,3 @@ function pack(f: CellsFile): PackedCells {
   return { city: f.city, n, dim, lon, lat, d, v, norm, g, top };
 }
 
-export async function isMockData(): Promise<boolean> {
-  return (await getBase()) === "/data-mock";
-}
