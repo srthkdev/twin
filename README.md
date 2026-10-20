@@ -23,9 +23,10 @@
 |---|---|
 | **Explore** | Pick a neighbourhood and every ~1 km block of its city lights up. Pick another city and the camera flies there; blocks rise by similarity and the five closest neighbourhoods are ranked, with the traits they share and where they differ. |
 | **Drop a pin** | Click any block to use that exact cell as the source — not just a named neighbourhood. |
+| **Read a block** | Height = likeness, colour = what it's mostly about (sound · table · scene). Hover for its traits and how many venues stand there; *ask* sends that block to the agent. |
 | **Raw vs corrected** | One toggle shows the same map on raw Qloo scores, where everything busy looks alike. |
 | **Any city** | Ask about a city we didn't precompute and the agent fingerprints it live from Qloo (≈40 heatmaps), then caches it. |
-| **Agent** | 23 tools on free open models (MiniMax M3.1 Flash via OpenRouter), streamed as a timeline: each step shows its source, live progress and timing. |
+| **Agent** | 23 tools on free open models (MiniMax M3.1 Flash via OpenRouter), streamed as a timeline that folds away when the answer lands. Plain-language answers; every place is a link that flies the map; cited sources; one-click follow-ups; multi-turn memory that survives reloads. |
 | **Opportunity map** | Qloo demand for a taste vs how many such venues physically exist (Overture Maps), cell by cell. |
 | **MCP server** | The same tools, usable from Claude Code, Codex or any MCP client. |
 

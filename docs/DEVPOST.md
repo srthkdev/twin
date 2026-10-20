@@ -46,11 +46,34 @@ The corrected maps also grouped items the way you'd expect. Bad Bunny went with 
 
 - **Explore.** Pick a neighbourhood and every block of its city lights up by how similar it is. Pick another city and the camera flies there. Its blocks rise by similarity to your source, and the five closest neighbourhoods are ranked. A *shared / different* table shows the traits behind each match. A raw/corrected toggle shows the same map before and after our fix.
 - **Drop a pin.** Click any block to use that exact cell as the source, not just a named neighbourhood.
-- **Agent.** The right panel holds a chat agent. It runs on the local Codex CLI, or on a key you bring (Anthropic or OpenAI). It calls ten tools: seven over the precomputed fingerprints, and three that call Qloo live.
-  - `local_scene`: venues near a neighbourhood, steered by your source neighbourhood's taste.
-  - `audience`: age and gender skew of an artist or brand.
-  - `cross_domain`: brands that fans of an artist over-index on.
-- **MCP server.** The same tools ship as an MCP server, so Twin works inside Claude Code, Codex or any MCP client.
+- **Read a block.** Each ~1 km block is one column. Its height is how much it's like your source, and its colour is what it's mostly about: sound (amber), table (bone) or scene (rust). Hover it for the likeness, the taste mix, its strongest traits and how many venues of each kind actually stand there (Overture). Hit *ask* and the agent answers about that exact block.
+- **Any city on Earth.** Twin isn't limited to the six cities we precomputed. Ask about Lisbon or Madrid and the agent fingerprints the city live: about 40 Qloo heatmaps, the same correction, neighbourhoods from OpenStreetMap. The result is cached, so the second visitor gets it instantly.
+- **An agent with 23 tools,** in a tab beside the map. It streams its work as a timeline: each step shows its source (QLOO, TWIN, OVERTURE, OSM, WIKI, WEB), live progress and how long it took. Once the answer lands, the steps fold into one line. Answers are written for people, not analysts: a bold one-line verdict, a few reasons in plain words, "% match" instead of cosines. Every neighbourhood and venue in the answer is a link that flies the map there. Web facts are cited inline, and two follow-up questions are one click away. It's a real conversation: follow-ups like "and its twin in Paris?" keep the context, and the chat survives reloads.
+- **Opportunity map.** "Where should I open a wine bar in Berlin?" compares Qloo *demand* for the taste in every cell with *supply*, meaning how many such venues physically exist (Overture Maps Places). The gaps are painted on the map.
+- **Tour planner.** Where an artist's fans actually are in each city, the strongest neighbourhoods, and Qloo live-music venues nearby.
+- **Briefs.** On request, the agent packages findings as a downloadable markdown brief.
+- **MCP server.** The same tools run over stdio, so Twin works inside Claude Code, Codex or any MCP client.
+
+### Who answers what
+
+We kept one rule: **Qloo makes every taste decision, and the other sources only do jobs Qloo can't.**
+
+| Question | Source |
+|---|---|
+| Twins, vibe, venue picks (with hours and price), audiences, brands, momentum, demand | Qloo (live) and Twin's corrected fingerprints |
+| How many venues of a kind physically exist | Overture Maps Places, precomputed per city |
+| Neighbourhood boundaries for a new city, coordinates | OpenStreetMap (Overpass, Nominatim) |
+| Background facts, population | Wikipedia and Wikidata |
+| This week's events, news, closures, rents | Web search (Tavily), always cited |
+
+### Things to try
+
+- *Find the Silver Lake of Berlin.*
+- *I love Silver Lake. I'm moving to Neukölln — where do I actually go?*
+- *Where in Berlin should I open a natural wine bar?*
+- *Plan a 3-city European tour for Peso Pluma.*
+- *What's the vibe of Shimokitazawa, Tokyo?*
+- *Find the Shoreditch of Lisbon.*
 
 ![agent answering with live Qloo venues](https://raw.githubusercontent.com/srthkdev/twin/main/web/public/media/agent.jpg)
 
@@ -66,7 +89,10 @@ The corrected maps also grouped items the way you'd expect. Bad Bunny went with 
 **Stack:**
 - **Pipeline:** Python, standard library only.
 - **App:** Next.js with MapLibre's globe projection and deck.gl columns for the city blocks.
-- **Agent:** our own tool loop over the Anthropic and OpenAI SDKs, plus `codex exec` with the MCP server attached.
+- **Agent:** Vercel AI SDK. Server: `streamText` with tools, and `createUIMessageStream` so tool progress and map actions stream as data parts. Client: `useChat`.
+- **Models:** free open-weight models through OpenRouter, with OpenRouter's native fallback: MiniMax M3.1 Flash, then NVIDIA Nemotron 3 Ultra, then Thinking Machines Inkling.
+- **Caching:** every Qloo, OpenStreetMap, Wikipedia and search response, and every live city, goes to Vercel Blob. Repeat questions cost nothing, which matters on free tiers.
+- **Supply data:** Overture Maps Places, queried with DuckDB straight from its cloud bucket and binned into the same 1 km cells. It's precomputed per city, so opportunity answers are instant.
 
 **City queries had quirks we had to work around:**
 - "Los Angeles" returns only the City of LA, so Compton and Santa Monica were missing. We use "Los Angeles County".
@@ -136,6 +162,35 @@ But it also **compresses some true positives** that raw data had already maxed o
 
 That's the same trade-off the census check found.
 
+### 4. Building the agent
+
+We started with a hand-written tool loop running on the local Codex CLI. We moved to the AI SDK because it streams properly: text, reasoning and tool parts each get their own state, so the timeline UI could show real progress instead of a spinner.
+
+**Picking the model.** We compared the free models on our own agent questions and on Artificial Analysis's Intelligence Index (v4.3.2):
+- **MiniMax M3.1 Flash** (index 43) chose the right tools every time and made real live Qloo calls.
+- **Nemotron 3 Ultra** (index 23) answered with fewer tools and no live calls.
+- **Inkling's free endpoint** failed every request during our test.
+
+So MiniMax leads, with the others as automatic fallbacks.
+
+**Making it fast.** The first version took **135 s** to answer "find the Silver Lake of Berlin": the model reasoned at length and volunteered extra steps. Two changes fixed it: low reasoning effort for tool-heavy turns, and a playbook prompt with a recipe and tool budget per task type. The same question now takes **10 s and one tool call**.
+
+| Task | Time | Tools | Live Qloo calls |
+|---|---|---|---|
+| Find the Silver Lake of Berlin | 10 s | find_twins | 0 |
+| Moving from Silver Lake to Neukölln, where to go | 26 s | find_twins, local_scene ×4 | 11 |
+| Where to open a natural wine bar in Berlin | 57 s | opportunity, where_in_city, local_scene, venue_supply | 16 |
+| 3-city European tour for Peso Pluma | 13 s | tour, trend | 1 |
+| Vibe of Shimokitazawa, Tokyo | 10 s | scene, wiki | 4 |
+| Shoreditch of Lisbon | 12 s | list_cities, twins_anywhere | 0 |
+
+**What broke, and how we fixed it:**
+- **Public Overpass servers timed out or returned 502** for most of a day. So venue supply now comes from Overture, precomputed per city; Overpass is only the fallback for brand-new cities.
+- **"Natural wine" is a Qloo tag with almost no heatmap data.** Opportunity now falls back to the venue type itself (wine bar) and says so.
+- **An early tour run fingerprinted Madrid unprompted,** which cost 40 Qloo calls. The prompt now only allows `add_city` when the user names a city.
+- **Early answers read like a lab report** — z-scores, cosines, raw coordinates. The prompt now bans them from the visible text. Coordinates go into `geo:` links that the UI turns into map buttons, and the result cards carry the numbers.
+- **Stopping a run mid-tool broke the next question,** because history held a tool call with no result. The route now drops unfinished tool calls and old reasoning from history, and the last step is forced to be an answer, never another tool call.
+
 ## Challenges
 
 - **Proving Qloo was necessary.** Our first headline claim, "Twin beats an LLM at finding twins", turned out to be false. Instead of hiding it we changed the product's story. The LLM reasons and talks; Qloo supplies measured, fine-grained taste that the LLM doesn't have. The agent uses both, and the evals page shows the loss.
@@ -156,4 +211,4 @@ That's the same trade-off the census check found.
 
 ## Built with
 
-Qloo Insights API (heatmaps, location insights, demographics, search, tags) · Python · Next.js · MapLibre GL · deck.gl · Tailwind · shadcn/ui · Recharts · Anthropic SDK · OpenAI SDK · Codex CLI · Model Context Protocol · US Census ACS 2023
+Qloo Insights API (heatmaps, location insights, audiences, demographics, compare, trending, search, tags) · Vercel AI SDK · OpenRouter (MiniMax M3.1 Flash, Nemotron 3 Ultra, Inkling) · Vercel Blob · Overture Maps Places · DuckDB · OpenStreetMap (Nominatim, Overpass) · Wikipedia / Wikidata · Tavily · Python · Next.js · MapLibre GL · deck.gl · Tailwind · shadcn/ui · Recharts · Model Context Protocol · US Census ACS 2023

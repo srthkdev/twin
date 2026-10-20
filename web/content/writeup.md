@@ -46,8 +46,9 @@ The corrected maps also grouped items the way you'd expect. Bad Bunny went with 
 
 - **Explore.** Pick a neighbourhood and every block of its city lights up by how similar it is. Pick another city and the camera flies there. Its blocks rise by similarity to your source, and the five closest neighbourhoods are ranked. A *shared / different* table shows the traits behind each match. A raw/corrected toggle shows the same map before and after our fix.
 - **Drop a pin.** Click any block to use that exact cell as the source, not just a named neighbourhood.
+- **Read a block.** Each ~1 km block is one column. Its height is how much it's like your source, and its colour is what it's mostly about: sound (amber), table (bone) or scene (rust). Hover it for the likeness, the taste mix, its strongest traits and how many venues of each kind actually stand there (Overture). Hit *ask* and the agent answers about that exact block.
 - **Any city on Earth.** Twin isn't limited to the six cities we precomputed. Ask about Lisbon or Madrid and the agent fingerprints the city live: about 40 Qloo heatmaps, the same correction, neighbourhoods from OpenStreetMap. The result is cached, so the second visitor gets it instantly.
-- **An agent with 23 tools,** in a tab beside the map. It streams its work as a timeline: each step shows its source (QLOO, TWIN, OVERTURE, OSM, WIKI, WEB), live progress, how long it took and its result. Map actions fly the camera as it goes.
+- **An agent with 23 tools,** in a tab beside the map. It streams its work as a timeline: each step shows its source (QLOO, TWIN, OVERTURE, OSM, WIKI, WEB), live progress and how long it took. Once the answer lands, the steps fold into one line. Answers are written for people, not analysts: a bold one-line verdict, a few reasons in plain words, "% match" instead of cosines. Every neighbourhood and venue in the answer is a link that flies the map there. Web facts are cited inline, and two follow-up questions are one click away. It's a real conversation: follow-ups like "and its twin in Paris?" keep the context, and the chat survives reloads.
 - **Opportunity map.** "Where should I open a wine bar in Berlin?" compares Qloo *demand* for the taste in every cell with *supply*, meaning how many such venues physically exist (Overture Maps Places). The gaps are painted on the map.
 - **Tour planner.** Where an artist's fans actually are in each city, the strongest neighbourhoods, and Qloo live-music venues nearby.
 - **Briefs.** On request, the agent packages findings as a downloadable markdown brief.
@@ -187,6 +188,8 @@ So MiniMax leads, with the others as automatic fallbacks.
 - **Public Overpass servers timed out or returned 502** for most of a day. So venue supply now comes from Overture, precomputed per city; Overpass is only the fallback for brand-new cities.
 - **"Natural wine" is a Qloo tag with almost no heatmap data.** Opportunity now falls back to the venue type itself (wine bar) and says so.
 - **An early tour run fingerprinted Madrid unprompted,** which cost 40 Qloo calls. The prompt now only allows `add_city` when the user names a city.
+- **Early answers read like a lab report** — z-scores, cosines, raw coordinates. The prompt now bans them from the visible text. Coordinates go into `geo:` links that the UI turns into map buttons, and the result cards carry the numbers.
+- **Stopping a run mid-tool broke the next question,** because history held a tool call with no result. The route now drops unfinished tool calls and old reasoning from history, and the last step is forced to be an answer, never another tool call.
 
 ## Challenges
 

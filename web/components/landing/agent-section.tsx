@@ -54,7 +54,8 @@ export function AgentSection() {
           <ul className="space-y-2.5 text-[12.5px] leading-relaxed text-muted-foreground">
             <li><span className="text-foreground">23 tools</span> on the Vercel AI SDK, streamed as a live timeline with progress and timing.</li>
             <li><span className="text-foreground">Free open models</span> via OpenRouter — MiniMax M3.1 Flash, falling back to Nemotron 3 Ultra and Inkling.</li>
-            <li><span className="text-foreground">Every answer is cached</span> in Vercel Blob, so repeat questions cost no quota.</li>
+            <li><span className="text-foreground">Answers for people</span> — a plain verdict, places that fly the map when clicked, cited sources, one-click follow-ups, and a conversation that remembers.</li>
+            <li><span className="text-foreground">Every Qloo and tool call is cached</span> in Vercel Blob, so repeat questions cost no quota.</li>
             <li><span className="text-foreground">MCP server</span> — the same tools inside Claude Code, Codex or any MCP client.</li>
           </ul>
           <Link href="/explore?tab=agent" className="link mt-5 inline-block text-[12px] text-muted-foreground">open the agent →</Link>
