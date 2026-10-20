@@ -10,3 +10,4 @@ pipeline/raw_*.json
 probe/fp_*.json
 probe/hm_la.json
 pipeline/*.log
+web/.cache/

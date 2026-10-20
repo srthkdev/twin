@@ -52,7 +52,7 @@ export async function runAnthropic(opts: { apiKey: string; model?: string; messa
       }
       const results = await Promise.all(uses.map(async (u) => {
         emit({ type: "tool_call", id: u.id, name: u.name, args: u.input });
-        const r = await executeTool(u.name, u.input, ds);
+        const r = await executeTool(u.name, u.input, ds, (note) => emit({ type: "progress", id: u.id, note }));
         live += r.qloo.live; cached += r.qloo.cached;
         emit({ type: "tool_result", id: u.id, name: u.name, summary: r.summary, ok: r.ok, uiActions: r.uiActions, qloo: r.qloo });
         return { type: "tool_result" as const, tool_use_id: u.id, content: r.content, is_error: !r.ok };
@@ -94,7 +94,7 @@ export async function runOpenAI(opts: { apiKey: string; model?: string; messages
         let args: unknown = {};
         try { args = JSON.parse(c.arguments || "{}"); } catch { /* validated below */ }
         emit({ type: "tool_call", id: c.call_id, name: c.name, args });
-        const r = await executeTool(c.name, args, ds);
+        const r = await executeTool(c.name, args, ds, (note) => emit({ type: "progress", id: c.call_id, note }));
         live += r.qloo.live; cached += r.qloo.cached;
         emit({ type: "tool_result", id: c.call_id, name: c.name, summary: r.summary, ok: r.ok, uiActions: r.uiActions, qloo: r.qloo });
         return { type: "function_call_output" as const, call_id: c.call_id, output: r.content };
@@ -172,7 +172,7 @@ export async function runOpenRouter(opts: { apiKey: string; model?: string; mess
         let args: unknown = {};
         try { args = JSON.parse(c.args || "{}"); } catch { /* validated by executeTool */ }
         emit({ type: "tool_call", id: c.id, name: c.name, args });
-        const r = await executeTool(c.name, args, ds);
+        const r = await executeTool(c.name, args, ds, (note) => emit({ type: "progress", id: c.id, note }));
         live += r.qloo.live; cached += r.qloo.cached;
         emit({ type: "tool_result", id: c.id, name: c.name, summary: r.summary, ok: r.ok, uiActions: r.uiActions, qloo: r.qloo });
         return { role: "tool" as const, tool_call_id: c.id, content: r.content };

@@ -67,21 +67,13 @@ import { z } from "zod";
 import type { AgentAction } from "./types";
 import type { CellsFile } from "../types";
 import { BASKET_KEYS, loadCellsFile, loadDataSet } from "./node-data";
-import { QlooError, newStats, qlooConfigured, qlooGet, type QlooStats } from "./qloo";
+import { QlooError, fmtHours, newStats, qlooConfigured, qlooGet, qlooResolveTag, type QlooStats } from "./qloo";
 
-export interface ToolContext { ds: DataSet; stats: QlooStats }
-export interface ToolOutput { data: unknown; summary: string; uiActions?: AgentAction[] }
-export interface ToolDef<S extends z.ZodType = z.ZodType> {
-  name: string;
-  description: string;
-  schema: S;
-  live?: boolean; // calls Qloo live
-  run(args: z.infer<S>, ctx: ToolContext): Promise<ToolOutput>;
-}
-const defineTool = <S extends z.ZodType>(t: ToolDef<S>) => t as unknown as ToolDef;
+import { TOOLS_V2 } from "./tools-v2";
+import { ToolError, defineTool, type ToolContext, type ToolDef, type ToolOutput } from "./tool-kit";
+export type { ToolContext, ToolDef, ToolOutput };
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
-class ToolError extends Error {}
 
 const CITY_QUERY: Record<string, string> = {
   "los-angeles": "Los Angeles County", "new-york": "New York City", london: "London", berlin: "Berlin", "mexico-city": "Mexico City", paris: "Paris and suburbs",
@@ -356,7 +348,7 @@ const pin_twins = defineTool({
 // ───────────────────────────── Live Qloo tools ─────────────────────────────
 interface QEntity {
   name: string; entity_id: string; subtype?: string; tags?: { name: string }[];
-  properties?: { address?: string; description?: string; short_description?: string; business_rating?: number; geocode?: { neighborhood?: string } };
+  properties?: { address?: string; description?: string; short_description?: string; business_rating?: number; price_level?: number; hours?: unknown; geocode?: { neighborhood?: string } };
   query?: { affinity?: number; distance?: number };
 }
 const KIND_TYPE: Record<string, string> = { place: "urn:entity:place", artist: "urn:entity:artist", brand: "urn:entity:brand", movie: "urn:entity:movie", tv_show: "urn:entity:tv_show", book: "urn:entity:book", podcast: "urn:entity:podcast", videogame: "urn:entity:videogame" };
@@ -380,6 +372,8 @@ function slim(e: QEntity) {
     distance_m: e.query?.distance != null ? Math.round(e.query.distance) : undefined,
     qloo_affinity: e.query?.affinity != null ? r2(e.query.affinity) : undefined,
     rating: p.business_rating ? r2(p.business_rating) : undefined,
+    price_level: p.price_level ?? undefined,
+    hours: fmtHours(p.hours),
     about: (p.short_description ?? p.description)?.slice(0, 140),
     tags: e.tags?.slice(0, 3).map((t) => t.name),
   };
@@ -411,9 +405,11 @@ const local_scene = defineTool({
     interests: z.array(z.string()).optional().describe("basket item labels, e.g. ['Vegan restaurants','Radiohead']"),
     radius_m: z.number().min(300).max(5000).optional(),
     take: z.number().int().min(1).max(8).optional(),
+    place_type: z.string().optional().describe("restrict places to a Qloo place type, free text, e.g. 'wine bar', 'record store', 'ramen'"),
+    max_price_level: z.number().int().min(1).max(4).optional().describe("1 = cheap … 4 = expensive"),
   }),
   live: true,
-  async run({ hood_id, kinds, taste_of, interests, radius_m, take }, { ds, stats }) {
+  async run({ hood_id, kinds, taste_of, interests, radius_m, take, place_type, max_price_level }, { ds, stats }) {
     const h = resolveHood(ds, hood_id);
     let labels = interests ?? [];
     let tasteFrom: string | undefined;
@@ -425,12 +421,17 @@ const local_scene = defineTool({
     const { params: sig, used } = interestParams(ds, labels);
     const radius = radius_m ?? 1500, n = take ?? 6;
     const ks = kinds?.length ? kinds : (["place", "artist", "brand"] as const);
+    const placeTag = place_type ? await qlooResolveTag(place_type, stats) : null;
     const point = `POINT(${h.lon} ${h.lat})`;
     const out: Record<string, unknown> = {};
     await Promise.all(ks.map(async (kind) => {
       const params: Record<string, string | number> = { "filter.type": KIND_TYPE[kind], take: n, ...sig };
       if (kind !== "place") delete params["signal.interests.tags"]; // place tags are meaningless (and break results) for artists/brands
-      if (kind === "place") { params["filter.location"] = point; params["filter.location.radius"] = radius; }
+      if (kind === "place") {
+        params["filter.location"] = point; params["filter.location.radius"] = radius;
+        if (placeTag) params["filter.tags"] = placeTag.id;
+        if (max_price_level) params["filter.price_level.max"] = max_price_level;
+      }
       else { params["signal.location"] = point; params["signal.location.radius"] = radius; }
       try {
         const r = await qlooGet<{ results?: { entities?: QEntity[] } }>("/v2/insights", params, stats);
@@ -439,7 +440,7 @@ const local_scene = defineTool({
     }));
     const counts = ks.map((kd) => `${Array.isArray(out[kd]) ? (out[kd] as unknown[]).length : 0} ${kd}`).join(", ");
     return {
-      data: { where: { hood_id: h.id, name: h.name, radius_m: radius }, taste_signal: { from_hood: tasteFrom ?? null, interests_sent_to_qloo: used }, note: "place results are radius-filtered; artist/brand results use location as a soft bias only. Taste tags are loosely respected.", ...out },
+      data: { where: { hood_id: h.id, name: h.name, radius_m: radius }, place_filter: placeTag ? { type: placeTag.name, max_price_level: max_price_level ?? null } : null, taste_signal: { from_hood: tasteFrom ?? null, interests_sent_to_qloo: used }, note: "place results are radius-filtered; artist/brand results use location as a soft bias only. Taste tags are loosely respected.", ...out },
       summary: `${counts} in ${h.name}${tasteFrom ? ` (taste of ${tasteFrom})` : ""}`,
       uiActions: [{ type: "flyTo", hood: h.id }],
     };
@@ -499,7 +500,7 @@ const cross_domain = defineTool({
   },
 });
 
-export const TOOLS: ToolDef[] = [list_cities, search_hoods, find_twins, explain_match, taste_profile, where_in_city, pin_twins, local_scene, audience, cross_domain];
+export const TOOLS: ToolDef[] = [list_cities, search_hoods, find_twins, explain_match, taste_profile, where_in_city, pin_twins, local_scene, audience, cross_domain, ...TOOLS_V2];
 export const toolByName = (n: string) => TOOLS.find((t) => t.name === n);
 
 export function jsonSchemaOf(t: ToolDef): Record<string, unknown> {
@@ -512,7 +513,7 @@ export interface ExecResult { ok: boolean; content: string; summary: string; uiA
 const MAX_RESULT_CHARS = 9000;
 
 /** Validate args, run a tool, never throw. `content` is what the model sees. */
-export async function executeTool(name: string, rawArgs: unknown, ds?: DataSet): Promise<ExecResult> {
+export async function executeTool(name: string, rawArgs: unknown, ds?: DataSet, progress: (note: string) => void = () => {}): Promise<ExecResult> {
   const stats = newStats();
   const t = toolByName(name);
   if (!t) return { ok: false, content: JSON.stringify({ error: `unknown tool ${name}` }), summary: `unknown tool ${name}`, uiActions: [], qloo: stats };
@@ -522,7 +523,7 @@ export async function executeTool(name: string, rawArgs: unknown, ds?: DataSet):
     return { ok: false, content: JSON.stringify({ error: `invalid arguments: ${msg}` }), summary: `invalid arguments`, uiActions: [], qloo: stats };
   }
   try {
-    const out = await t.run(parsed.data, { ds: ds ?? (await loadDataSet()), stats });
+    const out = await t.run(parsed.data, { ds: ds ?? (await loadDataSet()), stats, progress });
     let content = JSON.stringify(out.data);
     if (content.length > MAX_RESULT_CHARS) content = content.slice(0, MAX_RESULT_CHARS) + '..."[truncated]';
     return { ok: true, content, summary: out.summary + (stats.live + stats.cached ? ` [qloo ${stats.live} live${stats.cached ? `, ${stats.cached} cached` : ""}]` : ""), uiActions: out.uiActions ?? [], qloo: stats };
