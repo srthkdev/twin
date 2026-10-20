@@ -14,7 +14,16 @@ export interface Meta {
 export interface BasketItem { i: number; id: string; label: string; kind: BasketKind; group: BasketGroup }
 export interface City {
   id: string; name: string; country: string; center: [number, number]; zoom: number; cellCount: number; hoodCount: number;
+  source?: "static" | "live"; dims?: 116 | 40; coverage?: { cells: number; sparseItems: number };
 }
+/** Core-basket fingerprint file: /data/core/{id}.json (static) or /api/cities/{id}/core (any city). */
+export interface CoreFile {
+  city?: string; items: string[];
+  cells: { g: string; lon: number; lat: number; v: number[] }[];
+  hoods: { id: string; name: string; lon: number; lat: number; v: number[] }[];
+}
+export interface OpportunityCell { g: string; lon: number; lat: number; demand: number; supply: number; score: number }
+export interface OpportunityResult { city: string; cells: OpportunityCell[] }
 export interface Cell { g: string; lon: number; lat: number; d: number; v: number[]; top: number[] }
 export interface CellsFile { city: string; cells: Cell[] }
 export interface Hood {
@@ -71,4 +80,6 @@ export interface DataSet {
   cities: City[];
   hoods: Hood[];
   twins: TwinsFile;
+  /** Labels for the 40 core dims used by live cities and any pair that includes one. */
+  coreBasket?: BasketItem[];
 }

@@ -10,6 +10,7 @@ export function cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
 export function cellSimilarities(cells: PackedCells, vec: ArrayLike<number>): Float32Array {
   const { n, dim, v, norm } = cells;
   const out = new Float32Array(n);
+  if (vec.length !== dim) return out;
   let nv = 0;
   for (let k = 0; k < dim; k++) nv += vec[k] * vec[k];
   nv = Math.sqrt(nv) || 1;
@@ -50,7 +51,7 @@ export function explainMatch(a: ArrayLike<number>, b: ArrayLike<number>, nShared
 /** Rank hoods of a target city by cosine to a vector. */
 export function rankHoods(vec: ArrayLike<number>, hoods: Hood[], cityId: string, k = 5): TwinMatch[] {
   return hoods
-    .filter((h) => h.city === cityId)
+    .filter((h) => h.city === cityId && h.v.length === vec.length)
     .map((h) => ({ h, s: cosine(vec, h.v) }))
     .sort((a, b) => b.s - a.s)
     .slice(0, k)

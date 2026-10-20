@@ -12,6 +12,11 @@ const SRC_STOPS: [number, number[]][] = [
   [0, [26, 26, 24]], [0.6, [70, 68, 62]], [1, [150, 146, 136]],
 ];
 
+// Opportunity: grey until the score is high, then amber.
+const OPP_STOPS: [number, number[]][] = [
+  [0, [34, 34, 31]], [0.55, [110, 107, 99]], [0.6, [190, 124, 46]], [1, [240, 160, 60]],
+];
+
 function ramp(stops: [number, number[]][], t: number) {
   for (let i = 1; i < stops.length; i++) {
     if (t <= stops[i][0]) {
@@ -21,9 +26,9 @@ function ramp(stops: [number, number[]][], t: number) {
   }
   return stops[stops.length - 1][1];
 }
-export type PaletteName = "twin" | "raw" | "src";
+export type PaletteName = "twin" | "raw" | "src" | "opp";
 export function colorAt(p: PaletteName, t: number): RGBA {
-  const c = ramp(p === "twin" ? TWIN_STOPS : p === "raw" ? RAW_STOPS : SRC_STOPS, t);
+  const c = ramp(p === "twin" ? TWIN_STOPS : p === "raw" ? RAW_STOPS : p === "opp" ? OPP_STOPS : SRC_STOPS, t);
   return [c[0], c[1], c[2], Math.round(70 + 185 * Math.min(1, t * 1.2))];
 }
 export function gradientCss(p: PaletteName) {
