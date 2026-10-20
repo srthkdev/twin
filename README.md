@@ -61,7 +61,7 @@ So the product's claim is the honest one: the LLM reasons and knows the famous a
 
 ## The agent
 
-<img src="web/public/media/agent.jpg" alt="the agent answering 'I love Silver Lake and I'm moving to Berlin' with Kreuzberg SO36 and venues returned live by Qloo" width="100%">
+<img src="web/public/media/agent.gif" alt="the agent answering 'I love Silver Lake, I'm moving to Berlin — where do I go?': steps stream with their sources, the answer names real places from Qloo, and clicking one flies the map there" width="100%">
 
 Qloo makes every taste decision; the other sources only do jobs Qloo can't:
 
