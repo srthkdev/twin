@@ -4,7 +4,7 @@ Twin finds the cultural twin of a neighbourhood in another city, such as the Sil
 
 This is the full story of how we got there, including the ideas we dropped and the tests we lost.
 
-![Twin explore: Silver Lake to Berlin](https://raw.githubusercontent.com/srthkdev/twin/main/web/public/media/twin-explore.gif)
+![Twin explore: Silver Lake to Berlin](https://twin-jade-rho.vercel.app/media/twin-explore.gif)
 
 ## Inspiration
 
@@ -42,7 +42,7 @@ The corrected maps also grouped items the way you'd expect. Bad Bunny went with 
 
 ## What it does
 
-![raw vs corrected](https://raw.githubusercontent.com/srthkdev/twin/main/web/public/media/raw-vs-corrected.gif)
+![raw vs corrected](https://twin-jade-rho.vercel.app/media/raw-vs-corrected.gif)
 
 - **Explore.** Pick a neighbourhood and every block of its city lights up by how similar it is. Pick another city and the camera flies there. Its blocks rise by similarity to your source, and the five closest neighbourhoods are ranked. A *shared / different* table shows the traits behind each match. A raw/corrected toggle shows the same map before and after our fix.
 - **Drop a pin.** Click any block to use that exact cell as the source, not just a named neighbourhood.
@@ -75,11 +75,11 @@ We kept one rule: **Qloo makes every taste decision, and the other sources only 
 - *What's the vibe of Shimokitazawa, Tokyo?*
 - *Find the Shoreditch of Lisbon.*
 
-![agent answering with live Qloo venues](https://raw.githubusercontent.com/srthkdev/twin/main/web/public/media/agent.gif)
+![agent answering with live Qloo venues](https://twin-jade-rho.vercel.app/media/agent.gif)
 
 ## How we built it
 
-![method](https://raw.githubusercontent.com/srthkdev/twin/main/web/public/media/method-stack.gif)
+![method](https://twin-jade-rho.vercel.app/media/method-stack.gif)
 
 1. **Sample.** One Qloo heatmap per basket item, per city. The basket has 116 items: artists, brands, films and place types. We picked them to span affluence, creative scenes, immigrant communities, queer nightlife, sport and suburban life. 1,041 live Qloo calls in total, every response cached.
 2. **Correct.** Percentile-rank each item across the city's cells. Subtract each cell's mean rank over the basket, which is its popularity baseline. Z-score each item within the city.
@@ -118,7 +118,7 @@ We pre-registered 18 hypotheses and ran each in LA and NYC, so 36 tests. Each on
 | Mean \|ρ\| | 0.29 | 0.22 |
 | Corrected beats raw | 21 / 36 | |
 
-![census check](https://raw.githubusercontent.com/srthkdev/twin/main/web/public/media/evals-census.jpg)
+![census check](https://twin-jade-rho.vercel.app/media/evals-census.jpg)
 
 **Where the correction helps:**
 - Latin artists ↔ % Hispanic in LA: **0.29 → 0.64**.
