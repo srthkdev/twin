@@ -225,9 +225,20 @@ const opportunity = defineTool({
   async run({ city, taste, taste_is, supply_kind }, { stats, progress }) {
     const { city: c, core } = await cityOrThrow(city);
     progress(`qloo demand for ${taste} in ${c.name}`);
-    const sig = await tasteSignal(taste, taste_is ?? "place_type", stats);
-    const heat = await fetchHeat(await qlooQueryFor(c.id), sig.key, sig.val, stats);
-    const { z: dz, present } = correctItem(core, heat);
+    const where = await qlooQueryFor(c.id);
+    let sig = await tasteSignal(taste, taste_is ?? "place_type", stats);
+    let heat = await fetchHeat(where, sig.key, sig.val, stats);
+    let { z: dz, present } = correctItem(core, heat);
+    if (present < 50 && (taste_is ?? "place_type") === "place_type") {
+      // niche tag (e.g. "natural wine") -> fall back to the venue type itself as the Qloo demand signal
+      const broad = await qlooResolveTag(supply_kind.replace(/_/g, " "), stats);
+      if (broad && broad.id !== sig.val) {
+        progress(`"${sig.name}" is thin in Qloo; using ${broad.name} demand instead`);
+        sig = { key: "signal.interests.tags", val: broad.id, name: broad.name };
+        heat = await fetchHeat(where, sig.key, sig.val, stats);
+        ({ z: dz, present } = correctItem(core, heat));
+      }
+    }
     if (present < 50) throw new ToolError(`Qloo has too little demand data for "${sig.name}" in ${c.name} (${present} cells).`);
     const pre = await loadSupply(c.id);
     let supplyOf: (g: string, lat: number, lon: number) => number | null, supplySource: string;

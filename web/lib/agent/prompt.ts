@@ -14,7 +14,8 @@ How to work:
 1. Built-in pairs: find_twins (+ explain_match / compare_taste for the why). Any other city: add_city first if needed, then twins_anywhere.
 2. "I love A, I'm moving to B": find the twin, then local_scene(hood, taste_of=A). Name real places with address, hours and Qloo affinity.
 3. "Where should I open X in C": opportunity(city=C, taste=X, supply_kind=…). Report the top gaps with demand z, supply count and nearest neighbourhood, and say OSM counts are a lower bound.
-4. "Plan a tour for artist Z": tour(Z, cities). Use trend(Z) for momentum if useful.
+4. "Plan a tour for artist Z": tour(Z, cities) using cities that already exist (list_cities) unless the user names others. Use trend(Z) for momentum if useful.
+   add_city costs ~40 Qloo calls: only call it when the user explicitly names a city that is not fingerprinted yet.
 5. "What's X like": scene(X) (+ wiki for background).
 6. Call brief(...) only when the user explicitly asks for a plan, brief, report or something to download.
 7. Use the fewest tools that answer the question (usually 2–4); venue_supply/web/wiki only when the user asks about what exists, current events or background. Call independent tools in parallel. Don't repeat a call. If a tool fails, say so and continue; never invent a result.

@@ -70,6 +70,8 @@ import { BASKET_KEYS, loadCellsFile, loadDataSet } from "./node-data";
 import { QlooError, fmtHours, newStats, qlooConfigured, qlooGet, qlooResolveTag, type QlooStats } from "./qloo";
 
 import { TOOLS_V2 } from "./tools-v2";
+import { CORE_BASKET, allCities, findCityAny, loadCore } from "./city-live";
+import { geocode } from "./net";
 import { ToolError, defineTool, type ToolContext, type ToolDef, type ToolOutput } from "./tool-kit";
 export type { ToolContext, ToolDef, ToolOutput };
 
@@ -150,11 +152,14 @@ function twinRows(ds: DataSet, vec: ArrayLike<number>, matches: TwinMatch[], cit
 // ───────────────────────────── Data tools ─────────────────────────────
 const list_cities = defineTool({
   name: "list_cities",
-  description: "List the 6 cities in the dataset with their ids, neighbourhood counts and neighbourhood ids/names. Call this first if you are unsure what exists.",
+  description: "List every fingerprinted city (6 built-in + any added live) with neighbourhood ids/names. Call this first if you are unsure what exists.",
   schema: z.object({}),
   async run(_a, { ds }) {
-    const data = ds.cities.map((c) => ({ id: c.id, name: c.name, country: c.country, hoods: ds.hoods.filter((h) => h.city === c.id).map((h) => ({ id: h.id, name: h.name })) }));
-    return { data, summary: `${data.length} cities, ${ds.hoods.length} neighbourhoods` };
+    const data = await Promise.all((await allCities()).map(async (c) => ({
+      id: c.id, name: c.name, country: c.country, source: c.source,
+      hoods: c.source === "static" ? ds.hoods.filter((h) => h.city === c.id).map((h) => ({ id: h.id, name: h.name })) : ((await loadCore(c.id))?.hoods ?? []).map((h) => ({ id: h.id, name: h.name })),
+    })));
+    return { data, summary: `${data.length} cities (${data.filter((c) => c.source === "live").length} added live)` };
   },
 });
 
@@ -163,7 +168,7 @@ const search_hoods = defineTool({
   description: "Fuzzy-find neighbourhoods by name (e.g. 'silver lake', 'neukolln', 'shoreditch'). Returns hood_ids to use with other tools.",
   schema: z.object({ query: z.string().describe("neighbourhood name or partial name"), city: z.string().optional().describe("optional city id/name to restrict to") }),
   async run({ query, city }, { ds }) {
-    const cityId = city ? resolveCity(ds, city) : null;
+    const cityId = city ? (ds.cities.some((c) => c.id === city) || findCity(ds, city) ? resolveCity(ds, city) : (await findCityAny(city))?.id ?? null) : null;
     const q = norm(query);
     const toks = q.split(" ").filter((t) => t.length > 1);
     const scored = ds.hoods
@@ -178,6 +183,13 @@ const search_hoods = defineTool({
       .sort((a, b) => b.s - a.s)
       .slice(0, 6)
       .map(({ h }) => ({ hood_id: h.id, name: h.name, city: h.city, blurb: h.blurb ?? null, top_traits: h.top.slice(0, 4).map((i) => label(ds, i)) }));
+    for (const c of await allCities()) {
+      if (c.source !== "live" || (cityId && c.id !== cityId) || scored.length >= 6) continue;
+      for (const h of (await loadCore(c.id))?.hoods ?? []) {
+        const n = norm(h.name);
+        if (n === q || n.includes(q) || q.includes(n)) scored.push({ hood_id: h.id, name: h.name, city: c.id, blurb: null, top_traits: topLive(h.v).slice(0, 4) });
+      }
+    }
     return { data: scored, summary: scored.length ? `${scored.length} match${scored.length > 1 ? "es" : ""}: ${scored.slice(0, 3).map((x) => x.name).join(", ")}` : "no match" };
   },
 });
@@ -394,12 +406,28 @@ function interestParams(ds: DataSet, dimLabels: string[]): { params: Record<stri
   return { params, used };
 }
 
+const topLive = (v: number[]) => v.map((x, i) => [x, i] as const).sort((a, b) => b[0] - a[0]).map(([, i]) => CORE_BASKET[i]?.label ?? `#${i}`);
+
+/** A place to search around: built-in hood, live-city hood, or anything geocodable. `traits` = its strongest measured tastes. */
+async function locateAny(ds: DataSet, text: string): Promise<{ id: string; name: string; lat: number; lon: number; traits: string[]; staticHood: boolean }> {
+  const st = ds.hoods.find((h) => h.id === text) ?? findHood(ds, text);
+  if (st) return { id: st.id, name: st.name, lat: st.lat, lon: st.lon, traits: st.v.map((x, i) => [x, i] as const).sort((a, b) => b[0] - a[0]).slice(0, 14).map(([, i]) => label(ds, i)), staticHood: true };
+  for (const c of await allCities()) {
+    if (c.source !== "live") continue;
+    const h = (await loadCore(c.id))?.hoods.find((x) => x.id === text || norm(x.name) === norm(text));
+    if (h) return { id: h.id, name: h.name, lat: h.lat, lon: h.lon, traits: topLive(h.v).slice(0, 12), staticHood: false };
+  }
+  const g = (await geocode(text, 1))[0];
+  if (!g) throw new ToolError(`Could not find "${text}".`);
+  return { id: g.name, name: g.name, lat: g.lat, lon: g.lon, traits: [], staticHood: false };
+}
+
 const local_scene = defineTool({
   name: "local_scene",
   description:
     "LIVE Qloo call. What to actually go to in a neighbourhood: real places (hard-filtered to a radius of the hood centre), plus artists and brands with local affinity (location is only a loose bias for those). Steer by taste: pass `taste_of` (a hood whose top traits the user loves, e.g. Silver Lake when they're moving to Neukolln) and/or explicit `interests` (basket labels). Returns names, addresses, distances and Qloo affinity.",
   schema: z.object({
-    hood_id: z.string().describe("where the user wants recommendations"),
+    hood_id: z.string().describe("where the user wants recommendations: a hood id/name in any fingerprinted city, or any place/address"),
     kinds: z.array(z.enum(["place", "artist", "brand"])).optional().describe("default all three"),
     taste_of: z.string().optional().describe("hood id/name whose measured top traits become the taste signal"),
     interests: z.array(z.string()).optional().describe("basket item labels, e.g. ['Vegan restaurants','Radiohead']"),
@@ -410,13 +438,13 @@ const local_scene = defineTool({
   }),
   live: true,
   async run({ hood_id, kinds, taste_of, interests, radius_m, take, place_type, max_price_level }, { ds, stats }) {
-    const h = resolveHood(ds, hood_id);
+    const h = await locateAny(ds, hood_id);
     let labels = interests ?? [];
     let tasteFrom: string | undefined;
     if (taste_of) {
-      const src = resolveHood(ds, taste_of);
+      const src = await locateAny(ds, taste_of);
       tasteFrom = src.name;
-      labels = [...labels, ...src.v.map((x, i) => [x, i] as const).sort((a, b) => b[0] - a[0]).slice(0, 14).map(([, i]) => label(ds, i))];
+      labels = [...labels, ...src.traits];
     }
     const { params: sig, used } = interestParams(ds, labels);
     const radius = radius_m ?? 1500, n = take ?? 6;
@@ -442,7 +470,7 @@ const local_scene = defineTool({
     return {
       data: { where: { hood_id: h.id, name: h.name, radius_m: radius }, place_filter: placeTag ? { type: placeTag.name, max_price_level: max_price_level ?? null } : null, taste_signal: { from_hood: tasteFrom ?? null, interests_sent_to_qloo: used }, note: "place results are radius-filtered; artist/brand results use location as a soft bias only. Taste tags are loosely respected.", ...out },
       summary: `${counts} in ${h.name}${tasteFrom ? ` (taste of ${tasteFrom})` : ""}`,
-      uiActions: [{ type: "flyTo", hood: h.id }],
+      uiActions: h.staticHood ? [{ type: "flyTo", hood: h.id }] : [],
     };
   },
 });

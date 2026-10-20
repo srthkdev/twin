@@ -86,7 +86,7 @@ export interface TrendPoint { date: string; percentile: number; rank: number | n
 export async function qlooTrend(entityId: string, filterType: string, months: number, stats?: QlooStats): Promise<TrendPoint[]> {
   const end = new Date(), start = new Date(end.getTime() - months * 30.4 * 86400_000), d = (x: Date) => x.toISOString().slice(0, 10);
   const r = await qlooGet<{ results?: { trending?: { date: string; population_percentile: number; population_rank?: string; population_rank_velocity?: number }[] } }>("/v2/trending", {
-    "filter.type": filterType, "signal.interests.entities": entityId, "filter.start_date": d(start), "filter.end_date": d(end), take: 60,
+    "filter.type": filterType, "signal.interests.entities": entityId, "filter.start_date": d(start), "filter.end_date": d(end), take: 50,
   }, stats);
   return (r.results?.trending ?? []).map((p) => ({ date: p.date, percentile: p.population_percentile, rank: p.population_rank ? +p.population_rank : null, velocity: p.population_rank_velocity ?? null })).sort((a, b) => a.date.localeCompare(b.date));
 }
