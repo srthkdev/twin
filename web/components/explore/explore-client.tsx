@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useDataset } from "@/hooks/use-dataset";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePanel } from "@/hooks/use-panel";
+import { usePairs, type Pair } from "@/hooks/use-pairs";
 import { coreHoods, isLive, loadCells, loadCore, loadEvals } from "@/lib/data";
 import { cellSimilarities, neighbourhoodVector, rankHoods } from "@/lib/similarity";
 import { gradientCss } from "@/lib/colors";
@@ -131,6 +132,12 @@ export function ExploreClient() {
     setPin(null); setFromId(id);
     setToCity((t) => (t && ds?.hoods.find((h) => h.id === id)?.city === t ? null : t));
   }, [ds]);
+  const { recent, popular, visit } = usePairs();
+  const pickPair = useCallback((p: Pair) => { setPin(null); setFromId(p.from); setToCity(p.to); }, []);
+  // every pair someone actually opens feeds "recent" (this browser) and "most opened" (everyone)
+  useEffect(() => {
+    if (!pin && toCity && ds?.hoods.some((h) => h.id === fromId)) visit(fromId, toCity);
+  }, [fromId, toCity, pin, ds, visit]);
   const pickCity = useCallback((id: string | null) => {
     setToCity(id);
     if (id) { setRight("twins"); setMobileTab("twins"); }
@@ -155,8 +162,11 @@ export function ExploreClient() {
 
   const cityAdded = useCallback((city: City) => {
     void refresh().then(() => {
-      if (city.id !== sourceCityId) pickCity(city.id);
+      if (city.id !== sourceCityId) setToCity(city.id); // the agent moves the map, never the panel away from the chat
     });
+  }, [refresh, sourceCityId]);
+  const userAddedCity = useCallback((city: City) => {
+    void refresh().then(() => { if (city.id !== sourceCityId) pickCity(city.id); });
   }, [refresh, sourceCityId, pickCity]);
 
   const onAgentAction = useCallback((act: AgentAction) => {
@@ -169,7 +179,7 @@ export function ExploreClient() {
       if (!ds.cities.some((c) => c.id === a.city)) void refresh();
       setOpp({ city: a.city, cells: a.cells });
       setMode("opportunity");
-      if (a.city !== sourceCityId) { setToCity(a.city); setRight("twins"); setMobileTab("twins"); }
+      if (a.city !== sourceCityId) setToCity(a.city);
     } else if (a.type === "select" || a.type === "showTwins") {
       setPin(null); setFromId(a.from); setToCity(a.to);
       if (a.twin) setTimeout(() => setSelected(a.twin!), 60);
@@ -202,7 +212,7 @@ export function ExploreClient() {
   const sourcePoint = { lon: pin?.lon ?? sourceHood.lon, lat: pin?.lat ?? sourceHood.lat, name: pin ? "pin" : sourceHood.name, cityId: sourceCityId };
   const sourceName = pin ? "your pin" : sourceHood.name;
 
-  const sourceUI = <SourcePanel ds={ds} source={sourceHood} pin={livePin} toCity={toCity} sourceCityId={sourceCityId} onPickHood={pickHood} onPickCity={pickCity} onCityAdded={cityAdded} />;
+  const sourceUI = <SourcePanel ds={ds} source={sourceHood} pin={livePin} toCity={toCity} sourceCityId={sourceCityId} onPickHood={pickHood} onPickCity={pickCity} onPickPair={pickPair} onCityAdded={userAddedCity} recent={recent} popular={popular} />;
   const twinsUI = targetCity ? (
     <TwinsPanel ds={ds} matches={matches} selected={selected} onSelect={setSelected} sourceName={sourceName} targetName={targetCity.name} mode={mode} onSwap={swap} evals={evals} />
   ) : (

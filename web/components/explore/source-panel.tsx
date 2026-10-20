@@ -5,12 +5,14 @@ import { Label } from "./meter";
 import { addCity, cityCode } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import type { City, DataSet, Hood } from "@/lib/types";
+import type { Pair } from "@/hooks/use-pairs";
 
 export interface SourcePin { kind: "pin"; city: string; lon: number; lat: number; label: string; top: number[]; vec: number[] }
 
-export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, onCityAdded, sourceCityId }: {
+export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, onPickPair, onCityAdded, sourceCityId, recent, popular }: {
   ds: DataSet; source: Hood | null; pin: SourcePin | null; toCity: string | null; sourceCityId: string;
-  onPickHood: (id: string) => void; onPickCity: (id: string | null) => void; onCityAdded: (city: City) => void;
+  onPickHood: (id: string) => void; onPickCity: (id: string | null) => void; onPickPair: (p: Pair) => void; onCityAdded: (city: City) => void;
+  recent: Pair[]; popular: Pair[];
 }) {
   const [newCity, setNewCity] = useState("");
   const [adding, setAdding] = useState(false);
@@ -30,57 +32,79 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
       setAdding(false); setProgress(null);
     }
   };
-  const [browse, setBrowse] = useState<string>(sourceCityId);
-  const [prev, setPrev] = useState(sourceCityId);
   const [q, setQ] = useState("");
-  if (prev !== sourceCityId) { setPrev(sourceCityId); setBrowse(sourceCityId); }
   const city = (id: string) => ds.cities.find((c) => c.id === id) as City;
-  const hoods = useMemo(() => {
+  const hoodName = (id: string) => ds.hoods.find((h) => h.id === id)?.name;
+  const found = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return ds.hoods.filter((h) => (s ? h.name.toLowerCase().includes(s) : h.city === browse));
-  }, [ds, browse, q]);
+    if (!s) return null;
+    return {
+      hoods: ds.hoods.filter((h) => h.name.toLowerCase().includes(s)).slice(0, 8),
+      cities: ds.cities.filter((c) => c.name.toLowerCase().includes(s) || cityCode(c).toLowerCase() === s),
+    };
+  }, [ds, q]);
+  const pairRow = (p: Pair) => {
+    const from = hoodName(p.from), to = city(p.to);
+    if (!from || !to) return null;
+    const on = source?.id === p.from && toCity === p.to && !pin;
+    return (
+      <li key={`${p.from}>${p.to}`}>
+        <button onClick={() => onPickPair(p)} aria-current={on || undefined}
+          className={cn("flex w-full items-baseline gap-1.5 px-4 py-[3px] text-left transition-colors", on ? "bg-raised text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+          <span className="truncate">{from.toLowerCase()}</span><span className="text-dim">→</span><span className="truncate text-foreground">{to.name.toLowerCase()}</span>
+          {p.n != null && <span className="num ml-auto text-[10.5px] text-dim">{p.n}</span>}
+        </button>
+      </li>
+    );
+  };
   const vec = pin?.vec ?? source?.v ?? [];
   const topDims = pin ? pin.top : source?.top ?? [];
 
   return (
     <div className="flex h-full flex-col text-[12.5px]">
-      {/* where from */}
+      {/* where from: one search over every neighbourhood and city; recent and most-opened pairs when idle */}
       <div className="border-b border-line px-4 pb-3 pt-4">
         <Label>from</Label>
-        <div role="tablist" aria-label="Source city" className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11.5px]">
-          {ds.cities.map((c) => (
-            <button key={c.id} role="tab" aria-selected={browse === c.id && !q} onClick={() => { setBrowse(c.id); setQ(""); }}
-              className={cn("transition-colors", browse === c.id && !q ? "text-foreground underline decoration-primary underline-offset-4" : "text-dim hover:text-muted-foreground")}>
-              {cityCode(c)}
-            </button>
-          ))}
-        </div>
-        <label className="mt-3 flex items-center gap-2 border border-line bg-background px-2 py-1.5 focus-within:border-line-strong">
+        <label className="mt-2 flex items-center gap-2 border border-line bg-background px-2 py-1.5 focus-within:border-line-strong">
           <span className="text-dim">/</span>
           <input
-            value={q} onChange={(e) => setQ(e.target.value)} placeholder="search all neighbourhoods"
+            value={q} onChange={(e) => setQ(e.target.value)} placeholder="neighbourhood or city"
+            onKeyDown={(e) => { if (e.key === "Escape") setQ(""); if (e.key === "Enter" && found?.hoods[0]) { onPickHood(found.hoods[0].id); setQ(""); } }}
             className="w-full bg-transparent text-[12px] text-foreground outline-none placeholder:text-dim"
-            aria-label="Search neighbourhoods"
+            aria-label="Search neighbourhoods and cities"
           />
+          {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="text-[11px] text-dim hover:text-foreground">esc</button>}
         </label>
       </div>
 
-      <ul className="max-h-[30vh] min-h-24 overflow-y-auto border-b border-line py-1" aria-label="Neighbourhoods">
-        {hoods.map((h) => {
-          const active = source?.id === h.id && !pin;
-          return (
-            <li key={h.id}>
-              <button onClick={() => onPickHood(h.id)} aria-current={active || undefined}
-                className={cn("flex w-full items-center gap-2 px-4 py-[3px] text-left transition-colors", active ? "bg-raised text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
-                <span className={cn("w-2", active ? "text-primary" : "text-transparent")}>›</span>
-                <span className="flex-1 truncate">{h.name}</span>
-                {q && <span className="text-[10.5px] text-dim">{cityCode(city(h.city) ?? { id: h.city, name: h.city })}</span>}
-              </button>
-            </li>
-          );
-        })}
-        {!hoods.length && <li className="px-4 py-2 text-dim">no match</li>}
-      </ul>
+      <div className="max-h-[34vh] min-h-16 overflow-y-auto border-b border-line py-1.5">
+        {found ? (
+          <ul aria-label="Search results">
+            {found.cities.filter((c) => c.id !== sourceCityId).map((c) => (
+              <li key={c.id}>
+                <button onClick={() => { onPickCity(c.id); setQ(""); }} className="flex w-full items-baseline gap-2 px-4 py-[3px] text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                  <span className="text-primary">→</span><span className="flex-1 truncate">twins in {c.name.toLowerCase()}</span>
+                </button>
+              </li>
+            ))}
+            {found.hoods.map((h) => (
+              <li key={h.id}>
+                <button onClick={() => { onPickHood(h.id); setQ(""); }} className="flex w-full items-baseline gap-2 px-4 py-[3px] text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                  <span className="flex-1 truncate">{h.name}</span>
+                  <span className="text-[10.5px] text-dim">{cityCode(city(h.city) ?? { id: h.city, name: h.city })}</span>
+                </button>
+              </li>
+            ))}
+            {!found.hoods.length && !found.cities.length && <li className="px-4 py-1 text-dim">no match · add it as a city below</li>}
+          </ul>
+        ) : (
+          <>
+            {recent.length > 0 && (<><div className="px-4 pb-1 pt-0.5"><Label>recent</Label></div><ul aria-label="Recent pairs">{recent.map(pairRow)}</ul></>)}
+            {popular.length > 0 && (<><div className={cn("px-4 pb-1", recent.length ? "pt-3" : "pt-0.5")}><Label>most opened</Label></div><ul aria-label="Most opened pairs">{popular.map(pairRow)}</ul></>)}
+            {!recent.length && !popular.length && <p className="px-4 py-1 text-[11.5px] text-dim">search above, or click any block on the map</p>}
+          </>
+        )}
+      </div>
 
       <div className="flex-1 overflow-y-auto">
         {/* profile */}
