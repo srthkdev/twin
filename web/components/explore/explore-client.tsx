@@ -174,7 +174,7 @@ export function ExploreClient() {
     // addCity / opportunity come from the v2 backend; typed locally so this compiles either way.
     const a = act as AgentAction | { type: "addCity"; city: City } | { type: "opportunity"; city: string; cells: OpportunityResult["cells"] };
     // the opportunity paint belongs to one answer; any other map move returns to the taste map
-    if (a.type !== "opportunity" && a.type !== "focus" && a.type !== "focusHood") setMode((m) => (m === "opportunity" ? "twin" : m));
+    if (a.type === "addCity" || a.type === "select" || a.type === "showTwins") setMode((m) => (m === "opportunity" ? "twin" : m));
     if (a.type === "addCity") {
       cityAdded(a.city);
     } else if (a.type === "opportunity") {

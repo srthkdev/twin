@@ -75,7 +75,7 @@ We kept one rule: **Qloo makes every taste decision, and the other sources only 
 - *What's the vibe of Shimokitazawa, Tokyo?*
 - *Find the Shoreditch of Lisbon.*
 
-![agent answering with live Qloo venues](https://raw.githubusercontent.com/srthkdev/twin/main/web/public/media/agent.jpg)
+![agent answering with live Qloo venues](https://raw.githubusercontent.com/srthkdev/twin/main/web/public/media/agent.gif)
 
 ## How we built it
 
@@ -190,6 +190,8 @@ So MiniMax leads, with the others as automatic fallbacks.
 - **An early tour run fingerprinted Madrid unprompted,** which cost 40 Qloo calls. The prompt now only allows `add_city` when the user names a city.
 - **Early answers read like a lab report** — z-scores, cosines, raw coordinates. The prompt now bans them from the visible text. Coordinates go into `geo:` links that the UI turns into map buttons, and the result cards carry the numbers.
 - **Stopping a run mid-tool broke the next question,** because history held a tool call with no result. The route now drops unfinished tool calls and old reasoning from history, and the last step is forced to be an answer, never another tool call.
+- **Models send sloppy arguments.** We fired every tool with the inputs models actually produce: names instead of ids, "Berlin" instead of "berlin", cities added live, missing optional fields, "natural wine" instead of a venue type. Nine failed. Now every tool accepts live cities, a city the user names is fingerprinted on first use, and free text is matched to a venue kind through Overture's own category names and the Qloo tag it resolves to, not a hand-written list. The one remaining failure is honest: Qloo has too little data for Tokyo, and the agent says so.
+- **Free models sometimes stall.** One run sat silent for three minutes. The route now times out a silent model and moves the same turn to the next free model before anything reaches the screen.
 
 ## Challenges
 
