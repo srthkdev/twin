@@ -1,0 +1,322 @@
+[
+ {
+  "id": "artist-beyoncé",
+  "label": "Beyoncé",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "F6754C46-B3E7-457F-8B7E-06C613597320"
+ },
+ {
+  "id": "artist-taylor-swift",
+  "label": "Taylor Swift",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "4BBEF799-A0C4-4110-AB01-39216993C312"
+ },
+ {
+  "id": "artist-kendrick-lamar",
+  "label": "Kendrick Lamar",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "C915A918-39C5-47A3-A101-D9FA1DECBD9C"
+ },
+ {
+  "id": "artist-rosalía",
+  "label": "Rosalía",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "8BE95420-BCDA-4B00-871F-247A55D35594"
+ },
+ {
+  "id": "artist-coldplay",
+  "label": "Coldplay",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "B6FA456F-B729-4700-B01F-E82AD3AC8ADA"
+ },
+ {
+  "id": "artist-david-guetta",
+  "label": "David Guetta",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "EB042810-1AAC-4170-B781-38FCB7F012A2"
+ },
+ {
+  "id": "artist-metallica",
+  "label": "Metallica",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "C445C761-CB38-4FEE-B085-D35F444A04DF"
+ },
+ {
+  "id": "artist-bad-bunny",
+  "label": "Bad Bunny",
+  "kind": "artist",
+  "group": "music",
+  "key": "signal.interests.entities",
+  "val": "BDA1B73F-10E7-4D09-AC51-B796CCEC5FF3"
+ },
+ {
+  "id": "brand-nike",
+  "label": "Nike",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "C70CE2B8-0AD1-4150-BF18-5A6347F2E860"
+ },
+ {
+  "id": "brand-gucci",
+  "label": "Gucci",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "84B18312-3C2B-41A9-863B-89651C2F6A2C"
+ },
+ {
+  "id": "brand-supreme",
+  "label": "Supreme",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "7161ADA0-8DC8-471E-A4A8-61EE15578400"
+ },
+ {
+  "id": "brand-zara",
+  "label": "Zara",
+  "kind": "brand",
+  "group": "fashion",
+  "key": "signal.interests.entities",
+  "val": "74A44B01-5C99-4754-9585-F487D21C543D"
+ },
+ {
+  "id": "tag-park",
+  "label": "Parks",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:park"
+ },
+ {
+  "id": "tag-gym",
+  "label": "Gyms",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:gym"
+ },
+ {
+  "id": "tag-hotel",
+  "label": "Hotels",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:hotel"
+ },
+ {
+  "id": "brand-starbucks",
+  "label": "Starbucks",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "B13C02E3-BA3C-4B39-85B4-ACF12FEBC892"
+ },
+ {
+  "id": "tag-golf-club",
+  "label": "Golf clubs",
+  "kind": "place-tag",
+  "group": "lifestyle",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:golf_club"
+ },
+ {
+  "id": "brand-tesla",
+  "label": "Tesla",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "29B49E3F-A0EC-42C6-A453-38B1C20D8374"
+ },
+ {
+  "id": "brand-patagonia",
+  "label": "Patagonia",
+  "kind": "brand",
+  "group": "lifestyle",
+  "key": "signal.interests.entities",
+  "val": "DB4CE34E-3A63-4947-946F-9D52502C5762"
+ },
+ {
+  "id": "movie-fast-x",
+  "label": "Fast X",
+  "kind": "movie",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "2B8CA5A9-FE7E-4E71-B2FA-23749E0BE057"
+ },
+ {
+  "id": "tv-rupaul-s-drag-race",
+  "label": "RuPaul's Drag Race",
+  "kind": "tv",
+  "group": "film",
+  "key": "signal.interests.entities",
+  "val": "F484DCB5-3576-49FF-A8F6-8B3F3A9C3056"
+ },
+ {
+  "id": "tag-museum",
+  "label": "Museums",
+  "kind": "place-tag",
+  "group": "culture",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:museum"
+ },
+ {
+  "id": "tag-art-gallery",
+  "label": "Art galleries",
+  "kind": "place-tag",
+  "group": "culture",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:art_gallery"
+ },
+ {
+  "id": "person-kevin-hart",
+  "label": "Kevin Hart",
+  "kind": "person",
+  "group": "culture",
+  "key": "signal.interests.entities",
+  "val": "D3E9FC88-9837-46A5-8F0F-A69FD4D18082"
+ },
+ {
+  "id": "brand-ultimate-fighting-championship",
+  "label": "Ultimate Fighting Championship",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "C07C6DB7-CC47-40C3-837C-C482678A1961"
+ },
+ {
+  "id": "brand-fc-barcelona",
+  "label": "FC Barcelona",
+  "kind": "brand",
+  "group": "sport",
+  "key": "signal.interests.entities",
+  "val": "AB274E13-8E14-4A39-BCB6-82977B9DB380"
+ },
+ {
+  "id": "tag-pizza",
+  "label": "Pizza",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:pizza"
+ },
+ {
+  "id": "tag-italian",
+  "label": "Italian food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:italian"
+ },
+ {
+  "id": "tag-fast-food",
+  "label": "Fast food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:fast_food"
+ },
+ {
+  "id": "tag-brunch",
+  "label": "Brunch",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:brunch"
+ },
+ {
+  "id": "tag-steak-house",
+  "label": "Steakhouses",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:steak_house"
+ },
+ {
+  "id": "tag-sushi",
+  "label": "Sushi",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:sushi"
+ },
+ {
+  "id": "tag-fine-dining",
+  "label": "Fine dining",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:fine_dining"
+ },
+ {
+  "id": "tag-french",
+  "label": "French food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:french"
+ },
+ {
+  "id": "tag-vegan",
+  "label": "Vegan restaurants",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:vegan"
+ },
+ {
+  "id": "tag-chinese",
+  "label": "Chinese food",
+  "kind": "place-tag",
+  "group": "food",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:chinese"
+ },
+ {
+  "id": "tag-live-music-venue",
+  "label": "Live music venues",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:live_music_venue"
+ },
+ {
+  "id": "tag-night-club",
+  "label": "Night clubs",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:night_club"
+ },
+ {
+  "id": "tag-cocktail-bar",
+  "label": "Cocktail bars",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:cocktail_bar"
+ },
+ {
+  "id": "tag-wine-bar",
+  "label": "Wine bars",
+  "kind": "place-tag",
+  "group": "nightlife",
+  "key": "signal.interests.tags",
+  "val": "urn:tag:genre:place:restaurant:wine_bar"
+ }
+]
