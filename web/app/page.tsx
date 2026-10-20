@@ -3,6 +3,7 @@ import { Hero } from "@/components/landing/hero";
 import { BugVisual } from "@/components/landing/bug-visual";
 import { MethodStrip } from "@/components/landing/method-strip";
 import { EvalsTeaser } from "@/components/landing/evals-teaser";
+import { AgentSection } from "@/components/landing/agent-section";
 import { LogoMark } from "@/components/logo";
 
 function Section({ n, label, title, children }: { n: string; label: string; title: string; children: React.ReactNode }) {
@@ -34,11 +35,14 @@ export default function Home() {
           <BugVisual />
         </div>
       </Section>
-      <Section n="02" label="method" title="Four steps from heatmaps to twins.">
+      <Section n="02" label="the agent" title="Ask it to do the work, not just answer.">
+        <AgentSection />
+      </Section>
+      <Section n="03" label="method" title="Four steps from heatmaps to twins.">
         <MethodStrip />
         <Link href="/method" className="link mt-6 inline-block text-[12px] text-muted-foreground">full method and limitations →</Link>
       </Section>
-      <Section n="03" label="evidence" title="What holds up, and what doesn't.">
+      <Section n="04" label="evidence" title="What holds up, and what doesn't.">
         <EvalsTeaser />
       </Section>
       <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-[11.5px] text-dim sm:px-8">

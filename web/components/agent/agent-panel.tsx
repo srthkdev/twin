@@ -55,15 +55,16 @@ function Thinking({ text, done }: { text: string; done: boolean }) {
 
 type Group = { kind: "text"; text: string } | { kind: "tools"; steps: ToolStep[] } | { kind: "thinking"; text: string; done: boolean };
 
-export function AgentPanel({ context, onAction, className }: {
+export function AgentPanel({ context, onAction, className, initialInput }: {
   context: { fromHood: string | null; toCity: string | null };
   onAction: (a: AgentAction) => void;
   className?: string;
+  initialInput?: string;
 }) {
   const [settings, setSettings] = useState<AgentSettings>(emptySettings);
   const [health, setHealth] = useState<Health | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialInput ?? "");
   const [listening, setListening] = useState(false);
   const [speak, setSpeak] = useState(false);
   const [canListen, setCanListen] = useState(false);

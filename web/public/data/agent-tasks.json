@@ -1,0 +1,13 @@
+{
+  "measuredAt": "2026-10-21",
+  "model": "minimax/minimax-m3.1-flash:free (OpenRouter)",
+  "note": "One live run per task through /api/agent on the deployed agent version; Qloo calls counted by the agent, cached = served from Twin's cache.",
+  "tasks": [
+    { "q": "Find the Silver Lake of Berlin", "seconds": 10, "tools": ["find_twins"], "qlooLive": 0, "qlooCached": 0, "outcome": "Kreuzberg (SO36), cosine 0.65 — 95th percentile" },
+    { "q": "I love Silver Lake. I'm moving to Neukölln — where do I actually go?", "seconds": 26, "tools": ["search_hoods", "find_twins", "local_scene"], "qlooLive": 11, "qlooCached": 3, "outcome": "real venues with address, hours and Qloo affinity" },
+    { "q": "Where in Berlin should I open a natural wine bar?", "seconds": 57, "tools": ["opportunity", "where_in_city", "local_scene", "venue_supply", "scene"], "qlooLive": 16, "qlooCached": 10, "outcome": "gaps where wine-bar demand is high (z 3.5–4) and existing wine bars are zero" },
+    { "q": "Plan a 3-city European tour for Peso Pluma", "seconds": 13, "tools": ["tour", "trend"], "qlooLive": 1, "qlooCached": 8, "outcome": "London → Paris → Berlin by fan reach, with neighbourhoods and venues" },
+    { "q": "What's the vibe of Shimokitazawa, Tokyo?", "seconds": 10, "tools": ["scene", "wiki"], "qlooLive": 4, "qlooCached": 0, "outcome": "Qloo place types, artists and brands + Wikipedia background" },
+    { "q": "Find the Shoreditch of Lisbon", "seconds": 12, "tools": ["list_cities", "twins_anywhere"], "qlooLive": 0, "qlooCached": 0, "outcome": "Alvalade (cosine 0.58) on a live-fingerprinted city" }
+  ]
+}

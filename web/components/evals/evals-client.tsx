@@ -48,12 +48,19 @@ function Kpi({ label, value, decimals = 2, suffix = "", note, accent }: { label:
   );
 }
 
+interface AgentTasks { measuredAt: string; model: string; note: string; tasks: { q: string; seconds: number; tools: string[]; qlooLive: number; qlooCached: number; outcome: string }[] }
+
 export function EvalsClient() {
   const [ev, setEv] = useState<Evals | null>(null);
+  const [tasks, setTasks] = useState<AgentTasks | null>(null);
   const [hoods, setHoods] = useState<Hood[]>([]);
   const [split, setSplit] = useState<"test" | "dev" | "all">("test");
   const [sk, setSk] = useState<string | null>(null);
-  useEffect(() => { loadEvals().then(setEv).catch(() => {}); loadHoods().then(setHoods).catch(() => {}); }, []);
+  useEffect(() => {
+    loadEvals().then(setEv).catch(() => {});
+    loadHoods().then(setHoods).catch(() => {});
+    fetch("/data/agent-tasks.json").then((r) => r.json()).then(setTasks).catch(() => {});
+  }, []);
   const name = useMemo(() => new Map(hoods.map((h) => [h.id, h.name])), [hoods]);
   const cityOf = useMemo(() => new Map(hoods.map((h) => [h.id, h.city])), [hoods]);
 
@@ -291,6 +298,29 @@ export function EvalsClient() {
           </div>
         ) : <Skeleton className="h-40 rounded-none bg-card" />}
       </Panel>
+
+      {tasks && (
+        <Panel className="mt-4" title="Agent tasks" sub={<>One live run per task, {tasks.measuredAt}, {tasks.model}. {tasks.note} Click a task to run it yourself.</>}>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent"><TableHead>Task</TableHead><TableHead>Tools</TableHead><TableHead className="text-right">Qloo live / cached</TableHead><TableHead className="text-right">Time</TableHead><TableHead>Outcome</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
+                {tasks.tasks.map((t) => (
+                  <TableRow key={t.q}>
+                    <TableCell className="max-w-[16rem]"><a href={`/explore?tab=agent&q=${encodeURIComponent(t.q)}`} className="link text-foreground">{t.q}</a></TableCell>
+                    <TableCell className="text-[11.5px] text-muted-foreground">{t.tools.join(", ")}</TableCell>
+                    <TableCell className="num text-right text-muted-foreground"><span className="text-primary">{t.qlooLive}</span> / {t.qlooCached}</TableCell>
+                    <TableCell className="num text-right">{t.seconds}s</TableCell>
+                    <TableCell className="max-w-[18rem] text-[11.5px] text-muted-foreground">{t.outcome}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Panel>
+      )}
 
       <Panel title="Methodology" className="mt-4">
         <div className="grid gap-6 text-[12.5px] leading-relaxed text-muted-foreground md:grid-cols-3">

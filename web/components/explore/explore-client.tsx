@@ -40,8 +40,8 @@ export function ExploreClient() {
   const [evals, setEvals] = useState<Evals | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [flying, setFlying] = useState(false);
-  const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" ? "agent" : "twins");
-  const [mobileTab, setMobileTab] = useState<MobileTab>("from");
+  const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" || sp.get("q") ? "agent" : "twins");
+  const [mobileTab, setMobileTab] = useState<MobileTab>(sp.get("q") || sp.get("tab") === "agent" ? "agent" : "from");
   const [opp, setOpp] = useState<OpportunityResult | null>(null);
   const [cores, setCores] = useState<Record<string, CoreFile>>({});
 
@@ -194,7 +194,7 @@ export function ExploreClient() {
       to <span className="text-foreground">{sourceName.toLowerCase()}</span> light up.
     </div>
   );
-  const agentUI = <AgentPanel context={{ fromHood: pin ? null : fromId, toCity }} onAction={onAgentAction} className="h-full" />;
+  const agentUI = <AgentPanel context={{ fromHood: pin ? null : fromId, toCity }} onAction={onAgentAction} className="h-full" initialInput={sp.get("q") ?? undefined} />;
 
   const map = (
     <div className="relative h-full min-h-0 overflow-hidden">
