@@ -161,11 +161,6 @@ export interface BuildProgress { stage: "geocode" | "heatmaps" | "neighbourhoods
 type ProgressFn = (p: BuildProgress) => void;
 const inflight = new Map<string, { promise: Promise<CityMeta>; subs: Set<ProgressFn>; last?: BuildProgress }>();
 
-async function cachedMeta(id: string): Promise<CityMeta | null> {
-  const i = await readJson<LiveInfo>(join(liveDir(id), "city.json"));
-  return i ? publicMeta(i) : null;
-}
-
 /** Idempotent: static or cached cities return immediately; otherwise runs (and de-duplicates) the live pipeline. */
 export function ensureCity(name: string, o: { stats?: QlooStats; onProgress?: ProgressFn } = {}): Promise<CityMeta> {
   const key = slug(name);

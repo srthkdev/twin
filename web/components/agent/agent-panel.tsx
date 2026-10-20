@@ -1,7 +1,11 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, isToolUIPart, getToolName } from "ai";
 import { cn } from "@/lib/utils";
-import type { AgentAction, AgentResponse, ProviderId, StreamEvent } from "@/lib/agent/types";
+import { Markdown } from "@/lib/markdown";
+import type { AgentAction } from "@/lib/agent/types";
+import type { TwinUIMessage } from "@/lib/agent/ai";
 import { AgentSettingsPanel } from "./agent-settings";
 import { ToolTrace, type ToolStep } from "./tool-trace";
 import { emptySettings, loadSettings, saveSettings, type AgentSettings, type Health } from "./settings";
@@ -19,11 +23,6 @@ const getRecognition = (): RecognitionCtor | null => {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 };
 
-type Part = { kind: "text"; text: string } | { kind: "tool"; step: ToolStep };
-interface UiMessage { role: "user" | "assistant"; parts: Part[]; error?: string; meta?: string; progress?: string }
-const textOf = (m: UiMessage) => m.parts.filter((p): p is Extract<Part, { kind: "text" }> => p.kind === "text").map((p) => p.text).join("\n\n").trim();
-
-/** Save a markdown brief through a temporary anchor (this runs in the real app, not a sandbox). */
 function saveMarkdown(filename: string, markdown: string) {
   const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
   const a = document.createElement("a");
@@ -31,9 +30,19 @@ function saveMarkdown(filename: string, markdown: string) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+/** Recording names are derived from the question, so `?replay=1` can play back what `?record=1` captured. */
+export const recordingName = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+const urlFlag = (k: string) => (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get(k) : null);
 
-const SUGGEST = ["Find the Silver Lake of Berlin", "Why are they similar?", "I love Silver Lake. I'm moving to Neukölln, where do I go?", "Where in London do Peso Pluma fans cluster?"];
-const INTRO = 'Ask for the twin of any neighbourhood, e.g. "find the Silver Lake of Berlin". With an LLM provider I call Twin\'s measured taste data and live Qloo, and say when I am using general knowledge.';
+const SUGGEST = [
+  "Find the Silver Lake of Berlin",
+  "I love Silver Lake. I'm moving to Neukölln — where do I actually go?",
+  "Where in Berlin should I open a natural wine bar?",
+  "Plan a 3-city European tour for Peso Pluma",
+  "What's the vibe of Shimokitazawa, Tokyo?",
+];
+
+type Group = { kind: "text"; text: string } | { kind: "tools"; steps: ToolStep[] };
 
 export function AgentPanel({ context, onAction, className }: {
   context: { fromHood: string | null; toCity: string | null };
@@ -43,122 +52,106 @@ export function AgentPanel({ context, onAction, className }: {
   const [settings, setSettings] = useState<AgentSettings>(emptySettings);
   const [health, setHealth] = useState<Health | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [speak, setSpeak] = useState(false);
   const [canListen, setCanListen] = useState(false);
+  const [progress, setProgress] = useState<Record<string, string>>({});
+  const [files, setFiles] = useState<Record<string, { filename: string; markdown: string }[]>>({});
+  const times = useRef(new Map<string, { start: number; end?: number }>());
   const recRef = useRef<Recognition | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const onActionRef = useRef(onAction);
-  useEffect(() => { onActionRef.current = onAction; }, [onAction]);
-  const dispatch = useCallback((act: AgentAction) => {
-    const a = act as AgentAction | { type: "download"; filename: string; markdown: string };
-    if (a.type === "download") saveMarkdown(a.filename, a.markdown); else onActionRef.current(a);
-  }, []);
+  const live = useRef({ settings, context, onAction });
+  live.current = { settings, context, onAction };
+  const lastQuestion = useRef("");
 
-  // restore settings, then ask the server what is available (free open models are the default)
+  const transport = useMemo(() => new DefaultChatTransport<TwinUIMessage>({
+    api: "/api/agent",
+    prepareSendMessagesRequest: ({ messages }) => {
+      const { settings: s, context: ctx } = live.current;
+      const name = recordingName(lastQuestion.current);
+      return {
+        headers: s.key ? { "x-agent-key": s.key } : undefined,
+        body: {
+          messages, context: ctx, model: s.model || undefined,
+          ...(urlFlag("record") ? { record: name } : {}),
+          ...(urlFlag("replay") ? { replay: name, speed: Number(urlFlag("speed") ?? 1) } : {}),
+        },
+      };
+    },
+  }), []);
+
+  const { messages, sendMessage, status, stop, error } = useChat<TwinUIMessage>({
+    transport,
+    onData: (part) => {
+      const p = part as { type: string; data: unknown };
+      if (p.type === "data-progress") {
+        const d = p.data as { toolCallId: string; note: string };
+        setProgress((m) => ({ ...m, [d.toolCallId]: d.note }));
+      } else if (p.type === "data-action") {
+        const a = p.data as AgentAction;
+        if (a.type === "download") setFiles((f) => ({ ...f, last: [...(f.last ?? []), { filename: a.filename, markdown: a.markdown }] }));
+        else live.current.onAction(a);
+      }
+    },
+    onFinish: ({ message }) => {
+      setFiles((f) => (f.last ? { ...f, [message.id]: f.last, last: [] } : f));
+      if (speak && "speechSynthesis" in window) {
+        const txt = message.parts.map((p) => (p.type === "text" ? p.text : "")).join(" ").replace(/[*_`#|]/g, "");
+        if (txt) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(txt)); }
+      }
+    },
+  });
+  const busy = status === "submitted" || status === "streaming";
+
   useEffect(() => {
     setCanListen(!!getRecognition());
     const saved = loadSettings();
-    let alive = true;
-    fetch("/api/agent/health").then((r) => r.json() as Promise<Health>).then((h) => {
-      if (!alive) return;
-      setHealth(h);
-      setSettings((cur) => {
-        const base = saved ?? cur;
-        // "offline" is the pre-health default that gets persisted on first render — never treat it as a choice.
-        const known: ProviderId[] = ["openrouter", "anthropic", "openai"];
-        const want = saved?.provider && known.includes(saved.provider) ? saved.provider : undefined;
-        const provider: ProviderId = want ?? (h.openrouter.available ? "openrouter" : "offline");
-        return { ...base, provider };
-      });
-    }).catch(() => { if (alive && saved) setSettings(saved); });
-    return () => { alive = false; abortRef.current?.abort(); window.speechSynthesis?.cancel(); };
+    if (saved) setSettings(saved);
+    fetch("/api/agent/health").then((r) => r.json() as Promise<Health>).then(setHealth).catch(() => {});
+    return () => { window.speechSynthesis?.cancel(); };
   }, []);
   useEffect(() => { saveSettings(settings); }, [settings]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages]);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, progress]);
 
-  const patchLast = (fn: (m: UiMessage) => UiMessage) => setMessages((ms) => { const c = [...ms]; c[c.length - 1] = fn(c[c.length - 1]); return c; });
+  // stamp first/last-seen times per tool call so each step shows how long it took
+  for (const m of messages) for (const p of m.parts) {
+    if (!isToolUIPart(p)) continue;
+    const t = times.current.get(p.toolCallId) ?? { start: Date.now() };
+    if (!t.end && (p.state === "output-available" || p.state === "output-error")) t.end = Date.now();
+    times.current.set(p.toolCallId, t);
+  }
 
-  const applyEvent = useCallback((ev: StreamEvent) => {
-    const e = ev as StreamEvent | { type: "progress"; id: string; note: string };
-    if (e.type === "progress") {
-      patchLast((m) => ({ ...m, progress: e.note }));
-    } else if (e.type === "text") {
-      patchLast((m) => {
-        const parts = [...m.parts]; const last = parts[parts.length - 1];
-        if (last?.kind === "text") parts[parts.length - 1] = { kind: "text", text: last.text + e.delta };
-        else parts.push({ kind: "text", text: e.delta.replace(/^\s+/, "") });
-        return { ...m, parts };
-      });
-    } else if (e.type === "tool_call") {
-      patchLast((m) => ({ ...m, parts: [...m.parts, { kind: "tool", step: { id: e.id, name: e.name, args: e.args, pending: true } }] }));
-    } else if (e.type === "tool_result") {
-      patchLast((m) => ({ ...m, parts: m.parts.map((p) => (p.kind === "tool" && p.step.id === e.id ? { kind: "tool", step: { ...p.step, pending: false, ok: e.ok, summary: e.summary } } : p)) }));
-      patchLast((m) => ({ ...m, progress: undefined }));
-      e.uiActions.forEach(dispatch);
-    } else if (e.type === "error") {
-      patchLast((m) => ({ ...m, error: e.message, progress: undefined }));
-    } else if (e.type === "done") {
-      const q = (e.qlooLive ?? 0) + (e.qlooCached ?? 0);
-      patchLast((m) => ({ ...m, progress: undefined, meta: `${e.provider}${q ? ` · ${e.qlooLive} live qloo call${e.qlooLive === 1 ? "" : "s"}${e.qlooCached ? `, ${e.qlooCached} cached` : ""}` : ""}` }));
-    }
-  }, [dispatch]);
-
-  const send = useCallback(async (text: string) => {
+  const send = (text: string) => {
     const t = text.trim();
     if (!t || busy) return;
-    const history = [...messages, { role: "user", parts: [{ kind: "text", text: t }] } as UiMessage];
-    setMessages([...history, { role: "assistant", parts: [] }]);
+    lastQuestion.current = t;
     setInput("");
-    setBusy(true);
-    const ctl = new AbortController();
-    abortRef.current = ctl;
-    const { provider } = settings;
-    const key = provider === "anthropic" || provider === "openai" || provider === "openrouter" ? (settings.keys[provider] ?? "").trim() : "";
-    try {
-      if ((provider === "anthropic" || provider === "openai") && !key) throw new Error(`Add your ${provider === "anthropic" ? "Anthropic" : "OpenAI"} API key in settings first.`);
-      const res = await fetch("/api/agent", {
-        method: "POST", signal: ctl.signal,
-        headers: { "Content-Type": "application/json", ...(key ? { "x-agent-key": key } : {}) },
-        body: JSON.stringify({
-          provider, model: settings.models[provider] || undefined, context,
-          messages: history.map((m) => ({ role: m.role, content: textOf(m) })).filter((m) => m.content),
-        }),
-      });
-      if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `Request failed (${res.status})`);
-      if (!(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
-        const data = (await res.json()) as AgentResponse;
-        patchLast((m) => ({ ...m, parts: [{ kind: "text", text: data.reply }], meta: "offline" }));
-        data.actions?.forEach(dispatch);
-      } else {
-        const reader = res.body!.getReader();
-        const dec = new TextDecoder();
-        let buf = "";
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          let i: number;
-          while ((i = buf.indexOf("\n\n")) >= 0) {
-            const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
-            if (chunk.startsWith("data: ")) { try { applyEvent(JSON.parse(chunk.slice(6)) as StreamEvent); } catch { /* skip bad frame */ } }
-          }
-        }
-      }
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") patchLast((m) => ({ ...m, error: e instanceof Error ? e.message : "Could not reach the agent." }));
-    } finally {
-      setBusy(false);
-      abortRef.current = null;
-      if (speak && "speechSynthesis" in window) {
-        setMessages((ms) => { const last = ms[ms.length - 1]; const s = last ? textOf(last) : ""; if (s) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(s)); } return ms; });
+    void sendMessage({ text: t });
+  };
+
+  const groups = (m: TwinUIMessage): Group[] => {
+    const out: Group[] = [];
+    for (const p of m.parts) {
+      if (isToolUIPart(p)) {
+        const o = p.state === "output-available" ? (p.output as { ok?: boolean; summary?: string }) : undefined;
+        const t = times.current.get(p.toolCallId)!;
+        const step: ToolStep = {
+          id: p.toolCallId, name: getToolName(p), args: p.input,
+          pending: p.state === "input-streaming" || p.state === "input-available",
+          ok: p.state === "output-error" ? false : o?.ok !== false,
+          summary: p.state === "output-error" ? p.errorText : o?.summary,
+          progress: progress[p.toolCallId], startedAt: t.start, endedAt: t.end,
+        };
+        const last = out[out.length - 1];
+        if (last?.kind === "tools") last.steps.push(step); else out.push({ kind: "tools", steps: [step] });
+      } else if (p.type === "text" && p.text.trim()) {
+        const last = out[out.length - 1];
+        if (last?.kind === "text") last.text += p.text; else out.push({ kind: "text", text: p.text });
       }
     }
-  }, [busy, messages, settings, context, applyEvent, speak, dispatch]);
+    return out;
+  };
 
   const toggleMic = () => {
     if (listening) { recRef.current?.stop(); return; }
@@ -169,7 +162,7 @@ export function AgentPanel({ context, onAction, className }: {
     r.onresult = (e) => {
       const text = Array.from(e.results).map((x) => x[0].transcript).join("");
       setInput(text);
-      if (e.results[e.results.length - 1].isFinal) void send(text);
+      if (e.results[e.results.length - 1].isFinal) send(text);
     };
     r.onend = () => setListening(false);
     r.onerror = () => setListening(false);
@@ -178,56 +171,71 @@ export function AgentPanel({ context, onAction, className }: {
     r.start();
   };
 
-  const btn = "h-8 border border-border bg-background px-2 font-mono text-xs text-foreground hover:bg-muted disabled:opacity-50";
-  const pLabel = { openrouter: "open models", anthropic: "anthropic", openai: "openai", offline: "offline" }[settings.provider];
+  const btn = "h-8 border border-line bg-background px-2 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40";
+  const modelLabel = (settings.model || health?.openrouter.models[0] || "").replace(/^[a-z-]+\//, "").replace(/:free$/, "");
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-background font-mono text-xs text-foreground", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <span className="text-muted-foreground">agent · {pLabel}{settings.models[settings.provider] ? ` · ${settings.models[settings.provider]}` : ""}</span>
-        <button type="button" onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings} className="text-muted-foreground hover:text-foreground">
-          [{showSettings ? "hide settings" : "settings"}]
+      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11px]">
+        <span className="text-dim">model <span className="text-muted-foreground">{modelLabel || "…"}</span>{urlFlag("replay") && <span className="ml-2 text-primary">replay</span>}{urlFlag("record") && <span className="ml-2 text-primary">● rec</span>}</span>
+        <button type="button" onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings} className="text-dim hover:text-foreground">
+          [{showSettings ? "close" : "settings"}]
         </button>
       </div>
       {showSettings && <AgentSettingsPanel value={settings} onChange={setSettings} health={health} />}
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" aria-live="polite">
-        {!messages.length && <p className="text-muted-foreground">{INTRO}</p>}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3" aria-live="polite">
+        {!messages.length && (
+          <div className="space-y-3 text-[12px] leading-relaxed text-muted-foreground">
+            <p>I find a neighbourhood&apos;s cultural twin anywhere in the world and help you act on it — where to go, where to open something, where to tour.</p>
+            <p className="text-dim">Taste comes from Qloo. OpenStreetMap, Wikipedia and the web only add facts, and every step shows its source.</p>
+          </div>
+        )}
         {messages.map((m, i) => (
-          <div key={i}>
+          <div key={m.id}>
             {m.role === "user" ? (
-              <p className="whitespace-pre-wrap break-words text-muted-foreground">&gt; {textOf(m)}</p>
+              <p className="whitespace-pre-wrap break-words border-l-2 border-primary pl-2 text-[12px] text-foreground">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</p>
             ) : (
-              <div className="space-y-1">
-                {m.parts.map((p, j) => p.kind === "text"
-                  ? <p key={j} className="whitespace-pre-wrap break-words leading-relaxed">{p.text}</p>
-                  : <ToolTrace key={j} steps={[p.step]} />)}
-                {busy && i === messages.length - 1 && !m.error && (m.progress
-                  ? <p className="cursor-block break-words text-dim">{m.progress}</p>
-                  : <span className="animate-pulse text-muted-foreground">…</span>)}
-                {m.error && <p className="text-destructive">error: {m.error}</p>}
-                {m.meta && <p className="text-muted-foreground">[{m.meta}]</p>}
+              <div>
+                {groups(m).map((g, j) => g.kind === "text"
+                  ? <div key={j} className="break-words"><Markdown source={g.text} variant="chat" /></div>
+                  : <ToolTrace key={j} steps={g.steps} />)}
+                {busy && i === messages.length - 1 && !m.parts.some((p) => isToolUIPart(p) && (p.state === "input-available" || p.state === "input-streaming")) && (
+                  <p className="cursor-block mt-1 text-[11px] text-dim">{m.parts.length ? "thinking" : "planning"}</p>
+                )}
+                {(files[m.id] ?? (i === messages.length - 1 ? files.last : undefined))?.map((f) => (
+                  <button key={f.filename} type="button" onClick={() => saveMarkdown(f.filename, f.markdown)}
+                    className="mt-2 flex w-full items-center justify-between border border-primary/60 px-2 py-1.5 text-left text-[11.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
+                    <span>↓ {f.filename}</span><span className="text-[10.5px] opacity-70">{Math.max(1, Math.round(f.markdown.length / 1024))} KB · markdown</span>
+                  </button>
+                ))}
+                {m.metadata && !busy && (
+                  <p className="pt-2 text-[10.5px] text-dim">
+                    {[m.metadata.model?.replace(/^[a-z-]+\//, "").replace(/:free$/, ""), `qloo ${m.metadata.qlooLive} live · ${m.metadata.qlooCached} cached`, m.metadata.ms ? `${(m.metadata.ms / 1000).toFixed(1)}s` : ""].filter(Boolean).join(" · ")}
+                  </p>
+                )}
               </div>
             )}
           </div>
         ))}
+        {error && <p className="text-[11.5px] text-destructive">{error.message.replace(/^.*?"error":"?|"?}$/g, "")}</p>}
         <div ref={endRef} />
       </div>
 
-      <div className="space-y-2 border-t border-border p-3">
+      <div className="space-y-2 border-t border-line p-3">
         {!messages.length && (
           <div className="flex flex-col items-start gap-1">
-            {SUGGEST.map((s) => <button key={s} type="button" onClick={() => void send(s)} className="text-left text-muted-foreground hover:text-foreground">+ {s}</button>)}
+            {SUGGEST.map((s) => <button key={s} type="button" onClick={() => send(s)} className="text-left text-[11.5px] text-muted-foreground transition-colors hover:text-primary">→ {s}</button>)}
           </div>
         )}
-        <form onSubmit={(e) => { e.preventDefault(); void send(input); }} className="flex items-center gap-1.5">
-          <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Message the Twin agent" placeholder={listening ? "listening..." : "ask about a neighbourhood"}
-            className="h-8 min-w-0 flex-1 border border-border bg-background px-2 font-mono text-xs outline-none placeholder:text-muted-foreground focus:border-primary" />
-          {canListen && <button type="button" onClick={toggleMic} aria-pressed={listening} aria-label={listening ? "Stop listening" : "Start voice input"} className={cn(btn, listening && "border-primary text-primary")}>mic</button>}
-          <button type="button" onClick={() => { setSpeak((s) => { if (s) window.speechSynthesis?.cancel(); return !s; }); }} aria-pressed={speak} aria-label="Read answers aloud" className={cn(btn, speak && "border-primary text-primary")}>read</button>
+        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex items-center gap-1.5">
+          <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Message the Twin agent" placeholder={listening ? "listening…" : "ask about any neighbourhood"}
+            className="h-8 min-w-0 flex-1 border border-line bg-background px-2 text-[12px] outline-none placeholder:text-dim focus:border-primary" />
+          {canListen && <button type="button" onClick={toggleMic} aria-pressed={listening} aria-label={listening ? "Stop listening" : "Voice input"} className={cn(btn, listening && "border-primary text-primary")}>mic</button>}
+          <button type="button" onClick={() => setSpeak((s) => { if (s) window.speechSynthesis?.cancel(); return !s; })} aria-pressed={speak} aria-label="Read answers aloud" className={cn(btn, speak && "border-primary text-primary")}>read</button>
           {busy
-            ? <button type="button" onClick={() => abortRef.current?.abort()} className={btn}>stop</button>
-            : <button type="submit" disabled={!input.trim()} className="h-8 bg-primary px-3 font-mono text-xs text-primary-foreground disabled:opacity-50">send</button>}
+            ? <button type="button" onClick={() => void stop()} className={btn}>stop</button>
+            : <button type="submit" disabled={!input.trim()} className="h-8 bg-primary px-3 text-[11.5px] font-semibold text-primary-foreground disabled:opacity-40">send</button>}
         </form>
       </div>
     </div>

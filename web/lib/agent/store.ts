@@ -6,7 +6,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 const PREFIX = "twin/";
-const useBlob = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+const blobOn = () => !!process.env.BLOB_READ_WRITE_TOKEN;
 const diskRoot = () => join(process.env.TWIN_WEB_ROOT ?? process.cwd(), ".cache", "twin");
 
 const MEM_MAX = 600;
@@ -21,7 +21,7 @@ export async function storeGet<T>(key: string, o: { fresh?: boolean } = {}): Pro
   if (!o.fresh && mem.has(key)) return mem.get(key) as T;
   let v: T | null = null;
   try {
-    if (useBlob()) {
+    if (blobOn()) {
       const r = await get(PREFIX + key, { access: "public", useCache: !o.fresh });
       if (r?.statusCode === 200 && r.stream) v = JSON.parse(await new Response(r.stream).text()) as T;
     } else {
@@ -36,7 +36,7 @@ export async function storePut(key: string, data: unknown): Promise<void> {
   remember(key, data);
   const body = JSON.stringify(data);
   try {
-    if (useBlob()) {
+    if (blobOn()) {
       await put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", cacheControlMaxAge: 60 });
     } else {
       const f = join(diskRoot(), key);
@@ -48,7 +48,7 @@ export async function storePut(key: string, data: unknown): Promise<void> {
 
 /** Keys under a prefix (e.g. "cities/"), relative to the store root. */
 export async function storeList(prefix: string): Promise<string[]> {
-  if (useBlob()) {
+  if (blobOn()) {
     const out: string[] = [];
     let cursor: string | undefined;
     do {
@@ -77,4 +77,4 @@ export async function storeCached<T>(key: string, ttlMs: number, fn: () => Promi
   return d;
 }
 
-export const storeBackend = () => (useBlob() ? "vercel-blob" : "disk");
+export const storeBackend = () => (blobOn() ? "vercel-blob" : "disk");

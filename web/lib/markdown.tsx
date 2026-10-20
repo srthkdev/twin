@@ -24,7 +24,27 @@ function inline(text: string, key = 0): ReactNode[] {
 
 const cells = (row: string) => row.trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/).map((c) => c.trim());
 
-export function Markdown({ source }: { source: string }) {
+const STYLES = {
+  article: {
+    h1: "text-balance text-[clamp(32px,5vw,52px)] font-medium leading-[1.05] tracking-[-0.05em]",
+    h2: "mt-16 scroll-mt-16 border-t border-line pt-8 text-[24px] font-medium tracking-[-0.03em]",
+    h3: "mt-10 scroll-mt-16 text-[16px] font-medium tracking-[-0.02em] text-foreground",
+    p: "my-4 text-[13.5px] leading-[1.75] text-muted-foreground",
+    li: "text-[13.5px] leading-relaxed text-muted-foreground",
+    list: "my-5 space-y-2.5", table: "my-6", td: "h-8 text-[12.5px]", fig: "my-8",
+  },
+  chat: {
+    h1: "mt-2 text-[14px] font-medium text-foreground",
+    h2: "mt-3 text-[12.5px] font-medium text-foreground",
+    h3: "mt-2 text-[12px] font-medium text-foreground",
+    p: "my-1.5 text-[12px] leading-[1.65] text-foreground/90",
+    li: "text-[12px] leading-[1.6] text-foreground/85",
+    list: "my-1.5 space-y-1", table: "my-2", td: "h-6 text-[11.5px]", fig: "my-2",
+  },
+};
+
+export function Markdown({ source, variant = "article" }: { source: string; variant?: keyof typeof STYLES }) {
+  const S = STYLES[variant];
   const lines = source.split("\n");
   const blocks: ReactNode[] = [];
   let i = 0, k = 0;
@@ -34,7 +54,7 @@ export function Markdown({ source }: { source: string }) {
     const img = l.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/);
     if (img) {
       blocks.push(
-        <figure key={k++} className="my-8 border border-line bg-card">
+        <figure key={k++} className={`${S.fig} border border-line bg-card`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={img[2]} alt={img[1]} className="block w-full" loading="lazy" />
           {img[1] && <figcaption className="border-t border-line px-3 py-2 text-[11px] text-dim">{img[1]}</figcaption>}
@@ -46,9 +66,9 @@ export function Markdown({ source }: { source: string }) {
     if (h) {
       const lvl = h[1].length, txt = h[2];
       const id = txt.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      if (lvl === 1) blocks.push(<h1 key={k++} id={id} className="text-balance text-[clamp(32px,5vw,52px)] font-medium leading-[1.05] tracking-[-0.05em]">{inline(txt)}</h1>);
-      else if (lvl === 2) blocks.push(<h2 key={k++} id={id} className="mt-16 scroll-mt-16 border-t border-line pt-8 text-[24px] font-medium tracking-[-0.03em]">{inline(txt)}</h2>);
-      else blocks.push(<h3 key={k++} id={id} className="mt-10 scroll-mt-16 text-[16px] font-medium tracking-[-0.02em] text-foreground">{inline(txt)}</h3>);
+      if (lvl === 1) blocks.push(<h1 key={k++} id={id} className={S.h1}>{inline(txt)}</h1>);
+      else if (lvl === 2) blocks.push(<h2 key={k++} id={id} className={S.h2}>{inline(txt)}</h2>);
+      else blocks.push(<h3 key={k++} id={id} className={S.h3}>{inline(txt)}</h3>);
       i++; continue;
     }
     if (l.trim().startsWith("|")) {
@@ -56,10 +76,10 @@ export function Markdown({ source }: { source: string }) {
       while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(lines[i++]);
       const [head, , ...body] = rows;
       blocks.push(
-        <div key={k++} className="my-6 overflow-x-auto">
-          <table className="w-full min-w-[480px] text-[12.5px]">
-            <thead><tr>{cells(head).map((c, j) => <th key={j} className="h-8 border-b border-line-strong pr-4 text-left font-normal text-dim">{inline(c)}</th>)}</tr></thead>
-            <tbody>{body.map((r, ri) => <tr key={ri}>{cells(r).map((c, j) => <td key={j} className="h-8 border-b border-line pr-4 text-muted-foreground">{inline(c)}</td>)}</tr>)}</tbody>
+        <div key={k++} className={`${S.table} overflow-x-auto`}>
+          <table className={`w-full ${variant === "article" ? "min-w-[480px]" : ""} text-[12.5px]`}>
+            <thead><tr>{cells(head).map((c, j) => <th key={j} className={`${S.td} border-b border-line-strong pr-3 text-left font-normal text-dim`}>{inline(c)}</th>)}</tr></thead>
+            <tbody>{body.map((r, ri) => <tr key={ri}>{cells(r).map((c, j) => <td key={j} className={`${S.td} border-b border-line pr-3 text-muted-foreground`}>{inline(c)}</td>)}</tr>)}</tbody>
           </table>
         </div>,
       );
@@ -75,9 +95,9 @@ export function Markdown({ source }: { source: string }) {
       }
       const List = ordered ? "ol" : "ul";
       blocks.push(
-        <List key={k++} className="my-5 space-y-2.5">
+        <List key={k++} className={S.list}>
           {items.map((it, j) => (
-            <li key={j} className="grid grid-cols-[1.6rem_minmax(0,1fr)] text-[13.5px] leading-relaxed text-muted-foreground">
+            <li key={j} className={`grid ${variant === "chat" ? "grid-cols-[1.1rem_minmax(0,1fr)]" : "grid-cols-[1.6rem_minmax(0,1fr)]"} ${S.li}`}>
               <span className="num text-primary">{ordered ? `${j + 1}.` : "–"}</span>
               <span>
                 {inline(it.text, j)}
@@ -95,7 +115,7 @@ export function Markdown({ source }: { source: string }) {
     }
     const para: string[] = [];
     while (i < lines.length && lines[i].trim() && !/^(#|\||!\[|\d+\.\s|-\s)/.test(lines[i])) para.push(lines[i++]);
-    blocks.push(<p key={k++} className="my-4 text-[13.5px] leading-[1.75] text-muted-foreground">{inline(para.join(" "))}</p>);
+    blocks.push(<p key={k++} className={S.p}>{inline(para.join(" "))}</p>);
   }
   return <Fragment>{blocks}</Fragment>;
 }
