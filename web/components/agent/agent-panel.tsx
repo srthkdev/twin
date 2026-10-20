@@ -20,8 +20,17 @@ const getRecognition = (): RecognitionCtor | null => {
 };
 
 type Part = { kind: "text"; text: string } | { kind: "tool"; step: ToolStep };
-interface UiMessage { role: "user" | "assistant"; parts: Part[]; error?: string; meta?: string }
+interface UiMessage { role: "user" | "assistant"; parts: Part[]; error?: string; meta?: string; progress?: string }
 const textOf = (m: UiMessage) => m.parts.filter((p): p is Extract<Part, { kind: "text" }> => p.kind === "text").map((p) => p.text).join("\n\n").trim();
+
+/** Save a markdown brief through a temporary anchor (this runs in the real app, not a sandbox). */
+function saveMarkdown(filename: string, markdown: string) {
+  const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename.endsWith(".md") ? filename : `${filename}.md`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 const SUGGEST = ["Find the Silver Lake of Berlin", "Why are they similar?", "I love Silver Lake. I'm moving to Neukölln, where do I go?", "Where in London do Peso Pluma fans cluster?"];
 const INTRO = 'Ask for the twin of any neighbourhood, e.g. "find the Silver Lake of Berlin". With an LLM provider I call Twin\'s measured taste data and live Qloo, and say when I am using general knowledge.';
@@ -45,6 +54,10 @@ export function AgentPanel({ context, onAction, className }: {
   const abortRef = useRef<AbortController | null>(null);
   const onActionRef = useRef(onAction);
   useEffect(() => { onActionRef.current = onAction; }, [onAction]);
+  const dispatch = useCallback((act: AgentAction) => {
+    const a = act as AgentAction | { type: "download"; filename: string; markdown: string };
+    if (a.type === "download") saveMarkdown(a.filename, a.markdown); else onActionRef.current(a);
+  }, []);
 
   // restore settings, then ask the server what is available (free open models are the default)
   useEffect(() => {
@@ -70,8 +83,11 @@ export function AgentPanel({ context, onAction, className }: {
 
   const patchLast = (fn: (m: UiMessage) => UiMessage) => setMessages((ms) => { const c = [...ms]; c[c.length - 1] = fn(c[c.length - 1]); return c; });
 
-  const applyEvent = useCallback((e: StreamEvent) => {
-    if (e.type === "text") {
+  const applyEvent = useCallback((ev: StreamEvent) => {
+    const e = ev as StreamEvent | { type: "progress"; id: string; note: string };
+    if (e.type === "progress") {
+      patchLast((m) => ({ ...m, progress: e.note }));
+    } else if (e.type === "text") {
       patchLast((m) => {
         const parts = [...m.parts]; const last = parts[parts.length - 1];
         if (last?.kind === "text") parts[parts.length - 1] = { kind: "text", text: last.text + e.delta };
@@ -82,14 +98,15 @@ export function AgentPanel({ context, onAction, className }: {
       patchLast((m) => ({ ...m, parts: [...m.parts, { kind: "tool", step: { id: e.id, name: e.name, args: e.args, pending: true } }] }));
     } else if (e.type === "tool_result") {
       patchLast((m) => ({ ...m, parts: m.parts.map((p) => (p.kind === "tool" && p.step.id === e.id ? { kind: "tool", step: { ...p.step, pending: false, ok: e.ok, summary: e.summary } } : p)) }));
-      e.uiActions.forEach((a) => onActionRef.current(a));
+      patchLast((m) => ({ ...m, progress: undefined }));
+      e.uiActions.forEach(dispatch);
     } else if (e.type === "error") {
-      patchLast((m) => ({ ...m, error: e.message }));
+      patchLast((m) => ({ ...m, error: e.message, progress: undefined }));
     } else if (e.type === "done") {
       const q = (e.qlooLive ?? 0) + (e.qlooCached ?? 0);
-      patchLast((m) => ({ ...m, meta: `${e.provider}${q ? ` · ${e.qlooLive} live qloo call${e.qlooLive === 1 ? "" : "s"}${e.qlooCached ? `, ${e.qlooCached} cached` : ""}` : ""}` }));
+      patchLast((m) => ({ ...m, progress: undefined, meta: `${e.provider}${q ? ` · ${e.qlooLive} live qloo call${e.qlooLive === 1 ? "" : "s"}${e.qlooCached ? `, ${e.qlooCached} cached` : ""}` : ""}` }));
     }
-  }, []);
+  }, [dispatch]);
 
   const send = useCallback(async (text: string) => {
     const t = text.trim();
@@ -116,7 +133,7 @@ export function AgentPanel({ context, onAction, className }: {
       if (!(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
         const data = (await res.json()) as AgentResponse;
         patchLast((m) => ({ ...m, parts: [{ kind: "text", text: data.reply }], meta: "offline" }));
-        data.actions?.forEach((a) => onActionRef.current(a));
+        data.actions?.forEach(dispatch);
       } else {
         const reader = res.body!.getReader();
         const dec = new TextDecoder();
@@ -141,7 +158,7 @@ export function AgentPanel({ context, onAction, className }: {
         setMessages((ms) => { const last = ms[ms.length - 1]; const s = last ? textOf(last) : ""; if (s) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(s)); } return ms; });
       }
     }
-  }, [busy, messages, settings, context, applyEvent, speak]);
+  }, [busy, messages, settings, context, applyEvent, speak, dispatch]);
 
   const toggleMic = () => {
     if (listening) { recRef.current?.stop(); return; }
@@ -185,7 +202,9 @@ export function AgentPanel({ context, onAction, className }: {
                 {m.parts.map((p, j) => p.kind === "text"
                   ? <p key={j} className="whitespace-pre-wrap break-words leading-relaxed">{p.text}</p>
                   : <ToolTrace key={j} steps={[p.step]} />)}
-                {busy && i === messages.length - 1 && !m.error && <span className="animate-pulse text-muted-foreground">…</span>}
+                {busy && i === messages.length - 1 && !m.error && (m.progress
+                  ? <p className="cursor-block break-words text-dim">{m.progress}</p>
+                  : <span className="animate-pulse text-muted-foreground">…</span>)}
                 {m.error && <p className="text-destructive">error: {m.error}</p>}
                 {m.meta && <p className="text-muted-foreground">[{m.meta}]</p>}
               </div>
