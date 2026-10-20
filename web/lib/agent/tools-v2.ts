@@ -121,7 +121,7 @@ const twins_anywhere = defineTool({
     const top = ranked.slice(0, k ?? 5).map(({ h, s }, i) => {
       const dims = h.v.map((x, d) => ({ d, a: srcVec![d], b: x }));
       return {
-        rank: i + 1, hood_id: h.id, name: h.name, cosine: r3(s),
+        rank: i + 1, hood_id: h.id, name: h.name, cosine: r3(s), lat: h.lat, lon: h.lon,
         shared: dims.filter((x) => x.a > 0 && x.b > 0).sort((p, q) => Math.min(q.a, q.b) - Math.min(p.a, p.b)).slice(0, 5).map((x) => labels[x.d]),
         different: dims.sort((p, q) => Math.abs(q.a - q.b) - Math.abs(p.a - p.b)).slice(0, 3).map((x) => `${labels[x.d]} (${r2(x.a)} vs ${r2(x.b)})`),
       };

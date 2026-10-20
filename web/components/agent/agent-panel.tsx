@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, isToolUIPart, getToolName } from "ai";
+import { DefaultChatTransport, getToolName, isToolUIPart } from "ai";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@/lib/markdown";
 import type { AgentAction } from "@/lib/agent/types";
 import type { TwinUIMessage } from "@/lib/agent/ai";
 import { AgentSettingsPanel } from "./agent-settings";
-import { ToolTrace, type ToolStep } from "./tool-trace";
+import { Elapsed, Spinner, ToolTrace, type ToolStep } from "./tool-trace";
+import { ResultCard, hasCard } from "./result-cards";
 import { emptySettings, loadSettings, saveSettings, type AgentSettings, type Health } from "./settings";
 
 interface RecognitionEvent { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }
@@ -37,26 +38,47 @@ const SUGGEST = [
   "Where in Berlin should I open a natural wine bar?",
   "Plan a 3-city European tour for Peso Pluma",
   "What's the vibe of Shimokitazawa, Tokyo?",
+  "Find the Shoreditch of Lisbon",
 ];
 
-/** The model's reasoning: one dim line while it streams, expandable afterwards. */
-function Thinking({ text, done }: { text: string; done: boolean }) {
-  const tail = text.trim().split(/\n+/).pop() ?? "";
+/** Split the model's closing "Next: a · b" line off the answer so it can render as buttons. */
+function splitNext(text: string): { body: string; next: string[] } {
+  const m = text.match(/\n*\**Next:?\**:?\s*(.+)\s*$/i);
+  if (!m) return { body: text, next: [] };
+  return { body: text.slice(0, m.index).trimEnd(), next: m[1].split(/\s+·\s+|\s+\|\s+/).map((x) => x.replace(/[*"“”]/g, "").trim()).filter((x) => x.length > 3).slice(0, 3) };
+}
+
+/** The model's reasoning: a live, moving ticker while it thinks; a one-line "thought for Ns" afterwards. */
+function Thinking({ text, done, since }: { text: string; done: boolean; since: number }) {
+  const [end, setEnd] = useState<number | undefined>(undefined);
+  useEffect(() => { if (done && !end) setEnd(Date.now()); }, [done, end]);
+  const lines = text.trim().split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
   return (
-    <details className="group my-1.5 text-[11px] text-dim">
-      <summary className="flex cursor-pointer list-none gap-2 [&::-webkit-details-marker]:hidden">
-        <span className="shrink-0 border border-line-strong px-1 text-[9.5px] uppercase tracking-wider">think</span>
-        <span className={cn("min-w-0 flex-1 truncate", !done && "cursor-block")}>{done ? `${text.trim().split(/\s+/).length} words of reasoning` : tail.slice(-120)}</span>
+    <details className="group my-1.5" open={!done ? true : undefined}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] text-dim [&::-webkit-details-marker]:hidden">
+        {done ? <span className="inline-block w-3 text-center">◇</span> : <Spinner />}
+        <span>{done ? "thought for " : "thinking "}<Elapsed from={since} to={end} /></span>
       </summary>
-      <p className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap border-l border-line pl-2 leading-relaxed">{text.trim()}</p>
+      {!done ? (
+        <div className="relative ml-5 mt-1 h-[2.9em] overflow-hidden border-l border-line pl-2 text-[11px] leading-[1.45] text-dim [mask-image:linear-gradient(to_bottom,transparent,black_45%)]">
+          <div className="absolute bottom-0 left-2 right-0">{lines.slice(-3).map((l, i) => <p key={lines.length - 3 + i} className="animate-in fade-in slide-in-from-bottom-1 duration-300 truncate">{l}</p>)}</div>
+        </div>
+      ) : (
+        <p className="ml-5 mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap border-l border-line pl-2 text-[11px] leading-relaxed text-dim">{text.trim()}</p>
+      )}
     </details>
   );
 }
 
-type Group = { kind: "text"; text: string } | { kind: "tools"; steps: ToolStep[] } | { kind: "thinking"; text: string; done: boolean };
+type Group =
+  | { kind: "text"; text: string }
+  | { kind: "tools"; steps: ToolStep[]; cards: { name: string; data: unknown; id: string }[] }
+  | { kind: "thinking"; text: string; done: boolean; key: string };
 
-export function AgentPanel({ context, onAction, className, initialInput }: {
-  context: { fromHood: string | null; toCity: string | null };
+export function AgentPanel({ context, onAction, className, initialInput, external }: {
+  context: { fromHood: string | null; toCity: string | null; focus?: { lat: number; lon: number; label: string } | null };
+  /** A question sent from elsewhere in the UI (e.g. the map's ask box); `t` changes per request. */
+  external?: { text: string; t: number } | null;
   onAction: (a: AgentAction) => void;
   className?: string;
   initialInput?: string;
@@ -73,6 +95,7 @@ export function AgentPanel({ context, onAction, className, initialInput }: {
   const times = useRef(new Map<string, { start: number; end?: number }>());
   const recRef = useRef<Recognition | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
   const live = useRef({ settings, context, onAction });
   live.current = { settings, context, onAction };
 
@@ -80,12 +103,7 @@ export function AgentPanel({ context, onAction, className, initialInput }: {
     api: "/api/agent",
     prepareSendMessagesRequest: ({ messages }) => {
       const { settings: s, context: ctx } = live.current;
-      return {
-        headers: s.key ? { "x-agent-key": s.key } : undefined,
-        body: {
-          messages, context: ctx, model: s.model || undefined,
-        },
-      };
+      return { headers: s.key ? { "x-agent-key": s.key } : undefined, body: { messages, context: ctx, model: s.model || undefined } };
     },
   }), []);
 
@@ -105,7 +123,7 @@ export function AgentPanel({ context, onAction, className, initialInput }: {
     onFinish: ({ message }) => {
       setFiles((f) => (f.last ? { ...f, [message.id]: f.last, last: [] } : f));
       if (speak && "speechSynthesis" in window) {
-        const txt = message.parts.map((p) => (p.type === "text" ? p.text : "")).join(" ").replace(/[*_`#|]/g, "");
+        const txt = splitNext(message.parts.map((p) => (p.type === "text" ? p.text : "")).join(" ")).body.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*_`#|◎]/g, "");
         if (txt) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(txt)); }
       }
     },
@@ -121,14 +139,27 @@ export function AgentPanel({ context, onAction, className, initialInput }: {
   }, []);
   useEffect(() => { saveSettings(settings); }, [settings]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, progress]);
+  useEffect(() => {
+    const t = taRef.current;
+    if (t) { t.style.height = "0px"; t.style.height = `${Math.min(120, t.scrollHeight)}px`; }
+  }, [input]);
 
-  // stamp first/last-seen times per tool call so each step shows how long it took
-  for (const m of messages) for (const p of m.parts) {
-    if (!isToolUIPart(p)) continue;
-    const t = times.current.get(p.toolCallId) ?? { start: Date.now() };
-    if (!t.end && (p.state === "output-available" || p.state === "output-error")) t.end = Date.now();
-    times.current.set(p.toolCallId, t);
-  }
+  // stamp first/last-seen times per tool call and per reasoning block, so steps can show how long they took
+  for (const m of messages) m.parts.forEach((p, idx) => {
+    const key = isToolUIPart(p) ? p.toolCallId : p.type === "reasoning" ? `${m.id}:r${idx}` : null;
+    if (!key) return;
+    const t = times.current.get(key) ?? { start: Date.now() };
+    const finished = isToolUIPart(p) ? p.state === "output-available" || p.state === "output-error" : (p as { state?: string }).state === "done";
+    if (!t.end && finished) t.end = Date.now();
+    times.current.set(key, t);
+  });
+
+  const lastExternal = useRef(0);
+  useEffect(() => {
+    if (!external || external.t === lastExternal.current) return;
+    lastExternal.current = external.t;
+    if (status === "ready" || status === "error") void sendMessage({ text: external.text });
+  }, [external, status, sendMessage]);
 
   const send = (text: string) => {
     const t = text.trim();
@@ -137,29 +168,45 @@ export function AgentPanel({ context, onAction, className, initialInput }: {
     void sendMessage({ text: t });
   };
 
+  const onLink = (href: string) => {
+    const kind = href.slice(0, href.indexOf(":")), rest = href.slice(href.indexOf(":") + 1);
+    if (kind === "hood") live.current.onAction({ type: "focusHood", hood: rest });
+    if (kind === "geo") {
+      const [lat, lon] = rest.split(",").map(Number);
+      if (isFinite(lat) && isFinite(lon)) live.current.onAction({ type: "focus", lat, lon });
+    }
+  };
+
   const groups = (m: TwinUIMessage): Group[] => {
     const out: Group[] = [];
-    for (const p of m.parts) {
+    m.parts.forEach((p, idx) => {
       if (isToolUIPart(p)) {
-        const o = p.state === "output-available" ? (p.output as { ok?: boolean; summary?: string }) : undefined;
+        const o = p.state === "output-available" ? (p.output as { ok?: boolean; summary?: string; data?: unknown }) : undefined;
         const t = times.current.get(p.toolCallId)!;
+        const name = getToolName(p);
         const step: ToolStep = {
-          id: p.toolCallId, name: getToolName(p), args: p.input,
+          id: p.toolCallId, name, args: p.input,
           pending: p.state === "input-streaming" || p.state === "input-available",
           ok: p.state === "output-error" ? false : o?.ok !== false,
           summary: p.state === "output-error" ? p.errorText : o?.summary,
           progress: progress[p.toolCallId], startedAt: t.start, endedAt: t.end,
         };
-        const last = out[out.length - 1];
-        if (last?.kind === "tools") last.steps.push(step); else out.push({ kind: "tools", steps: [step] });
+        let last = out[out.length - 1];
+        if (last?.kind !== "tools") { last = { kind: "tools", steps: [], cards: [] }; out.push(last); }
+        last.steps.push(step);
+        if (o?.ok && hasCard(name)) {
+          // one card per tool type per block — the latest result wins
+          last.cards = [...last.cards.filter((c) => c.name !== name), { name, data: o.data, id: p.toolCallId }];
+        }
       } else if (p.type === "reasoning" && p.text.trim()) {
         const last = out[out.length - 1];
-        if (last?.kind === "thinking") { last.text += p.text; last.done = p.state === "done"; } else out.push({ kind: "thinking", text: p.text, done: p.state === "done" });
+        const done = (p as { state?: string }).state === "done";
+        if (last?.kind === "thinking") { last.text += p.text; last.done = done; } else out.push({ kind: "thinking", text: p.text, done, key: `${m.id}:r${idx}` });
       } else if (p.type === "text" && p.text.trim()) {
         const last = out[out.length - 1];
         if (last?.kind === "text") last.text += p.text; else out.push({ kind: "text", text: p.text });
       }
-    }
+    });
     return out;
   };
 
@@ -181,75 +228,109 @@ export function AgentPanel({ context, onAction, className, initialInput }: {
     r.start();
   };
 
-  const btn = "h-8 border border-line bg-background px-2 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40";
   const modelLabel = (settings.model || health?.openrouter.models[0] || "").replace(/^[a-z-]+\//, "").replace(/:free$/, "");
+  const lastIdx = messages.length - 1;
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-background font-mono text-xs text-foreground", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11px]">
-        <span className="text-dim">model <span className="text-muted-foreground">{modelLabel || "…"}</span></span>
-        <button type="button" onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings} className="text-dim hover:text-foreground">
-          [{showSettings ? "close" : "settings"}]
-        </button>
+      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11px] text-dim">
+        <span className="truncate">{modelLabel || "…"}</span>
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => setSpeak((s) => { if (s) window.speechSynthesis?.cancel(); return !s; })} aria-pressed={speak} className={cn("transition-colors hover:text-foreground", speak && "text-primary")}>
+            voice {speak ? "on" : "off"}
+          </button>
+          <button type="button" onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings} className="transition-colors hover:text-foreground">
+            {showSettings ? "close" : "settings"}
+          </button>
+        </div>
       </div>
       {showSettings && <AgentSettingsPanel value={settings} onChange={setSettings} health={health} />}
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3" aria-live="polite">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-3" aria-live="polite">
         {!messages.length && (
-          <div className="space-y-3 text-[12px] leading-relaxed text-muted-foreground">
-            <p>I find a neighbourhood&apos;s cultural twin anywhere in the world and help you act on it — where to go, where to open something, where to tour.</p>
-            <p className="text-dim">Taste comes from Qloo. OpenStreetMap, Wikipedia and the web only add facts, and every step shows its source.</p>
+          <div className="space-y-4">
+            <p className="text-[12px] leading-relaxed text-muted-foreground">Ask about any neighbourhood in the world: its twin elsewhere, where to go, where to open something, where an artist should play.</p>
+            <div className="space-y-px border border-line bg-line">
+              {SUGGEST.map((s) => (
+                <button key={s} type="button" onClick={() => send(s)} className="block w-full bg-background px-2.5 py-2 text-left text-[11.5px] text-muted-foreground transition-colors hover:bg-raised hover:text-foreground">
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m, i) => (
           <div key={m.id}>
             {m.role === "user" ? (
-              <p className="whitespace-pre-wrap break-words border-l-2 border-primary pl-2 text-[12px] text-foreground">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</p>
+              <div className="ml-6 border border-line bg-raised px-2.5 py-2 text-[12px] text-foreground">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</div>
             ) : (
               <div>
-                {groups(m).map((g, j) => g.kind === "text"
-                  ? <div key={j} className="break-words"><Markdown source={g.text} variant="chat" /></div>
-                  : g.kind === "thinking"
-                    ? <Thinking key={j} text={g.text} done={g.done} />
-                    : <ToolTrace key={j} steps={g.steps} />)}
-                {busy && i === messages.length - 1 && !m.parts.some((p) => isToolUIPart(p) && (p.state === "input-available" || p.state === "input-streaming")) && (
-                  <p className="cursor-block mt-1 text-[11px] text-dim">{m.parts.length ? "thinking" : "planning"}</p>
+                {groups(m).map((g, j) => {
+                  if (g.kind === "thinking") return <Thinking key={j} text={g.text} done={g.done || !busy || i !== lastIdx} since={times.current.get(g.key)?.start ?? Date.now()} />;
+                  if (g.kind === "tools") return (
+                    <div key={j}>
+                      <ToolTrace steps={g.steps} />
+                      {g.cards.map((c) => <ResultCard key={c.id} name={c.name} data={c.data} />)}
+                    </div>
+                  );
+                  const { body, next } = splitNext(g.text);
+                  const final = !busy || i !== lastIdx;
+                  return (
+                    <div key={j} className="break-words">
+                      <Markdown source={body} variant="chat" onLink={onLink} />
+                      {final && next.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {next.map((q) => <button key={q} type="button" onClick={() => send(q)} className="border border-line px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary">{q}</button>)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {busy && i === lastIdx && !m.parts.some((p) => isToolUIPart(p) && (p.state === "input-available" || p.state === "input-streaming")) && !m.parts.some((p) => p.type === "reasoning" && (p as { state?: string }).state !== "done") && (
+                  <p className="mt-1 flex items-center gap-2 text-[11px] text-dim"><Spinner />{m.parts.length ? "writing" : "planning"}</p>
                 )}
-                {(files[m.id] ?? (i === messages.length - 1 ? files.last : undefined))?.map((f) => (
+                {(files[m.id] ?? (i === lastIdx ? files.last : undefined))?.map((f) => (
                   <button key={f.filename} type="button" onClick={() => saveMarkdown(f.filename, f.markdown)}
-                    className="mt-2 flex w-full items-center justify-between border border-primary/60 px-2 py-1.5 text-left text-[11.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
-                    <span>↓ {f.filename}</span><span className="text-[10.5px] opacity-70">{Math.max(1, Math.round(f.markdown.length / 1024))} KB · markdown</span>
+                    className="mt-2 flex w-full items-center justify-between border border-primary/60 px-2.5 py-2 text-left text-[11.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
+                    <span>↓ {f.filename}</span><span className="text-[10.5px] opacity-70">{Math.max(1, Math.round(f.markdown.length / 1024))} KB</span>
                   </button>
                 ))}
-                {m.metadata && !busy && (
-                  <p className="pt-2 text-[10.5px] text-dim">
-                    {[m.metadata.model?.replace(/^[a-z-]+\//, "").replace(/:free$/, ""), `qloo ${m.metadata.qlooLive} live · ${m.metadata.qlooCached} cached`, m.metadata.ms ? `${(m.metadata.ms / 1000).toFixed(1)}s` : ""].filter(Boolean).join(" · ")}
+                {m.metadata && !(busy && i === lastIdx) && (
+                  <p className="mt-2 text-[10px] text-dim">
+                    {[`qloo ${m.metadata.qlooLive} live · ${m.metadata.qlooCached} cached`, m.metadata.ms ? `${(m.metadata.ms / 1000).toFixed(1)}s` : ""].filter(Boolean).join(" · ")}
                   </p>
                 )}
               </div>
             )}
           </div>
         ))}
-        {error && <p className="text-[11.5px] text-destructive">{error.message.replace(/^.*?"error":"?|"?}$/g, "")}</p>}
+        {error && <p className="border border-destructive/50 px-2.5 py-2 text-[11.5px] text-destructive">{error.message.replace(/^.*?"error":"?|"?}$/g, "")}</p>}
         <div ref={endRef} />
       </div>
 
-      <div className="space-y-2 border-t border-line p-3">
-        {!messages.length && (
-          <div className="flex flex-col items-start gap-1">
-            {SUGGEST.map((s) => <button key={s} type="button" onClick={() => send(s)} className="text-left text-[11.5px] text-muted-foreground transition-colors hover:text-primary">→ {s}</button>)}
-          </div>
-        )}
-        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex items-center gap-1.5">
-          <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Message the Twin agent" placeholder={listening ? "listening…" : "ask about any neighbourhood"}
-            className="h-8 min-w-0 flex-1 border border-line bg-background px-2 text-[12px] outline-none placeholder:text-dim focus:border-primary" />
-          {canListen && <button type="button" onClick={toggleMic} aria-pressed={listening} aria-label={listening ? "Stop listening" : "Voice input"} className={cn(btn, listening && "border-primary text-primary")}>mic</button>}
-          <button type="button" onClick={() => setSpeak((s) => { if (s) window.speechSynthesis?.cancel(); return !s; })} aria-pressed={speak} aria-label="Read answers aloud" className={cn(btn, speak && "border-primary text-primary")}>read</button>
-          {busy
-            ? <button type="button" onClick={() => void stop()} className={btn}>stop</button>
-            : <button type="submit" disabled={!input.trim()} className="h-8 bg-primary px-3 text-[11.5px] font-semibold text-primary-foreground disabled:opacity-40">send</button>}
-        </form>
-      </div>
+      <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="border-t border-line p-2.5">
+        <div className="flex items-end gap-1 border border-line-strong bg-card px-2 py-1.5 transition-colors focus-within:border-primary">
+          <textarea ref={taRef} value={input} rows={1} onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
+            aria-label="Message the Twin agent" placeholder={listening ? "listening…" : "ask about any neighbourhood…"}
+            className="max-h-[120px] min-h-[22px] flex-1 resize-none bg-transparent py-0.5 text-[12.5px] leading-[1.45] outline-none placeholder:text-dim" />
+          {canListen && (
+            <button type="button" onClick={toggleMic} aria-pressed={listening} aria-label={listening ? "Stop listening" : "Voice input"}
+              className={cn("grid size-6 shrink-0 place-items-center transition-colors", listening ? "text-primary" : "text-dim hover:text-foreground")}>
+              <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5" /><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2" /></svg>
+            </button>
+          )}
+          {busy ? (
+            <button type="button" onClick={() => void stop()} aria-label="Stop" className="grid size-6 shrink-0 place-items-center border border-line-strong text-foreground hover:border-foreground">
+              <span className="size-2 bg-current" />
+            </button>
+          ) : (
+            <button type="submit" disabled={!input.trim()} aria-label="Send" className="grid size-6 shrink-0 place-items-center bg-primary text-primary-foreground transition-opacity disabled:opacity-30">
+              <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" /></svg>
+            </button>
+          )}
+        </div>
+      </form>
     </div>
   );
 }

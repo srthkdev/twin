@@ -29,6 +29,59 @@ export interface ExploreMapProps {
   onPickSourceCell: (i: number) => void;
   onSelectTwin: (id: string) => void;
   onFlightState?: (flying: boolean) => void;
+  /** Basket group per fingerprint dimension (aligned with basketLabels), for the three-colour mix. */
+  basketGroups: string[];
+  /** Neighbourhoods, to name the block under the cursor. */
+  hoods: Hood[];
+  sourceName: string;
+  /** Click on a block (either city): screen position + what's there. */
+  onBlockClick?: (b: BlockInfo) => void;
+  /** Hide the hover card (e.g. while the ask box is open). */
+  quiet?: boolean;
+  /** One-off camera target from the agent (a clicked place in an answer). `t` changes on every request. */
+  focus?: { lat: number; lon: number; label?: string; t: number } | null;
+}
+
+export interface BlockInfo { x: number; y: number; lat: number; lon: number; g: string; city: string; near: string; isSource: boolean; index: number; match: number | null }
+
+// ── three-colour blocks: height = similarity, segments = what the block's distinctive taste is made of ──
+import { MIX, mixOf } from "./mix";
+
+/** Share of a cell's positive (distinctive) taste in each of the three groups, averaged per dimension so big groups don't dominate. */
+function cellMix(cells: PackedCells, i: number, groups: string[], counts: number[]): [number, number, number] {
+  const s = [0, 0, 0], off = i * cells.dim;
+  for (let k = 0; k < cells.dim; k++) { const z = cells.v[off + k]; if (z > 0) s[mixOf(groups[k] ?? "")] += z; }
+  const m = s.map((x, j) => x / (counts[j] || 1));
+  const tot = m[0] + m[1] + m[2];
+  return tot > 0 ? [m[0] / tot, m[1] / tot, m[2] / tot] : [1 / 3, 1 / 3, 1 / 3];
+}
+
+/**
+ * A block as three bands: drawn as three columns on the same footprint with cumulative heights (top band first, widest
+ * last), so the lower bands wrap the taller columns and read as stacked colour.
+ */
+interface StackData { bands: ColumnData[]; mix: Float32Array; t: Float32Array; lo: number }
+function buildStacks(cells: PackedCells, vals: Float32Array, maxElev: number, groups: string[]): StackData {
+  const { t, lo } = normalizeRobust(vals);
+  const n = cells.n, counts = [0, 0, 0];
+  for (let k = 0; k < cells.dim; k++) counts[mixOf(groups[k] ?? "")]++;
+  const mix = new Float32Array(n * 3), pos = new Float64Array(n * 2);
+  const elev = [new Float32Array(n), new Float32Array(n), new Float32Array(n)], fill = [0, 1, 2].map(() => new Uint8ClampedArray(n * 4));
+  for (let i = 0; i < n; i++) {
+    pos[i * 2] = cells.lon[i]; pos[i * 2 + 1] = cells.lat[i];
+    const H = 25 + Math.pow(t[i], 2.2) * maxElev, m = cellMix(cells, i, groups, counts);
+    const shade = 0.34 + 0.66 * t[i], alpha = Math.round(90 + 165 * Math.min(1, t[i] * 1.2));
+    let cum = 0;
+    for (let j = 0; j < 3; j++) {
+      mix[i * 3 + j] = m[j];
+      cum += m[j];
+      elev[j][i] = Math.max(4, H * cum); // band j spans the heights of bands 0..j
+      const [r, g, b] = MIX[j].rgb;
+      fill[j].set([r * shade, g * shade, b * shade, alpha], i * 4);
+    }
+  }
+  const bands = [0, 1, 2].map((j) => ({ length: n, attributes: { getPosition: { value: pos, size: 2 as const }, getElevation: { value: elev[j], size: 1 as const }, getFillColor: { value: fill[j], size: 4 as const } }, t }));
+  return { bands, mix, t, lo };
 }
 
 interface ColumnData {
@@ -63,6 +116,21 @@ function buildOppColumns(res: OpportunityResult, maxElev: number): ColumnData {
   return { length: n, attributes: { getPosition: { value: pos, size: 2 }, getElevation: { value: elev, size: 1 }, getFillColor: { value: fill, size: 4 } }, t };
 }
 
+function nearestHood(hoods: Hood[], lat: number, lon: number): string | null {
+  let best: string | null = null, bd = Infinity;
+  const k = Math.cos((lat * Math.PI) / 180);
+  for (const h of hoods) { const d = (h.lat - lat) ** 2 + ((h.lon - lon) * k) ** 2; if (d < bd) { bd = d; best = h.name; } }
+  return bd < 0.0004 ? best : null; // within ~2 km
+}
+/** Similarity as words people use: "78% like silver lake", or "not much like silver lake" for weak/negative matches. */
+function likeness(m: number | null, name: string) {
+  const n = escapeHtml(name.toLowerCase());
+  if (m == null) return n;
+  return m >= 0.15 ? `<span style="color:#f0a03c">${Math.round(m * 100)}%</span> like ${n}` : `<span style="color:#8d8a80">not much like ${n}</span>`;
+}
+const card = (title: string, body: string, foot: string) =>
+  `<div style="padding:7px 9px 8px"><div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5f5c55">${title}</div>${body}</div><div style="border-top:1px solid #22211d;padding:5px 9px;color:#f0a03c;font-size:10.5px">${foot}</div>`;
+
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export default function ExploreMap(props: ExploreMapProps) {
@@ -74,32 +142,56 @@ export default function ExploreMap(props: ExploreMapProps) {
   const { containerRef, mapRef, overlayRef, ready } = useDeckMap({
     center: [-118.3, 34.05], zoom: 9, pitch: 45, bearing: -10,
     onClick: (info: PickingInfo) => {
-      if (info.layer?.id === "src-cells" && info.index >= 0) propsRef.current.onPickSourceCell(info.index);
+      const b = blockAt(info);
+      if (!b) return;
+      const p = propsRef.current;
+      if (p.onBlockClick) p.onBlockClick(b);
+      else if (b.isSource) p.onPickSourceCell(b.index);
     },
     getTooltip: (info: PickingInfo) => {
       const p = propsRef.current;
-      if (info.index < 0 || !info.layer) return null;
+      if (info.index < 0 || !info.layer || p.quiet) return null;
+      const style = { zIndex: "60", background: "#11110f", border: "1px solid #383631", borderRadius: "0", padding: "0", color: "#e6e3da", fontSize: "11.5px", fontFamily: "var(--font-geist-mono), monospace", maxWidth: "260px" };
       if (info.layer.id === "opp-cells") {
         const c = p.opportunity?.cells[info.index];
         if (!c) return null;
-        return {
-          html: `<div style="font-family:var(--font-geist-mono),monospace;font-size:11px;color:#5f5c55">${c.g}</div><div style="font-weight:600;margin:2px 0">score ${c.score.toFixed(2)}</div><div style="color:#8d8a80">demand z ${c.demand.toFixed(2)} · supply ${c.supply}</div>`,
-          style: { background: "#141412", border: "1px solid #383631", borderRadius: "0", padding: "6px 8px", color: "#e6e3da", fontSize: "11.5px", fontFamily: "var(--font-geist-mono), monospace" },
-        };
+        const near = nearestHood(p.hoods, c.lat, c.lon);
+        return { html: card(near ? escapeHtml(near) : "this block", `<div style="font-size:15px;margin:2px 0 6px">${c.supply === 0 ? "no" : c.supply} existing · demand ${c.demand >= 2 ? "very strong" : c.demand >= 1 ? "strong" : c.demand > 0 ? "above average" : "low"}</div><div style="color:#8d8a80">opportunity score ${c.score.toFixed(1)}</div>`, "click to ask about this spot"), style };
       }
-      const isTgt = info.layer.id === "tgt-cells";
-      const cells = isTgt ? p.tgtCells : p.srcCells;
-      const sim = isTgt ? p.tgtSim : p.srcSim;
-      if (!cells || !sim) return null;
-      const i = info.index;
-      const top = cells.top[i].map((k) => p.basketLabels[k] ?? "").join(" · ");
-      const val = p.mode === "raw" ? `raw density ${cells.d[i].toFixed(2)}` : `similarity ${sim[i].toFixed(2)}`;
-      return {
-        html: `<div style="font-family:var(--font-geist-mono),monospace;font-size:11px;color:#5f5c55">${cells.g[i]}</div><div style="font-weight:600;margin:2px 0">${val}</div><div style="color:#8d8a80">${top}</div>${!isTgt ? '<div style="margin-top:4px;color:#f0a03c">click to drop a pin</div>' : ""}`,
-        style: { background: "#141412", border: "1px solid #383631", borderRadius: "0", padding: "6px 8px", color: "#e6e3da", fontSize: "11.5px", fontFamily: "var(--font-geist-mono), monospace" },
-      };
+      const b = blockAt(info);
+      if (!b) return null;
+      const cells = b.isSource ? p.srcCells : p.tgtCells;
+      if (!cells) return null;
+      const i = b.index;
+      const stack = b.isSource ? colsRef.current.srcStack : colsRef.current.tgtStack;
+      const head = p.mode === "raw"
+        ? `<div style="font-size:15px;margin:2px 0 6px">busyness ${Math.round(cells.d[i] * 100)}%</div><div style="color:#8d8a80;margin-bottom:6px">raw qloo — mostly how busy the block is</div>`
+        : `<div style="font-size:15px;margin:2px 0 6px">${likeness(b.match, p.sourceName)}</div>`;
+      const mix = stack ? MIX.map((m, j) => {
+        const v = stack.mix[i * 3 + j];
+        return `<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span style="width:38px;color:#8d8a80">${m.name}</span><span style="flex:1;height:5px;background:#22211d;position:relative"><span style="position:absolute;inset:0 auto 0 0;width:${Math.round(v * 100)}%;background:rgb(${m.rgb.join(",")})"></span></span><span style="width:28px;text-align:right;color:#8d8a80">${Math.round(v * 100)}%</span></div>`;
+      }).join("") : "";
+      const traits = cells.top[i].slice(0, 3).map((k) => escapeHtml(p.basketLabels[k] ?? "")).filter(Boolean).join(" · ");
+      const sup = supplyRef.current.get(cells.city);
+      const counts = sup?.cells[cells.g[i]];
+      const SHOW: [string, string][] = [["cafe", "cafés"], ["bar", "bars"], ["restaurant", "restaurants"], ["art_gallery", "galleries"], ["music_venue", "venues"], ["record_store", "record shops"]];
+      const supply = counts ? SHOW.map(([k, l]) => { const n = counts[sup!.kinds.indexOf(k)] ?? 0; return n ? `${n} ${l}` : ""; }).filter(Boolean).slice(0, 4).join(" · ") : "";
+      const body = `${head}${mix ? `<div style="margin-bottom:6px">${mix}</div>` : ""}${traits ? `<div style="color:#e6e3da;margin-bottom:4px">${traits}</div>` : ""}${supply ? `<div style="color:#8d8a80">${supply}</div>` : ""}`;
+      return { html: card(b.near ? escapeHtml(b.near) : "this block", body, b.isSource ? "click: use as source or ask" : "click to ask about this block"), style };
     },
   });
+
+  /** Which block a pick hit, in either city and either rendering (columns or stacked cubes). */
+  function blockAt(info: PickingInfo): BlockInfo | null {
+    const id = info.layer?.id ?? "";
+    if (info.index < 0 || !/^(src|tgt)-(cells|stack-\d)$/.test(id)) return null;
+    const p = propsRef.current, isSource = id.startsWith("src");
+    const cells = isSource ? p.srcCells : p.tgtCells, sim = isSource ? p.srcSim : p.tgtSim;
+    if (!cells) return null;
+    const i = info.index;
+    const lat = cells.lat[i], lon = cells.lon[i];
+    return { x: info.x, y: info.y, lat, lon, g: cells.g[i], city: cells.city, near: nearestHood(p.hoods, lat, lon) ?? "", isSource, index: i, match: sim ? sim[i] : null };
+  }
 
   // Column data (cheap typed-array work, memoised)
   const tgtCols = useMemo(() => {
@@ -113,8 +205,26 @@ export default function ExploreMap(props: ExploreMapProps) {
     return buildColumns(props.srcCells, vals, props.mode === "raw" ? "raw" : "twin", 650);
   }, [props.srcCells, props.srcSim, props.mode]);
   const oppCols = useMemo(() => (props.opportunity?.cells.length ? buildOppColumns(props.opportunity, 1500) : null), [props.opportunity]);
-  const colsRef = useRef({ tgtCols, srcCols, oppCols });
-  colsRef.current = { tgtCols, srcCols, oppCols };
+  const groupsKey = props.basketGroups.join("|");
+  const tgtStack = useMemo(() => (props.tgtCells && props.tgtSim && props.mode === "twin" ? buildStacks(props.tgtCells, props.tgtSim, 1100, props.basketGroups) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [props.tgtCells, props.tgtSim, props.mode, groupsKey]);
+  const srcStack = useMemo(() => (props.srcCells && props.srcSim && props.mode === "twin" ? buildStacks(props.srcCells, props.srcSim, 650, props.basketGroups) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [props.srcCells, props.srcSim, props.mode, groupsKey]);
+  const colsRef = useRef({ tgtCols, srcCols, oppCols, tgtStack, srcStack });
+  colsRef.current = { tgtCols, srcCols, oppCols, tgtStack, srcStack };
+
+  // Overture venue counts per cell for the hover card (≈150–300 KB per city, loaded once)
+  const supplyRef = useRef(new Map<string, { kinds: string[]; cells: Record<string, number[]> } | null>());
+  const supplyCities = [props.sourceCity?.id, props.targetCity?.id].filter(Boolean).join(",");
+  useEffect(() => {
+    for (const id of supplyCities.split(",").filter(Boolean)) {
+      if (supplyRef.current.has(id)) continue;
+      supplyRef.current.set(id, null);
+      fetch(`/data/supply/${id}.json`).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j) supplyRef.current.set(id, j); }).catch(() => {});
+    }
+  }, [supplyCities]);
 
   // opportunity result: fly to its city
   const oppKey = props.opportunity && props.opportunityCity ? `${props.opportunityCity.id}|${props.opportunity.cells.length}|${props.opportunity.cells[0]?.g}` : "";
@@ -167,6 +277,20 @@ export default function ExploreMap(props: ExploreMapProps) {
     if (reducedMotion()) map.jumpTo(o); else map.flyTo({ ...o, duration: 1600, essential: true });
   }, [ready, props.selectedTwin, mapRef]);
 
+  // fly to a spot the agent linked; drop a small label there
+  const focusMarker = useRef<maplibregl.Marker | null>(null);
+  useEffect(() => {
+    const map = mapRef.current, f = props.focus;
+    if (!ready || !map || !f) return;
+    const o = { center: [f.lon, f.lat] as [number, number], zoom: 13, pitch: 55, bearing: -14 };
+    if (reducedMotion()) map.jumpTo(o); else map.flyTo({ ...o, duration: 1800, essential: true });
+    focusMarker.current?.remove();
+    const el = document.createElement("div");
+    el.className = "pointer-events-none flex flex-col items-center";
+    el.innerHTML = `<div style="padding:2px 6px;background:#f0a03c;color:#0b0b0a;font:600 11px var(--font-geist-mono),monospace;white-space:nowrap">${escapeHtml((f.label ?? "here").toLowerCase())}</div><div style="width:1px;height:14px;background:#f0a03c"></div><div style="width:7px;height:7px;background:#f0a03c"></div>`;
+    focusMarker.current = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([f.lon, f.lat]).addTo(map);
+  }, [ready, props.focus, mapRef]);
+
   // markers (HTML, crisp labels; auto-hidden behind the globe)
   const twinKey = props.twins.map((t) => t.hood.id).join(",");
   useEffect(() => {
@@ -217,7 +341,7 @@ export default function ExploreMap(props: ExploreMapProps) {
       lastDraw = now;
       const a = anim.current;
       const p = propsRef.current;
-      const { tgtCols, srcCols, oppCols } = colsRef.current;
+      const { tgtCols, srcCols, oppCols, tgtStack, srcStack } = colsRef.current;
       // arc: draws during the first ~3.4 s of the flight
       if (p.targetCity && p.source && !reduce) {
         const e = (now - a.flightStart) / 1000;
@@ -237,7 +361,18 @@ export default function ExploreMap(props: ExploreMapProps) {
           autoHighlight: true, highlightColor: [230, 227, 218, 110],
         }));
       }
-      if (srcCols && p.mode !== "opportunity") {
+      const mat = { ambient: 0.6, diffuse: 0.55, shininess: 24, specularColor: [255, 230, 200] as [number, number, number] };
+      // band 2 (full height) first and narrowest; bands 1 and 0 progressively wider so they wrap it
+      const RADII = [318, 309, 300];
+      const pushStack = (id: string, st: StackData, opacity: number) => {
+        for (const j of [2, 1, 0]) layers.push(new ColumnLayer({
+          id: `${id}-${j}`, data: st.bands[j] as never, diskResolution: 4, angle: 45, radius: RADII[j], extruded: true, pickable: true,
+          elevationScale: 1, material: mat, opacity, autoHighlight: true, highlightColor: [230, 227, 218, 120],
+        }));
+      };
+      if (srcStack && p.mode === "twin") pushStack("src-stack", srcStack, p.targetCity ? 0.55 : 0.95);
+      if (tgtStack && p.mode === "twin") pushStack("tgt-stack", tgtStack, 0.08 + 0.92 * ease(a.reveal));
+      if (srcCols && p.mode === "raw") {
         layers.push(new ColumnLayer({
           id: "src-cells", data: srcCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
           elevationScale: 1, material: { ambient: 0.6, diffuse: 0.5, shininess: 20 }, opacity: p.targetCity ? 0.6 : 0.95,
@@ -245,7 +380,7 @@ export default function ExploreMap(props: ExploreMapProps) {
           updateTriggers: { getFillColor: [p.mode, srcCols.lo], getElevation: [p.mode, srcCols.lo] },
         }));
       }
-      if (tgtCols && p.mode !== "opportunity") {
+      if (tgtCols && p.mode === "raw") {
         layers.push(new ColumnLayer({
           id: "tgt-cells", data: tgtCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
           elevationScale: ease(a.reveal) , material: { ambient: 0.55, diffuse: 0.6, shininess: 40, specularColor: [255, 230, 200] }, opacity: 0.1 + 0.9 * ease(a.reveal),

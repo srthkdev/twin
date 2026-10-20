@@ -1,16 +1,18 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDataset } from "@/hooks/use-dataset";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { usePanel } from "@/hooks/use-panel";
 import { coreHoods, isLive, loadCells, loadCore, loadEvals } from "@/lib/data";
 import { cellSimilarities, neighbourhoodVector, rankHoods } from "@/lib/similarity";
 import { gradientCss } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import type { City, CoreFile, DataSet, Evals, Hood, OpportunityResult, PackedCells, TwinMatch } from "@/lib/types";
 import type { AgentAction } from "@/lib/agent/types";
-import type { Mode, MapTwin } from "@/components/map/explore-map";
+import type { BlockInfo, Mode, MapTwin } from "@/components/map/explore-map";
+import { MIX } from "@/components/map/mix";
 import { ModeToggle } from "./mode-toggle";
 import { SourcePanel, type SourcePin } from "./source-panel";
 import { TwinsPanel } from "./twins-panel";
@@ -41,6 +43,12 @@ export function ExploreClient() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [flying, setFlying] = useState(false);
   const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" || sp.get("q") ? "agent" : "twins");
+  const leftP = usePanel("left", 300, 220, 460, "left");
+  const rightP = usePanel("right", 400, 320, 680, "right");
+  const [ask, setAsk] = useState<BlockInfo | null>(null);
+  const [external, setExternal] = useState<{ text: string; t: number } | null>(null);
+  const [agentFocus, setAgentFocus] = useState<{ lat: number; lon: number; label: string } | null>(null);
+  const [focus, setFocus] = useState<{ lat: number; lon: number; label?: string; t: number } | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>(sp.get("q") || sp.get("tab") === "agent" ? "agent" : "from");
   const [opp, setOpp] = useState<OpportunityResult | null>(null);
   const [cores, setCores] = useState<Record<string, CoreFile>>({});
@@ -165,6 +173,16 @@ export function ExploreClient() {
     } else if (a.type === "select" || a.type === "showTwins") {
       setPin(null); setFromId(a.from); setToCity(a.to);
       if (a.twin) setTimeout(() => setSelected(a.twin!), 60);
+    } else if (a.type === "focus") {
+      setFocus({ lat: a.lat, lon: a.lon, label: a.label, t: Date.now() });
+    } else if (a.type === "focusHood") {
+      const h = ds.hoods.find((x) => x.id === a.hood);
+      if (h) { setFocus({ lat: h.lat, lon: h.lon, label: a.label ?? h.name, t: Date.now() }); return; }
+      const city = ds.cities.find((c) => a.hood.startsWith(c.id + "-"));
+      if (city) loadCore(city.id).then((core) => {
+        const lh = core?.hoods.find((x) => x.id === a.hood);
+        if (lh) setFocus({ lat: lh.lat, lon: lh.lon, label: a.label ?? lh.name, t: Date.now() });
+      }).catch(() => {});
     } else if (a.type === "flyTo") {
       const h = ds.hoods.find((x) => x.id === a.hood);
       if (!h) return;
@@ -194,14 +212,22 @@ export function ExploreClient() {
       to <span className="text-foreground">{sourceName.toLowerCase()}</span> light up.
     </div>
   );
-  const agentUI = <AgentPanel context={{ fromHood: pin ? null : fromId, toCity }} onAction={onAgentAction} className="h-full" initialInput={sp.get("q") ?? undefined} />;
+  const agentUI = <AgentPanel context={{ fromHood: pin ? null : fromId, toCity, focus: agentFocus }} onAction={onAgentAction} className="h-full" initialInput={sp.get("q") ?? undefined} external={external} />;
+  const askAgent = (b: BlockInfo, question: string) => {
+    const where = `${b.near ? `near ${b.near}` : "a block"}, ${ds.cities.find((c) => c.id === b.city)?.name ?? b.city}`;
+    setAgentFocus({ lat: b.lat, lon: b.lon, label: where });
+    setExternal({ text: `${question} — ${where}`, t: Date.now() });
+    setRight("agent"); setMobileTab("agent"); rightP.setCollapsed(false);
+    setAsk(null);
+  };
 
   const map = (
     <div className="relative h-full min-h-0 overflow-hidden">
       <ExploreMap
         source={sourcePoint} sourceCity={sourceCity} targetCity={targetCity} srcCells={srcCells} tgtCells={tgtCells}
         srcSim={srcSim} tgtSim={tgtSim} mode={mode} twins={mapTwins} selectedTwin={selected} basketLabels={ds.basket.map((b) => b.label)} opportunity={opp} opportunityCity={oppCity}
-        onPickSourceCell={onPickSourceCell} onSelectTwin={setSelected} onFlightState={setFlying}
+        onPickSourceCell={onPickSourceCell} onSelectTwin={setSelected} onFlightState={setFlying} focus={focus}
+        basketGroups={ds.basket.map((b) => b.group)} hoods={ds.hoods} sourceName={sourceName} onBlockClick={setAsk} quiet={!!ask}
       />
       <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3">
         <div className="pointer-events-auto"><ModeToggle mode={mode} onChange={setMode} hasOpportunity={!!opp} /></div>
@@ -212,11 +238,23 @@ export function ExploreClient() {
               : <span>{sourceCity?.name.toLowerCase()}{targetCity ? <> <span className="text-dim">→</span> {targetCity.name.toLowerCase()}</> : ""}</span>}
         </div>
       </div>
-      <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 border border-line bg-background/90 px-2 py-1 text-[10.5px] text-dim">
-        <span>{mode === "raw" ? "quiet" : mode === "opportunity" ? "saturated" : "unlike"}</span>
-        <span className="h-1.5 w-28" style={{ background: gradientCss(mode === "raw" ? "raw" : mode === "opportunity" ? "opp" : "twin") }} />
-        <span>{mode === "raw" ? "busy" : mode === "opportunity" ? "underserved" : `like ${sourceName.toLowerCase()}`}</span>
-      </div>
+      {ask && <AskBox block={ask} sourceName={sourceName} onClose={() => setAsk(null)} onAsk={(q) => askAgent(ask, q)}
+        onUseAsSource={ask.isSource ? () => { onPickSourceCell(ask.index); setAsk(null); } : undefined} />}
+      {mode === "twin" ? (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 border border-line bg-background/90 px-2.5 py-1.5 text-[10.5px] text-dim">
+          <div>height — how much like {sourceName.toLowerCase()}</div>
+          <div className="mt-1 flex items-center gap-3">
+            {MIX.map((m) => <span key={m.name} className="flex items-center gap-1"><span className="size-2" style={{ background: `rgb(${m.rgb.join(",")})` }} />{m.name}</span>)}
+            <span className="text-line-strong">what its taste is made of</span>
+          </div>
+        </div>
+      ) : (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 border border-line bg-background/90 px-2 py-1 text-[10.5px] text-dim">
+          <span>{mode === "raw" ? "quiet" : "saturated"}</span>
+          <span className="h-1.5 w-28" style={{ background: gradientCss(mode === "raw" ? "raw" : "opp") }} />
+          <span>{mode === "raw" ? "busy" : "underserved"}</span>
+        </div>
+      )}
     </div>
   );
 
@@ -231,20 +269,35 @@ export function ExploreClient() {
   return (
     <main className="fixed inset-x-0 bottom-0 top-11 bg-background">
       {desktop ? (
-        <div className="grid h-full grid-cols-[300px_minmax(0,1fr)_380px]">
-          <aside className="min-h-0 overflow-hidden border-r border-line" aria-label="Source neighbourhood">{sourceUI}</aside>
-          {map}
-          <aside className="flex min-h-0 flex-col border-l border-line" aria-label="Twins and agent">
-            <div role="tablist" className="flex h-10 shrink-0 items-stretch border-b border-line">
-              {tabBtn("twins", "twins", right === "twins", () => setRight("twins"))}
-              {tabBtn("agent", "agent", right === "agent", () => setRight("agent"))}
-              <button onClick={() => setCmdOpen(true)} className="ml-auto px-4 text-[11.5px] text-dim transition-colors hover:text-foreground" aria-label="Open search (Command K)">
-                search <span className="ml-1 text-line-strong">⌘K</span>
-              </button>
-            </div>
-            <div className={cn("min-h-0 flex-1 overflow-y-auto", right !== "twins" && "hidden")}>{twinsUI}</div>
-            <div className={cn("min-h-0 flex-1", right !== "agent" && "hidden")}>{agentUI}</div>
-          </aside>
+        <div className="flex h-full">
+          {leftP.collapsed ? (
+            <Rail label="from" side="left" onOpen={() => leftP.setCollapsed(false)} />
+          ) : (
+            <aside className="relative flex min-h-0 shrink-0 flex-col border-r border-line" style={{ width: leftP.width }} aria-label="Source neighbourhood">
+              <button onClick={() => leftP.setCollapsed(true)} aria-label="Collapse panel" title="collapse"
+                className="absolute right-1.5 top-1.5 z-10 grid size-6 place-items-center text-dim transition-colors hover:text-foreground">‹</button>
+              <div className="min-h-0 flex-1 overflow-hidden">{sourceUI}</div>
+              <Handle side="right" {...leftP.handle} />
+            </aside>
+          )}
+          <div className="relative min-w-0 flex-1">{map}</div>
+          {rightP.collapsed ? (
+            <Rail label={right === "agent" ? "agent" : "twins"} side="right" onOpen={() => rightP.setCollapsed(false)} />
+          ) : (
+            <aside className="relative flex min-h-0 shrink-0 flex-col border-l border-line" style={{ width: rightP.width }} aria-label="Twins and agent">
+              <Handle side="left" {...rightP.handle} />
+              <div role="tablist" className="flex h-10 shrink-0 items-stretch border-b border-line">
+                {tabBtn("twins", "twins", right === "twins", () => setRight("twins"))}
+                {tabBtn("agent", "agent", right === "agent", () => setRight("agent"))}
+                <button onClick={() => setCmdOpen(true)} className="ml-auto px-3 text-[11.5px] text-dim transition-colors hover:text-foreground" aria-label="Open search (Command K)">
+                  search <span className="ml-1 text-line-strong">⌘K</span>
+                </button>
+                <button onClick={() => rightP.setCollapsed(true)} aria-label="Collapse panel" title="collapse" className="px-3 text-dim transition-colors hover:text-foreground">›</button>
+              </div>
+              <div className={cn("min-h-0 flex-1 overflow-y-auto", right !== "twins" && "hidden")}>{twinsUI}</div>
+              <div className={cn("min-h-0 flex-1", right !== "agent" && "hidden")}>{agentUI}</div>
+            </aside>
+          )}
         </div>
       ) : (
         <div className="flex h-full flex-col">
@@ -261,5 +314,57 @@ export function ExploreClient() {
       )}
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} ds={ds} sourceCity={sourceCityId} onPickHood={pickHood} onPickCity={pickCity} />
     </main>
+  );
+}
+
+/** Drag strip on a panel edge; widens on hover so it's easy to grab. */
+function Handle({ side, ...h }: { side: "left" | "right" } & ReturnType<typeof usePanel>["handle"]) {
+  return (
+    <div {...h} role="separator" aria-orientation="vertical" aria-label="Resize panel"
+      className={cn("group absolute inset-y-0 z-20 w-2 cursor-col-resize touch-none", side === "right" ? "-right-1" : "-left-1")}>
+      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-primary group-active:bg-primary" />
+    </div>
+  );
+}
+
+/** A collapsed panel: a thin rail with a vertical label that reopens it. */
+function Rail({ label, side, onOpen }: { label: string; side: "left" | "right"; onOpen: () => void }) {
+  return (
+    <button onClick={onOpen} aria-label={`Open ${label} panel`}
+      className={cn("flex w-8 shrink-0 flex-col items-center gap-3 bg-background py-3 text-[11px] text-dim transition-colors hover:text-foreground", side === "left" ? "border-r border-line" : "border-l border-line")}>
+      <span>{side === "left" ? "›" : "‹"}</span>
+      <span className="[writing-mode:vertical-rl]">{label}</span>
+    </button>
+  );
+}
+
+/** ⌘K-style box anchored on a clicked block: ask the agent about exactly this spot. */
+function AskBox({ block, sourceName, onClose, onAsk, onUseAsSource }: {
+  block: BlockInfo; sourceName: string; onClose: () => void; onAsk: (q: string) => void; onUseAsSource?: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  const quick = ["What's the vibe here?", "Where should I go here?", "What would do well here?"];
+  return (
+    <div className="absolute z-30 w-[290px] border border-line-strong bg-popover shadow-[0_8px_30px_rgba(0,0,0,.5)]"
+      style={{ left: Math.max(8, Math.min(block.x + 14, 9999)), top: Math.max(8, block.y - 20) }}>
+      <div className="flex items-center justify-between border-b border-line px-2.5 py-1.5 text-[10.5px] uppercase tracking-[0.12em] text-dim">
+        <span className="truncate">{block.near || "this block"}{block.match != null && block.match >= 0.15 && <span className="ml-2 normal-case tracking-normal text-primary">{Math.round(block.match * 100)}% like {sourceName.toLowerCase()}</span>}</span>
+        <button onClick={onClose} aria-label="Close" className="ml-2 text-dim hover:text-foreground">esc</button>
+      </div>
+      <form onSubmit={(e) => { e.preventDefault(); if (q.trim()) onAsk(q.trim()); }} className="flex items-center gap-2 border-b border-line px-2.5 py-2">
+        <span className="text-primary">›</span>
+        <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} placeholder="ask about this block…" className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-dim" />
+      </form>
+      <div className="py-1">
+        {quick.map((x) => (
+          <button key={x} onClick={() => onAsk(x)} className="block w-full px-2.5 py-1 text-left text-[11.5px] text-muted-foreground transition-colors hover:bg-raised hover:text-foreground">{x}</button>
+        ))}
+        {onUseAsSource && (
+          <button onClick={onUseAsSource} className="block w-full border-t border-line px-2.5 py-1.5 text-left text-[11.5px] text-primary transition-colors hover:bg-raised">use this block as the source →</button>
+        )}
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 export interface ChatMessage { role: "user" | "assistant"; content: string }
-export interface AgentContext { fromHood?: string | null; toCity?: string | null }
+export interface AgentContext { fromHood?: string | null; toCity?: string | null; focus?: { lat: number; lon: number; label: string } | null }
 
 /** UI actions emitted by tools; the explore page applies them to the map. */
 export type AgentAction =
@@ -9,7 +9,9 @@ export type AgentAction =
   | { type: "highlightCells"; city: string; item: number; label: string }
   | { type: "addCity"; city: AgentCity }
   | { type: "opportunity"; city: string; kind: string; taste: string; cells: OpportunityCell[] }
-  | { type: "download"; filename: string; markdown: string };
+  | { type: "download"; filename: string; markdown: string }
+  | { type: "focus"; lat: number; lon: number; label?: string }
+  | { type: "focusHood"; hood: string; label?: string };
 
 /** City record as served by /api/cities (static + live). Mirrors CONTRACT.md City plus source/dims/coverage. */
 export interface AgentCity {

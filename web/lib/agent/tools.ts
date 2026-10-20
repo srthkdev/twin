@@ -359,7 +359,7 @@ const pin_twins = defineTool({
 
 // ───────────────────────────── Live Qloo tools ─────────────────────────────
 interface QEntity {
-  name: string; entity_id: string; subtype?: string; tags?: { name: string }[];
+  name: string; entity_id: string; subtype?: string; tags?: { name: string }[]; location?: { lat?: number; lon?: number };
   properties?: { address?: string; description?: string; short_description?: string; business_rating?: number; price_level?: number; hours?: unknown; geocode?: { neighborhood?: string } };
   query?: { affinity?: number; distance?: number };
 }
@@ -380,6 +380,8 @@ function slim(e: QEntity) {
   const p = e.properties ?? {};
   return {
     name: e.name, kind: e.subtype?.replace("urn:entity:", ""),
+    lat: e.location?.lat != null ? Math.round(e.location.lat * 1e5) / 1e5 : undefined,
+    lon: e.location?.lon != null ? Math.round(e.location.lon * 1e5) / 1e5 : undefined,
     address: p.address ?? undefined, neighbourhood: p.geocode?.neighborhood ?? undefined,
     distance_m: e.query?.distance != null ? Math.round(e.query.distance) : undefined,
     qloo_affinity: e.query?.affinity != null ? r2(e.query.affinity) : undefined,
