@@ -1,62 +1,44 @@
-# Twin web app
+# Twin — web app
 
-Next.js 15 (App Router) + Tailwind v4 + shadcn/ui, MapLibre GL v5 (globe) + deck.gl 9 (interleaved), framer-motion, Recharts.
+Next.js 15 (App Router) · Tailwind v4 · shadcn/ui · MapLibre GL (globe) + deck.gl · Vercel AI SDK · Vercel Blob.
 
 ## Run
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:3000
-pnpm build && pnpm start
-pnpm lint
+pnpm dev            # http://localhost:3000
+pnpm build && pnpm lint
 ```
+
+Keys go in `web/.env.local` (gitignored): `QLOO_API_KEY`, `QLOO_BASE_URL`, `OPENROUTER_API_KEY`, and optionally
+`TAVILY_API_KEY` (web search) and `BLOB_READ_WRITE_TOKEN` (shared cache; without it the cache is `web/.cache/twin`).
+
+## Pages
+
+| Route | What |
+|---|---|
+| `/` | Landing: globe of twin arcs, query box, the bias, method, evidence |
+| `/explore` | Map + source panel + right panel (`twins` / `agent` tabs). `?from=<hoodId>&to=<cityId>&tab=agent` |
+| `/evals` | Bias, census check, published-twin benchmark, sensitivity, sanity checks |
+| `/method` | The correction, the 3D layer diagram, the agent, limits |
+| `/blog` | The full write-up (`content/writeup.md`, also the Devpost text) |
 
 ## Data
 
-The app fetches static JSON at runtime (never bundled). The loader (`lib/data.ts`) reads `/data/*` (written by the
-pipeline into `public/data/`) and falls back to `/data-mock/*` when `/data/meta.json` is missing. A "DEMO DATA" badge
-shows in the nav when mock data is in use.
-
-Regenerate mock data (writes only to `public/data-mock/`):
-
-```bash
-node scripts/mock-data.mjs
-```
-
-## Layout
-
-- `/` landing (rotating globe + animated arcs, command-style finder, bug / method / evals sections)
-- `/explore?from=<hoodId>&to=<cityId>` main app: fly-to, 3D column layer, Raw/Twin toggle, pins, swap, ⌘K, agent drawer
-- `/evals` eval dashboard, `/method` explainer
-- `/api/agent` the Twin agent (see "Agent" below). `lib/agent/respond.ts` is the offline rule-based fallback.
-- `lib/similarity.ts` cosine + ranking; `lib/types.ts` mirrors CONTRACT.md.
+The app reads the pipeline's output in `public/data/` (`basket`, `cities`, `hoods`, `twins`, `evals`, `cells/*`,
+`core/*` for the 40-trait core basket, `supply/*` for Overture venue counts). Live cities added by the agent are
+stored in the cache under `cities/<id>/` and served by `GET /api/cities` and `GET /api/cities/<id>/core`.
 
 ## Agent
 
-Honest framing: an LLM alone already knows famous twin pairs; it cannot see fine-grained, measured taste. The agent is
-LLM reasoning plus Qloo as live evidence, and it must ground every claim in a tool result (`lib/agent/prompt.ts`).
-
-Architecture:
-
-- `lib/agent/tools.ts` is the single source of truth: zod-validated tools, run server-side.
-  Data tools (static JSON in `public/data`): `list_cities`, `search_hoods`, `find_twins`, `explain_match`,
-  `taste_profile`, `where_in_city` (falls back to a live Qloo heatmap for items outside the basket), `pin_twins`.
-  Live Qloo tools (`lib/agent/qloo.ts`, `X-Api-Key`, timeouts, memory + disk cache): `local_scene`, `audience`, `cross_domain`.
-  Tools also return UI actions (`flyTo`, `showTwins`, `highlightCells`) that `AgentPanel` hands to `onAction`.
-- `POST /api/agent` streams SSE: `text`, `tool_call`, `tool_result` (with `uiActions`), `error`, `done`.
-  `GET /api/agent/health` reports whether the Codex CLI runtime is available.
-- Runtimes (`provider` in the request body):
-  - `codex` (default locally when `codex` is on PATH and not on Vercel): spawns `codex exec --json -s read-only` in a temp dir
-    with the Twin MCP server attached through `-c mcp_servers.twin.*` overrides (your `~/.codex/config.toml` is untouched).
-    Killed on client disconnect or after 4 minutes.
-  - `anthropic` (BYOK, `@anthropic-ai/sdk`, default `claude-sonnet-5-5`) and `openai` (BYOK, `openai` Responses API, default `gpt-5.5`):
-    manual tool loop, max 8 rounds. The key is sent in the `x-agent-key` header per request; it is never stored or logged
-    server-side. The UI keeps it in memory unless "remember" is ticked (then localStorage).
-  - `offline`: the rule-based agent.
-- UI: `components/agent/agent-panel.tsx` exports `AgentPanel({ context, onAction, className })`, which fills its parent
-  (settings, streamed chat, collapsible tool trace, mic, read-aloud).
-
-Setup: put `QLOO_API_KEY` and `QLOO_BASE_URL` in `web/.env.local` (gitignored). Without them the data tools still work.
+- `app/api/agent/route.ts` — AI SDK `streamText` with tools over OpenRouter (free models with native fallback),
+  streamed as a UI message stream. Tool progress (`data-progress`) and map actions (`data-action`) are transient data
+  parts. The server's OpenRouter key is rate-limited per visitor; visitors can send their own in `x-agent-key`.
+- `lib/agent/tools.ts`, `tools-v2.ts` — the 23 tools (zod schemas); `lib/agent/prompt.ts` — the playbook prompt.
+  Reference: [`../docs/AGENT.md`](../docs/AGENT.md), regenerated with `pnpm exec tsx scripts/gen-agent-doc.mts`.
+- `lib/agent/qloo.ts`, `city-live.ts`, `supply.ts`, `net.ts`, `web.ts`, `osm.ts` — sources; `store.ts` — the cache.
+- `components/agent/agent-panel.tsx` — `useChat` UI: streaming markdown, reasoning, tool timeline with sources and
+  timing, brief downloads, mic and read-aloud.
 
 ### Use Twin inside Claude Code / Codex / any MCP client
 
@@ -83,4 +65,4 @@ Generic MCP client JSON:
 { "mcpServers": { "twin": { "command": "/ABS/PATH/web/node_modules/.bin/tsx", "args": ["/ABS/PATH/web/mcp/twin-mcp.mts"] } } }
 ```
 
-The server reads `web/.env.local` itself for the Qloo key, so live tools (`local_scene`, `audience`, `cross_domain`) work out of the box.
+The server reads `web/.env.local` itself for the Qloo key, so the live Qloo tools work out of the box.

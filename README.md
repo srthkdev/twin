@@ -24,8 +24,10 @@
 | **Explore** | Pick a neighbourhood and every ~1 km block of its city lights up. Pick another city and the camera flies there; blocks rise by similarity and the five closest neighbourhoods are ranked, with the traits they share and where they differ. |
 | **Drop a pin** | Click any block to use that exact cell as the source — not just a named neighbourhood. |
 | **Raw vs corrected** | One toggle shows the same map on raw Qloo scores, where everything busy looks alike. |
-| **Agent** | A chat tab that reasons with an LLM (local Codex CLI, or your own Anthropic/OpenAI key) and calls Qloo live for venues, audiences and brands near the twin. |
-| **MCP server** | The same ten tools, usable from Claude Code, Codex or any MCP client. |
+| **Any city** | Ask about a city we didn't precompute and the agent fingerprints it live from Qloo (≈40 heatmaps), then caches it. |
+| **Agent** | 23 tools on free open models (MiniMax M3.1 Flash via OpenRouter), streamed as a timeline: each step shows its source, live progress and timing. |
+| **Opportunity map** | Qloo demand for a taste vs how many such venues physically exist (Overture Maps), cell by cell. |
+| **MCP server** | The same tools, usable from Claude Code, Codex or any MCP client. |
 
 ## How it works
 
@@ -60,14 +62,19 @@ So the product's claim is the honest one: the LLM reasons and knows the famous a
 
 <img src="web/public/media/agent.jpg" alt="the agent answering 'I love Silver Lake and I'm moving to Berlin' with Kreuzberg SO36 and venues returned live by Qloo" width="100%">
 
-| Tool | Source |
-|---|---|
-| `list_cities`, `search_hoods`, `find_twins`, `explain_match`, `taste_profile`, `where_in_city`, `pin_twins` | precomputed fingerprints |
-| `local_scene` — venues near a neighbourhood, steered by the source's taste | Qloo, live |
-| `audience` — age and gender skew of an artist or brand | Qloo, live |
-| `cross_domain` — brands that fans of an artist over-index on | Qloo, live |
+Qloo makes every taste decision; the other sources only do jobs Qloo can't:
 
-Runtimes: **Codex CLI** (default when `codex` is on your PATH), **Anthropic** or **OpenAI** with a key you paste in the panel (sent per request, never stored server-side), or an offline rule-based fallback. MCP: `cd web && pnpm mcp` — config snippets in [`web/README.md`](web/README.md).
+| Question | Source | Tools |
+|---|---|---|
+| Twins, vibe, venue picks (hours, price), audiences, brands, momentum, demand | **Qloo** + Twin fingerprints | `find_twins`, `twins_anywhere`, `scene`, `local_scene`, `audience`, `cross_domain`, `compare_taste`, `trend`, `opportunity`, `tour`, `add_city` … |
+| How many venues of a kind exist | Overture Maps Places (precomputed) | `venue_supply`, `opportunity` |
+| Coordinates, new-city neighbourhoods | OpenStreetMap | `geocode`, `add_city` |
+| Background facts | Wikipedia / Wikidata | `wiki` |
+| Current events, news, closures | Web (Tavily) | `web_search`, `read_page` |
+
+Full tool reference and the agent's playbook prompt: [`docs/AGENT.md`](docs/AGENT.md) (generated from the code).
+
+**Try:** *find the Silver Lake of Berlin* · *I love Silver Lake, I'm moving to Neukölln — where do I go?* · *where in Berlin should I open a natural wine bar?* · *plan a 3-city European tour for Peso Pluma* · *what's the vibe of Shimokitazawa, Tokyo?* · *find the Shoreditch of Lisbon*
 
 ## Run it
 
@@ -77,11 +84,14 @@ pnpm install
 pnpm dev                       # http://localhost:3000
 ```
 
-The app ships with precomputed data in `web/public/data`. For the live agent tools, add your hackathon key to `web/.env.local`:
+The app ships with precomputed data in `web/public/data`. Put the keys in `web/.env.local`:
 
 ```
-QLOO_API_KEY=...
+QLOO_API_KEY=...                      # Qloo hackathon key
 QLOO_BASE_URL=https://hackathon.api.qloo.com
+OPENROUTER_API_KEY=...                # free models; visitors can also bring their own
+TAVILY_API_KEY=...                    # optional: web search
+BLOB_READ_WRITE_TOKEN=...             # optional: shared cache (Vercel Blob); disk cache otherwise
 ```
 
 Rebuild the data (cached, so re-runs are free): put the same two variables in `.env` at the repo root, then `cd pipeline && python3 run_all.py`.
@@ -89,8 +99,8 @@ Rebuild the data (cached, so re-runs are free): put the same two variables in `.
 ## Layout
 
 ```
-pipeline/        Python, stdlib only — basket, fetch, correction, twins, evals, census check
-web/             Next.js — globe, explore, evals, method, blog, agent, MCP server
+pipeline/        Python — basket, fetch, correction, twins, evals, census check, Overture venue supply (DuckDB)
+web/             Next.js — globe, explore, evals, method, blog; AI SDK agent; MCP server
 web/content/     the write-up (rendered at /blog)
 probe/           the first experiments that found the popularity bias
 ```
