@@ -56,32 +56,23 @@ function cellMix(cells: PackedCells, i: number, groups: string[], counts: number
   return tot > 0 ? [m[0] / tot, m[1] / tot, m[2] / tot] : [1 / 3, 1 / 3, 1 / 3];
 }
 
-/**
- * A block as three bands: drawn as three columns on the same footprint with cumulative heights (top band first, widest
- * last), so the lower bands wrap the taller columns and read as stacked colour.
- */
-interface StackData { bands: ColumnData[]; mix: Float32Array; t: Float32Array; lo: number }
+/** One block per cell: height = similarity to the source, colour = the cell's dominant taste (sound / table / scene). */
+interface StackData { cols: ColumnData; mix: Float32Array; t: Float32Array; lo: number }
 function buildStacks(cells: PackedCells, vals: Float32Array, maxElev: number, groups: string[]): StackData {
   const { t, lo } = normalizeRobust(vals);
   const n = cells.n, counts = [0, 0, 0];
   for (let k = 0; k < cells.dim; k++) counts[mixOf(groups[k] ?? "")]++;
-  const mix = new Float32Array(n * 3), pos = new Float64Array(n * 2);
-  const elev = [new Float32Array(n), new Float32Array(n), new Float32Array(n)], fill = [0, 1, 2].map(() => new Uint8ClampedArray(n * 4));
+  const mix = new Float32Array(n * 3), pos = new Float64Array(n * 2), elev = new Float32Array(n), fill = new Uint8ClampedArray(n * 4);
   for (let i = 0; i < n; i++) {
     pos[i * 2] = cells.lon[i]; pos[i * 2 + 1] = cells.lat[i];
-    const H = 25 + Math.pow(t[i], 2.2) * maxElev, m = cellMix(cells, i, groups, counts);
-    const shade = 0.34 + 0.66 * t[i], alpha = Math.round(90 + 165 * Math.min(1, t[i] * 1.2));
-    let cum = 0;
-    for (let j = 0; j < 3; j++) {
-      mix[i * 3 + j] = m[j];
-      cum += m[j];
-      elev[j][i] = Math.max(4, H * cum); // band j spans the heights of bands 0..j
-      const [r, g, b] = MIX[j].rgb;
-      fill[j].set([r * shade, g * shade, b * shade, alpha], i * 4);
-    }
+    const m = cellMix(cells, i, groups, counts);
+    mix.set(m, i * 3);
+    const dom = m[0] >= m[1] && m[0] >= m[2] ? 0 : m[1] >= m[2] ? 1 : 2;
+    const [r, g, b] = MIX[dom].rgb, shade = 0.3 + 0.7 * t[i];
+    fill.set([r * shade, g * shade, b * shade, Math.round(90 + 165 * Math.min(1, t[i] * 1.2))], i * 4);
+    elev[i] = 25 + Math.pow(t[i], 2.2) * maxElev;
   }
-  const bands = [0, 1, 2].map((j) => ({ length: n, attributes: { getPosition: { value: pos, size: 2 as const }, getElevation: { value: elev[j], size: 1 as const }, getFillColor: { value: fill[j], size: 4 as const } }, t }));
-  return { bands, mix, t, lo };
+  return { cols: { length: n, attributes: { getPosition: { value: pos, size: 2 }, getElevation: { value: elev, size: 1 }, getFillColor: { value: fill, size: 4 } }, t }, mix, t, lo };
 }
 
 interface ColumnData {
@@ -184,7 +175,7 @@ export default function ExploreMap(props: ExploreMapProps) {
   /** Which block a pick hit, in either city and either rendering (columns or stacked cubes). */
   function blockAt(info: PickingInfo): BlockInfo | null {
     const id = info.layer?.id ?? "";
-    if (info.index < 0 || !/^(src|tgt)-(cells|stack-\d)$/.test(id)) return null;
+    if (info.index < 0 || !/^(src|tgt)-(cells|stack)$/.test(id)) return null;
     const p = propsRef.current, isSource = id.startsWith("src");
     const cells = isSource ? p.srcCells : p.tgtCells, sim = isSource ? p.srcSim : p.tgtSim;
     if (!cells) return null;
@@ -249,6 +240,7 @@ export default function ExploreMap(props: ExploreMapProps) {
       if (a.lastTarget === p.targetCity.id + sourceKey) return;
       a.lastTarget = p.targetCity.id + sourceKey;
       a.arc = 0; a.reveal = 0; a.flightStart = performance.now(); a.revealStart = 0; a.flying = true;
+      kick.current();
       p.onFlightState?.(true);
       const done = () => { a.flying = false; p.onFlightState?.(false); };
       if (reduce) {
@@ -329,76 +321,69 @@ export default function ExploreMap(props: ExploreMapProps) {
     });
   }, [props.selectedTwin, twinKey, ready]);
 
-  // render loop
+  // Layers are rebuilt only when inputs change, plus a short animation burst during a flight (arc grows, blocks rise).
+  // Between those, deck.gl has nothing to redraw — the map stays idle unless the camera moves.
+  const draw = useRef<(now: number) => boolean>(() => false);
+  draw.current = (now: number) => {
+    const overlay = overlayRef.current;
+    if (!overlay) return false;
+    const a = anim.current, p = propsRef.current, reduce = reducedMotion();
+    const { tgtCols, srcCols, oppCols, tgtStack, srcStack } = colsRef.current;
+    let animating = false;
+    if (p.targetCity && p.source && !reduce && a.flightStart) {
+      const e = (now - a.flightStart) / 1000;
+      a.arc = Math.min(1, Math.max(0, e / 3.4));
+      if (e > 3.6) { if (!a.revealStart) a.revealStart = now; a.reveal = Math.min(1, (now - a.revealStart) / 1400); }
+      animating = a.arc < 1 || a.reveal < 1;
+    } else if (!p.targetCity) { a.arc = 0; a.reveal = 0; } else if (reduce) { a.arc = 1; a.reveal = 1; }
+    const ease = (x: number) => 1 - Math.pow(1 - x, 3);
+    const top = p.twins[0];
+    // only the city in view: the target once one is chosen, otherwise the source
+    const showSrc = !p.targetCity || a.reveal < 1;
+    const layers = [];
+    const mat = { ambient: 0.6, diffuse: 0.55, shininess: 24, specularColor: [255, 230, 200] as [number, number, number] };
+    if (p.mode === "opportunity" && oppCols) {
+      layers.push(new ColumnLayer({
+        id: "opp-cells", data: oppCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
+        material: mat, opacity: 0.95, autoHighlight: true, highlightColor: [230, 227, 218, 110],
+      }));
+    }
+    const pushStack = (id: string, st: StackData, opacity: number, rise = 1) => layers.push(new ColumnLayer({
+      id, data: st.cols as never, diskResolution: 4, angle: 45, radius: 320, extruded: true, pickable: true,
+      elevationScale: rise, material: mat, opacity, autoHighlight: true, highlightColor: [230, 227, 218, 120],
+    }));
+    if (p.mode === "twin") {
+      if (srcStack && showSrc) pushStack("src-stack", srcStack, p.targetCity ? 0.55 : 0.95);
+      if (tgtStack && p.targetCity) pushStack("tgt-stack", tgtStack, 0.08 + 0.92 * ease(a.reveal), 0.05 + 0.95 * ease(a.reveal));
+    }
+    if (p.mode === "raw") {
+      if (srcCols && showSrc) layers.push(new ColumnLayer({
+        id: "src-cells", data: srcCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
+        material: mat, opacity: p.targetCity ? 0.6 : 0.95, autoHighlight: true, highlightColor: [230, 227, 218, 110],
+      }));
+      if (tgtCols && p.targetCity) layers.push(new ColumnLayer({
+        id: "tgt-cells", data: tgtCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
+        elevationScale: ease(a.reveal), material: mat, opacity: 0.1 + 0.9 * ease(a.reveal), autoHighlight: true, highlightColor: [230, 227, 218, 110],
+      }));
+    }
+    if (p.source && top && p.targetCity && a.arc > 0 && p.mode !== "opportunity") {
+      const segs = arcSegments([p.source.lon, p.source.lat], [top.hood.lon, top.hood.lat], a.arc, 48, 255, 0.14);
+      layers.push(new PathLayer<ArcSeg>({ id: "arc", data: segs, getPath: (d) => d.path, getColor: (d) => d.color, widthUnits: "pixels", getWidth: 2.5, capRounded: true, jointRounded: true }));
+    }
+    try { overlay.setProps({ layers }); } catch { /* a bad layer shouldn't break the map */ }
+    return animating;
+  };
+  const rafRef = useRef(0);
+  const kick = useRef(() => {});
+  kick.current = () => {
+    cancelAnimationFrame(rafRef.current);
+    const loop = (now: number) => { if (draw.current(now)) rafRef.current = requestAnimationFrame(loop); };
+    rafRef.current = requestAnimationFrame(loop);
+  };
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
   useEffect(() => {
-    if (!ready) return;
-    const overlay = overlayRef.current!;
-    const reduce = reducedMotion();
-    let raf = 0, lastDraw = 0;
-    const frame = (now: number) => {
-      raf = requestAnimationFrame(frame);
-      if (document.hidden || now - lastDraw < 33) return;
-      lastDraw = now;
-      const a = anim.current;
-      const p = propsRef.current;
-      const { tgtCols, srcCols, oppCols, tgtStack, srcStack } = colsRef.current;
-      // arc: draws during the first ~3.4 s of the flight
-      if (p.targetCity && p.source && !reduce) {
-        const e = (now - a.flightStart) / 1000;
-        a.arc = Math.min(1, Math.max(0, e / 3.4));
-        if (a.reveal < 1 && e > 3.6) {
-          if (!a.revealStart) a.revealStart = now;
-          a.reveal = Math.min(1, (now - a.revealStart) / 1400);
-        }
-      } else if (!p.targetCity) { a.arc = 0; a.reveal = 0; }
-      const ease = (x: number) => 1 - Math.pow(1 - x, 3);
-      const top = p.twins[0];
-      const layers = [];
-      if (p.mode === "opportunity" && oppCols) {
-        layers.push(new ColumnLayer({
-          id: "opp-cells", data: oppCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
-          elevationScale: 1, material: { ambient: 0.55, diffuse: 0.6, shininess: 40, specularColor: [255, 230, 200] }, opacity: 0.95,
-          autoHighlight: true, highlightColor: [230, 227, 218, 110],
-        }));
-      }
-      const mat = { ambient: 0.6, diffuse: 0.55, shininess: 24, specularColor: [255, 230, 200] as [number, number, number] };
-      // band 2 (full height) first and narrowest; bands 1 and 0 progressively wider so they wrap it
-      const RADII = [318, 309, 300];
-      const pushStack = (id: string, st: StackData, opacity: number) => {
-        for (const j of [2, 1, 0]) layers.push(new ColumnLayer({
-          id: `${id}-${j}`, data: st.bands[j] as never, diskResolution: 4, angle: 45, radius: RADII[j], extruded: true, pickable: true,
-          elevationScale: 1, material: mat, opacity, autoHighlight: true, highlightColor: [230, 227, 218, 120],
-        }));
-      };
-      if (srcStack && p.mode === "twin") pushStack("src-stack", srcStack, p.targetCity ? 0.55 : 0.95);
-      if (tgtStack && p.mode === "twin") pushStack("tgt-stack", tgtStack, 0.08 + 0.92 * ease(a.reveal));
-      if (srcCols && p.mode === "raw") {
-        layers.push(new ColumnLayer({
-          id: "src-cells", data: srcCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
-          elevationScale: 1, material: { ambient: 0.6, diffuse: 0.5, shininess: 20 }, opacity: p.targetCity ? 0.6 : 0.95,
-          autoHighlight: true, highlightColor: [230, 227, 218, 110],
-          updateTriggers: { getFillColor: [p.mode, srcCols.lo], getElevation: [p.mode, srcCols.lo] },
-        }));
-      }
-      if (tgtCols && p.mode === "raw") {
-        layers.push(new ColumnLayer({
-          id: "tgt-cells", data: tgtCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
-          elevationScale: ease(a.reveal) , material: { ambient: 0.55, diffuse: 0.6, shininess: 40, specularColor: [255, 230, 200] }, opacity: 0.1 + 0.9 * ease(a.reveal),
-          autoHighlight: true, highlightColor: [230, 227, 218, 110],
-          updateTriggers: { getFillColor: [p.mode, tgtCols.lo], getElevation: [p.mode, tgtCols.lo] },
-        }));
-      }
-      if (p.source && top && p.targetCity && a.arc > 0 && p.mode !== "opportunity") {
-        const from: [number, number] = [p.source.lon, p.source.lat];
-        const to: [number, number] = [top.hood.lon, top.hood.lat];
-        const segs = arcSegments(from, to, a.arc, 48, 255, 0.14);
-        layers.push(new PathLayer<ArcSeg>({ id: "arc", data: segs, getPath: (d) => d.path, getColor: (d) => d.color, widthUnits: "pixels", getWidth: 2.5, capRounded: true, jointRounded: true }));
-      }
-      try { overlay.setProps({ layers }); } catch { /* layer error shouldn't kill the loop */ }
-    };
-    raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
-  }, [ready, overlayRef]);
+    if (ready) kick.current();
+  }, [ready, tgtCols, srcCols, oppCols, tgtStack, srcStack, props.mode, props.targetCity, props.source, props.twins]);
 
   return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} className="bg-background" />;
 }

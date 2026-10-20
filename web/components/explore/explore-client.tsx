@@ -242,10 +242,9 @@ export function ExploreClient() {
         onUseAsSource={ask.isSource ? () => { onPickSourceCell(ask.index); setAsk(null); } : undefined} />}
       {mode === "twin" ? (
         <div className="pointer-events-none absolute bottom-3 left-3 z-10 border border-line bg-background/90 px-2.5 py-1.5 text-[10.5px] text-dim">
-          <div>height — how much like {sourceName.toLowerCase()}</div>
+          <div>height — how much like {sourceName.toLowerCase()} · colour — what the block is mostly about</div>
           <div className="mt-1 flex items-center gap-3">
             {MIX.map((m) => <span key={m.name} className="flex items-center gap-1"><span className="size-2" style={{ background: `rgb(${m.rgb.join(",")})` }} />{m.name}</span>)}
-            <span className="text-line-strong">what its taste is made of</span>
           </div>
         </div>
       ) : (

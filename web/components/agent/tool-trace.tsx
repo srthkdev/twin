@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { stepLabel } from "./result-cards";
 
@@ -29,9 +29,28 @@ export function Elapsed({ from, to }: { from: number; to?: number }) {
   return <span className="num">{(((to ?? now) - from) / 1000).toFixed(1)}s</span>;
 }
 
-/** Consecutive tool calls as a compact checklist; each row expands to its raw arguments and result line. */
-export function ToolTrace({ steps }: { steps: ToolStep[] }) {
+/** Consecutive tool calls as a compact checklist. Once the answer is done they fold into one line. */
+export const ToolTrace = memo(function ToolTrace({ steps, folded }: { steps: ToolStep[]; folded?: boolean }) {
   if (!steps.length) return null;
+  if (folded) {
+    const secs = Math.max(...steps.map((x) => (x.endedAt ?? x.startedAt) - x.startedAt)) / 1000;
+    const srcs = [...new Set(steps.map((x) => SOURCE[x.name] ?? "tool"))];
+    const failed = steps.filter((x) => x.ok === false).length;
+    return (
+      <details className="group my-1.5">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] text-dim hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
+          <span className="inline-block w-3 text-center transition-transform group-open:rotate-90">›</span>
+          <span>{steps.length} step{steps.length > 1 ? "s" : ""} · {srcs.join(" · ")}{failed ? <span className="text-destructive"> · {failed} failed</span> : ""}</span>
+          <span className="num ml-auto">{secs.toFixed(1)}s</span>
+        </summary>
+        <StepList steps={steps} />
+      </details>
+    );
+  }
+  return <StepList steps={steps} />;
+});
+
+function StepList({ steps }: { steps: ToolStep[] }) {
   return (
     <ol className="my-2 space-y-0.5">
       {steps.map((s) => {

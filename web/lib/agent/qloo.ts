@@ -79,7 +79,7 @@ export async function qlooCompare(aIds: string[], bIds: string[], stats?: QlooSt
   const r = await qlooGet<{ results?: { tags?: { name: string; query?: { score?: number } }[] } }>("/v2/insights/compare", {
     "filter.type": "urn:tag", "a.signal.interests.entities": aIds.join(","), "b.signal.interests.entities": bIds.join(","), take,
   }, stats);
-  return (r.results?.tags ?? []).map((t) => ({ name: t.name, score: Math.round((t.query?.score ?? 0) * 1000) / 1000 }));
+  return (r.results?.tags ?? []).slice(0, take).map((t) => ({ name: t.name, score: Math.round((t.query?.score ?? 0) * 1000) / 1000 }));
 }
 
 export interface TrendPoint { date: string; percentile: number; rank: number | null; velocity: number | null }

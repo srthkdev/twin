@@ -558,7 +558,9 @@ export async function executeTool(name: string, rawArgs: unknown, ds?: DataSet, 
     if (content.length > MAX_RESULT_CHARS) content = content.slice(0, MAX_RESULT_CHARS) + '..."[truncated]';
     return { ok: true, content, summary: out.summary + (stats.live + stats.cached ? ` [qloo ${stats.live} live${stats.cached ? `, ${stats.cached} cached` : ""}]` : ""), uiActions: out.uiActions ?? [], qloo: stats };
   } catch (e) {
-    const msg = e instanceof ToolError || e instanceof QlooError ? e.message : "tool failed";
+    const known = e instanceof ToolError || e instanceof QlooError;
+    if (!known) console.error(`[tool ${name}]`, e);
+    const msg = known ? e.message : `${name} failed: ${e instanceof Error ? e.message.slice(0, 160) : "unexpected error"}`;
     return { ok: false, content: JSON.stringify({ error: msg }), summary: msg, uiActions: [], qloo: stats };
   }
 }

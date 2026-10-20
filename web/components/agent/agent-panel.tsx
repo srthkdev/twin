@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,86 @@ function Thinking({ text, done, since }: { text: string; done: boolean; since: n
     </details>
   );
 }
+
+type Times = Map<string, { start: number; end?: number }>;
+
+/** Turn a message's parts into render groups: thinking, tool steps (+ their result cards), and text. Pure. */
+function buildGroups(m: TwinUIMessage, times: Times, progress: Record<string, string> | undefined): Group[] {
+  const out: Group[] = [];
+  m.parts.forEach((p, idx) => {
+    if (isToolUIPart(p)) {
+      const o = p.state === "output-available" ? (p.output as { ok?: boolean; summary?: string; data?: unknown }) : undefined;
+      const t = times.get(p.toolCallId) ?? { start: Date.now() };
+      const name = getToolName(p);
+      const step: ToolStep = {
+        id: p.toolCallId, name, args: p.input,
+        pending: p.state === "input-streaming" || p.state === "input-available",
+        ok: p.state === "output-error" ? false : o?.ok !== false,
+        summary: p.state === "output-error" ? p.errorText : o?.summary,
+        progress: progress?.[p.toolCallId], startedAt: t.start, endedAt: t.end,
+      };
+      let last = out[out.length - 1];
+      if (last?.kind !== "tools") { last = { kind: "tools", steps: [], cards: [] }; out.push(last); }
+      last.steps.push(step);
+      if (o?.ok && hasCard(name)) last.cards = [...last.cards.filter((c) => c.name !== name), { name, data: o.data, id: p.toolCallId }];
+    } else if (p.type === "reasoning" && p.text.trim()) {
+      const last = out[out.length - 1];
+      const done = (p as { state?: string }).state === "done";
+      if (last?.kind === "thinking") { last.text += p.text; last.done = done; } else out.push({ kind: "thinking", text: p.text, done, key: `${m.id}:r${idx}` });
+    } else if (p.type === "text" && p.text.trim()) {
+      const last = out[out.length - 1];
+      if (last?.kind === "text") last.text += p.text; else out.push({ kind: "text", text: p.text });
+    }
+  });
+  return out;
+}
+
+/** One assistant message. Memoised: finished messages never re-render while the next answer streams. */
+const MessageView = memo(function MessageView({ m, live, times, progress, files, onLink, onSend, onSave }: {
+  m: TwinUIMessage; live: boolean; times: Times; progress?: Record<string, string>;
+  files?: { filename: string; markdown: string }[]; onLink: (href: string) => void; onSend: (q: string) => void;
+  onSave: (f: { filename: string; markdown: string }) => void;
+}) {
+  const groups = useMemo(() => buildGroups(m, times, progress), [m, times, progress]);
+  const waiting = live && !m.parts.some((p) => isToolUIPart(p) && (p.state === "input-available" || p.state === "input-streaming"))
+    && !m.parts.some((p) => p.type === "reasoning" && (p as { state?: string }).state !== "done");
+  return (
+    <div>
+      {groups.map((g, j) => {
+        if (g.kind === "thinking") return <Thinking key={j} text={g.text} done={g.done || !live} since={times.get(g.key)?.start ?? Date.now()} />;
+        if (g.kind === "tools") return (
+          <div key={j}>
+            <ToolTrace steps={g.steps} folded={!live} />
+            {g.cards.map((c) => <ResultCard key={c.id} name={c.name} data={c.data} />)}
+          </div>
+        );
+        const { body, next } = splitNext(g.text);
+        return (
+          <div key={j} className="break-words">
+            <Markdown source={body} variant="chat" onLink={onLink} />
+            {!live && next.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {next.map((q) => <button key={q} type="button" onClick={() => onSend(q)} className="border border-line px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary">{q}</button>)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {waiting && <p className="mt-1 flex items-center gap-2 text-[11px] text-dim"><Spinner />{m.parts.length ? "writing" : "planning"}</p>}
+      {files?.map((f) => (
+        <button key={f.filename} type="button" onClick={() => onSave(f)}
+          className="mt-2 flex w-full items-center justify-between border border-primary/60 px-2.5 py-2 text-left text-[11.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
+          <span>↓ {f.filename}</span><span className="text-[10.5px] opacity-70">{Math.max(1, Math.round(f.markdown.length / 1024))} KB</span>
+        </button>
+      ))}
+      {m.metadata && !live && (
+        <p className="mt-2 text-[10px] text-dim">
+          {[`qloo ${m.metadata.qlooLive} live · ${m.metadata.qlooCached} cached`, m.metadata.ms ? `${(m.metadata.ms / 1000).toFixed(1)}s` : ""].filter(Boolean).join(" · ")}
+        </p>
+      )}
+    </div>
+  );
+});
 
 type Group =
   | { kind: "text"; text: string }
@@ -161,54 +241,24 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     if (status === "ready" || status === "error") void sendMessage({ text: external.text });
   }, [external, status, sendMessage]);
 
-  const send = (text: string) => {
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const send = useCallback((text: string) => {
     const t = text.trim();
-    if (!t || busy) return;
+    if (!t || busyRef.current) return;
     setInput("");
     void sendMessage({ text: t });
-  };
+  }, [sendMessage]);
+  const save = useCallback((f: { filename: string; markdown: string }) => saveMarkdown(f.filename, f.markdown), []);
 
-  const onLink = (href: string) => {
+  const onLink = useCallback((href: string) => {
     const kind = href.slice(0, href.indexOf(":")), rest = href.slice(href.indexOf(":") + 1);
     if (kind === "hood") live.current.onAction({ type: "focusHood", hood: rest });
     if (kind === "geo") {
       const [lat, lon] = rest.split(",").map(Number);
       if (isFinite(lat) && isFinite(lon)) live.current.onAction({ type: "focus", lat, lon });
     }
-  };
-
-  const groups = (m: TwinUIMessage): Group[] => {
-    const out: Group[] = [];
-    m.parts.forEach((p, idx) => {
-      if (isToolUIPart(p)) {
-        const o = p.state === "output-available" ? (p.output as { ok?: boolean; summary?: string; data?: unknown }) : undefined;
-        const t = times.current.get(p.toolCallId)!;
-        const name = getToolName(p);
-        const step: ToolStep = {
-          id: p.toolCallId, name, args: p.input,
-          pending: p.state === "input-streaming" || p.state === "input-available",
-          ok: p.state === "output-error" ? false : o?.ok !== false,
-          summary: p.state === "output-error" ? p.errorText : o?.summary,
-          progress: progress[p.toolCallId], startedAt: t.start, endedAt: t.end,
-        };
-        let last = out[out.length - 1];
-        if (last?.kind !== "tools") { last = { kind: "tools", steps: [], cards: [] }; out.push(last); }
-        last.steps.push(step);
-        if (o?.ok && hasCard(name)) {
-          // one card per tool type per block — the latest result wins
-          last.cards = [...last.cards.filter((c) => c.name !== name), { name, data: o.data, id: p.toolCallId }];
-        }
-      } else if (p.type === "reasoning" && p.text.trim()) {
-        const last = out[out.length - 1];
-        const done = (p as { state?: string }).state === "done";
-        if (last?.kind === "thinking") { last.text += p.text; last.done = done; } else out.push({ kind: "thinking", text: p.text, done, key: `${m.id}:r${idx}` });
-      } else if (p.type === "text" && p.text.trim()) {
-        const last = out[out.length - 1];
-        if (last?.kind === "text") last.text += p.text; else out.push({ kind: "text", text: p.text });
-      }
-    });
-    return out;
-  };
+  }, []);
 
   const toggleMic = () => {
     if (listening) { recRef.current?.stop(); return; }
@@ -264,43 +314,8 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
             {m.role === "user" ? (
               <div className="ml-6 border border-line bg-raised px-2.5 py-2 text-[12px] text-foreground">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</div>
             ) : (
-              <div>
-                {groups(m).map((g, j) => {
-                  if (g.kind === "thinking") return <Thinking key={j} text={g.text} done={g.done || !busy || i !== lastIdx} since={times.current.get(g.key)?.start ?? Date.now()} />;
-                  if (g.kind === "tools") return (
-                    <div key={j}>
-                      <ToolTrace steps={g.steps} />
-                      {g.cards.map((c) => <ResultCard key={c.id} name={c.name} data={c.data} />)}
-                    </div>
-                  );
-                  const { body, next } = splitNext(g.text);
-                  const final = !busy || i !== lastIdx;
-                  return (
-                    <div key={j} className="break-words">
-                      <Markdown source={body} variant="chat" onLink={onLink} />
-                      {final && next.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {next.map((q) => <button key={q} type="button" onClick={() => send(q)} className="border border-line px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary">{q}</button>)}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {busy && i === lastIdx && !m.parts.some((p) => isToolUIPart(p) && (p.state === "input-available" || p.state === "input-streaming")) && !m.parts.some((p) => p.type === "reasoning" && (p as { state?: string }).state !== "done") && (
-                  <p className="mt-1 flex items-center gap-2 text-[11px] text-dim"><Spinner />{m.parts.length ? "writing" : "planning"}</p>
-                )}
-                {(files[m.id] ?? (i === lastIdx ? files.last : undefined))?.map((f) => (
-                  <button key={f.filename} type="button" onClick={() => saveMarkdown(f.filename, f.markdown)}
-                    className="mt-2 flex w-full items-center justify-between border border-primary/60 px-2.5 py-2 text-left text-[11.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
-                    <span>↓ {f.filename}</span><span className="text-[10.5px] opacity-70">{Math.max(1, Math.round(f.markdown.length / 1024))} KB</span>
-                  </button>
-                ))}
-                {m.metadata && !(busy && i === lastIdx) && (
-                  <p className="mt-2 text-[10px] text-dim">
-                    {[`qloo ${m.metadata.qlooLive} live · ${m.metadata.qlooCached} cached`, m.metadata.ms ? `${(m.metadata.ms / 1000).toFixed(1)}s` : ""].filter(Boolean).join(" · ")}
-                  </p>
-                )}
-              </div>
+              <MessageView m={m} live={busy && i === lastIdx} times={times.current} progress={busy && i === lastIdx ? progress : undefined}
+                files={files[m.id] ?? (i === lastIdx ? files.last : undefined)} onLink={onLink} onSend={send} onSave={save} />
             )}
           </div>
         ))}
