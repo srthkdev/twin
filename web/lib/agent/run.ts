@@ -107,3 +107,81 @@ export async function runOpenAI(opts: { apiKey: string; model?: string; messages
     emit({ type: "error", message: friendly("OpenAI", e) });
   }
 }
+
+/** Free OpenRouter models, best first (Artificial Analysis Intelligence Index v4.3.2: MiniMax M3.1 Flash 43, Nemotron 3 Ultra 23). */
+export const OPENROUTER_MODELS = ["minimax/minimax-m3.1-flash:free", "nvidia/nemotron-3-ultra-550b-a55b:free", "thinkingmachines/inkling:free"];
+
+type ORMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+
+/**
+ * OpenRouter (OpenAI-compatible chat completions) tool loop. Tries each model in turn; a model is only
+ * skipped if it fails before producing any output in the current round, so answers never mix models mid-sentence.
+ */
+export async function runOpenRouter(opts: { apiKey: string; model?: string; messages: ChatMessage[]; context?: AgentContext; ds: DataSet; emit: Emit; signal: AbortSignal }) {
+  const { apiKey, messages, context, ds, emit, signal } = opts;
+  const client = new OpenAI({
+    apiKey, baseURL: "https://openrouter.ai/api/v1", maxRetries: 0,
+    defaultHeaders: { "HTTP-Referer": "https://github.com/srthkdev/twin", "X-Title": "Twin" },
+  });
+  const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.map((t) => ({
+    type: "function", function: { name: t.name, description: t.description, parameters: jsonSchemaOf(t) },
+  }));
+  const convo: ORMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...withContext(messages, context).map((m) => ({ role: m.role, content: m.content }) as ORMessage)];
+  const chain = opts.model ? [opts.model, ...OPENROUTER_MODELS.filter((m) => m !== opts.model)] : OPENROUTER_MODELS;
+  let mi = 0, live = 0, cached = 0;
+
+  const oneRound = async (model: string) => {
+    const stream = await client.chat.completions.create({ model, messages: convo, tools, tool_choice: "auto", stream: true, temperature: 0.4 }, { signal });
+    let text = "", started = false;
+    const calls = new Map<number, { id: string; name: string; args: string }>();
+    for await (const chunk of stream) {
+      const err = (chunk as unknown as { error?: { message?: string; code?: number } }).error;
+      if (err) throw Object.assign(new Error(err.message ?? "upstream error"), { status: err.code });
+      const d = chunk.choices?.[0]?.delta;
+      if (!d) continue;
+      if (d.content) { started = true; text += d.content; emit({ type: "text", delta: d.content }); }
+      for (const tc of d.tool_calls ?? []) {
+        started = true;
+        const c = calls.get(tc.index) ?? { id: tc.id ?? `call_${tc.index}`, name: "", args: "" };
+        if (tc.id) c.id = tc.id;
+        if (tc.function?.name) c.name += tc.function.name;
+        if (tc.function?.arguments) c.args += tc.function.arguments;
+        calls.set(tc.index, c);
+      }
+    }
+    return { text, calls: [...calls.values()], started };
+  };
+
+  try {
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      let res: Awaited<ReturnType<typeof oneRound>> | null = null;
+      while (!res) {
+        const model = chain[mi];
+        try {
+          res = await oneRound(model);
+          if (!res.started) throw Object.assign(new Error("empty response"), { status: 502 });
+        } catch (e) {
+          if (signal.aborted) throw e;
+          if (mi < chain.length - 1) { mi++; emit({ type: "text", delta: "" }); res = null; continue; }
+          throw e;
+        }
+      }
+      if (!res.calls.length) break;
+      convo.push({ role: "assistant", content: res.text || null, tool_calls: res.calls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.args || "{}" } })) });
+      const outs = await Promise.all(res.calls.map(async (c) => {
+        let args: unknown = {};
+        try { args = JSON.parse(c.args || "{}"); } catch { /* validated by executeTool */ }
+        emit({ type: "tool_call", id: c.id, name: c.name, args });
+        const r = await executeTool(c.name, args, ds);
+        live += r.qloo.live; cached += r.qloo.cached;
+        emit({ type: "tool_result", id: c.id, name: c.name, summary: r.summary, ok: r.ok, uiActions: r.uiActions, qloo: r.qloo });
+        return { role: "tool" as const, tool_call_id: c.id, content: r.content };
+      }));
+      convo.push(...outs);
+      if (round === MAX_ROUNDS - 1) emit({ type: "text", delta: "\n\n(Stopped after the maximum number of tool rounds.)" });
+    }
+    emit({ type: "done", provider: `openrouter · ${chain[mi].replace(/:free$/, "")}`, qlooLive: live, qlooCached: cached });
+  } catch (e) {
+    emit({ type: "error", message: friendly("OpenRouter", e) });
+  }
+}

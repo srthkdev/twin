@@ -36,7 +36,7 @@ for (const t of TOOLS) {
         isError: !r.ok,
         content: [
           { type: "text" as const, text: r.content },
-          // Machine-readable trailer; the web app's Codex runtime strips it and turns it into map actions.
+          // Machine-readable trailer with map actions, for MCP clients that want to drive a UI.
           { type: "text" as const, text: `<twin-meta>${JSON.stringify(meta)}</twin-meta>` },
         ],
       };

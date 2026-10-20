@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createRuleAgent } from "@/lib/agent/respond";
 import { loadServerDataSet } from "@/lib/agent/server-data";
-import { runCodex, codexHealth } from "@/lib/agent/codex";
-import { runAnthropic, runOpenAI } from "@/lib/agent/run";
+import { runAnthropic, runOpenAI, runOpenRouter } from "@/lib/agent/run";
 import type { AgentRequest, ChatMessage, ProviderId, StreamEvent } from "@/lib/agent/types";
 
 export const runtime = "nodejs";
@@ -13,9 +12,21 @@ interface Body extends AgentRequest { provider?: ProviderId; model?: string }
 
 /**
  * POST /api/agent  -> text/event-stream of StreamEvent (`data: {json}\n\n`).
- * Provider keys come ONLY from the `x-agent-key` header (BYOK); they are never stored or logged.
+ * Provider keys come from the `x-agent-key` header (BYOK) and are never stored or logged. "openrouter" falls back to the
+ * server's OPENROUTER_API_KEY, rate-limited per client IP so a public demo can't drain it.
  * provider "offline" (or omitted) returns the legacy JSON response from the rule-based agent.
  */
+// Server-key budget per client: a few questions per minute is plenty for a demo, and each question is up to 8 model calls.
+const WINDOW_MS = 10 * 60_000, MAX_PER_WINDOW = 12;
+const hits = new Map<string, number[]>();
+function allow(ip: string) {
+  const now = Date.now();
+  const h = (hits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
+  if (h.length >= MAX_PER_WINDOW) { hits.set(ip, h); return false; }
+  h.push(now); hits.set(ip, h);
+  return true;
+}
+
 export async function POST(req: Request) {
   let body: Body;
   try { body = (await req.json()) as Body; } catch { return NextResponse.json({ error: "invalid json" }, { status: 400 }); }
@@ -28,7 +39,15 @@ export async function POST(req: Request) {
 
   const key = req.headers.get("x-agent-key")?.trim();
   if ((provider === "anthropic" || provider === "openai") && !key) return NextResponse.json({ error: `${provider} requires an API key` }, { status: 400 });
-  if (provider === "codex" && !codexHealth().available) return NextResponse.json({ error: "Codex CLI is not available here" }, { status: 400 });
+  let orKey = "";
+  if (provider === "openrouter") {
+    orKey = key || process.env.OPENROUTER_API_KEY || "";
+    if (!orKey) return NextResponse.json({ error: "No OpenRouter key on the server — add your own in agent settings." }, { status: 400 });
+    if (!key) {
+      const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "local";
+      if (!allow(ip)) return NextResponse.json({ error: "Demo limit reached (12 questions per 10 minutes). Add your own OpenRouter key in settings to keep going." }, { status: 429 });
+    }
+  }
 
   const enc = new TextEncoder();
   const ctl = new AbortController();
@@ -40,7 +59,7 @@ export async function POST(req: Request) {
       let closed = false;
       const emit = (e: StreamEvent) => { if (!closed) { try { controller.enqueue(enc.encode(`data: ${JSON.stringify(e)}\n\n`)); } catch { closed = true; } } };
       try {
-        if (provider === "codex") await runCodex({ model, messages, context: body.context, emit, signal: ctl.signal });
+        if (provider === "openrouter") await runOpenRouter({ apiKey: orKey, model, messages, context: body.context, ds, emit, signal: ctl.signal });
         else if (provider === "anthropic") await runAnthropic({ apiKey: key!, model, messages, context: body.context, ds, emit, signal: ctl.signal });
         else if (provider === "openai") await runOpenAI({ apiKey: key!, model, messages, context: body.context, ds, emit, signal: ctl.signal });
         else emit({ type: "error", message: `unknown provider ${provider}` });

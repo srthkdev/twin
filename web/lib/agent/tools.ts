@@ -62,7 +62,7 @@ export function explainMatch(ds: DataSet, aId: string, bId: string) {
 }
 
 // ───────────────────────────── Tool registry (single source of truth) ─────────────────────────────
-// Consumed by: the Anthropic/OpenAI agent loops, the Codex runtime (through the MCP server), and mcp/twin-mcp.ts.
+// Consumed by: the Anthropic/OpenAI agent loops, the OpenRouter loop, and mcp/twin-mcp.mts.
 import { z } from "zod";
 import type { AgentAction } from "./types";
 import type { CellsFile } from "../types";

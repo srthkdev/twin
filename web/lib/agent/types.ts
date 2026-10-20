@@ -14,7 +14,7 @@ export interface AgentResponse { reply: string; actions?: AgentAction[]; intent:
 /** Rule-based (offline) agent contract. */
 export interface Agent { respond(req: AgentRequest): Promise<AgentResponse> }
 
-export type ProviderId = "codex" | "anthropic" | "openai" | "offline";
+export type ProviderId = "openrouter" | "anthropic" | "openai" | "offline";
 
 /** Server -> client SSE events from POST /api/agent. */
 export type StreamEvent =
@@ -22,4 +22,4 @@ export type StreamEvent =
   | { type: "tool_call"; id: string; name: string; args: unknown }
   | { type: "tool_result"; id: string; name: string; summary: string; ok: boolean; uiActions: AgentAction[]; qloo?: { live: number; cached: number } }
   | { type: "error"; message: string }
-  | { type: "done"; provider: ProviderId; qlooLive?: number; qlooCached?: number };
+  | { type: "done"; provider: string; qlooLive?: number; qlooCached?: number };

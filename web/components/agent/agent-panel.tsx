@@ -46,7 +46,7 @@ export function AgentPanel({ context, onAction, className }: {
   const onActionRef = useRef(onAction);
   useEffect(() => { onActionRef.current = onAction; }, [onAction]);
 
-  // restore settings, then ask the server what is available (codex is the default when present)
+  // restore settings, then ask the server what is available (free open models are the default)
   useEffect(() => {
     setCanListen(!!getRecognition());
     const saved = loadSettings();
@@ -57,8 +57,9 @@ export function AgentPanel({ context, onAction, className }: {
       setSettings((cur) => {
         const base = saved ?? cur;
         // "offline" is the pre-health default that gets persisted on first render — never treat it as a choice.
-        const want = saved?.provider && saved.provider !== "offline" ? saved.provider : undefined;
-        const provider: ProviderId = want && (want !== "codex" || h.codex.available) ? want : h.codex.available ? "codex" : "offline";
+        const known: ProviderId[] = ["openrouter", "anthropic", "openai"];
+        const want = saved?.provider && known.includes(saved.provider) ? saved.provider : undefined;
+        const provider: ProviderId = want ?? (h.openrouter.available ? "openrouter" : "offline");
         return { ...base, provider };
       });
     }).catch(() => { if (alive && saved) setSettings(saved); });
@@ -100,7 +101,7 @@ export function AgentPanel({ context, onAction, className }: {
     const ctl = new AbortController();
     abortRef.current = ctl;
     const { provider } = settings;
-    const key = provider === "anthropic" || provider === "openai" ? settings.keys[provider].trim() : "";
+    const key = provider === "anthropic" || provider === "openai" || provider === "openrouter" ? (settings.keys[provider] ?? "").trim() : "";
     try {
       if ((provider === "anthropic" || provider === "openai") && !key) throw new Error(`Add your ${provider === "anthropic" ? "Anthropic" : "OpenAI"} API key in settings first.`);
       const res = await fetch("/api/agent", {
@@ -161,7 +162,7 @@ export function AgentPanel({ context, onAction, className }: {
   };
 
   const btn = "h-8 border border-border bg-background px-2 font-mono text-xs text-foreground hover:bg-muted disabled:opacity-50";
-  const pLabel = { codex: "codex", anthropic: "anthropic", openai: "openai", offline: "offline" }[settings.provider];
+  const pLabel = { openrouter: "open models", anthropic: "anthropic", openai: "openai", offline: "offline" }[settings.provider];
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-background font-mono text-xs text-foreground", className)}>

@@ -59,7 +59,7 @@ export default function MethodPage() {
             The fingerprints answer &ldquo;which place is like this one&rdquo;. The agent adds live Qloo calls for what comes next —
             <span className="text-foreground"> local_scene</span> (venues near a neighbourhood, steered by the source&apos;s taste),
             <span className="text-foreground"> audience</span> (age and gender skew) and <span className="text-foreground">cross_domain</span> (brands for fans of an artist).
-            It runs on the local Codex CLI or a key you bring, and the same tools ship as an MCP server.
+            It runs on free open-weight models through OpenRouter (MiniMax M3.1 Flash first), or a key you bring, and the same tools ship as an MCP server.
           </p>
         </div>
 
