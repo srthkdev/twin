@@ -173,6 +173,8 @@ export function ExploreClient() {
     if (!ds) return;
     // addCity / opportunity come from the v2 backend; typed locally so this compiles either way.
     const a = act as AgentAction | { type: "addCity"; city: City } | { type: "opportunity"; city: string; cells: OpportunityResult["cells"] };
+    // the opportunity paint belongs to one answer; any other map move returns to the taste map
+    if (a.type !== "opportunity" && a.type !== "focus" && a.type !== "focusHood") setMode((m) => (m === "opportunity" ? "twin" : m));
     if (a.type === "addCity") {
       cityAdded(a.city);
     } else if (a.type === "opportunity") {
@@ -184,6 +186,11 @@ export function ExploreClient() {
       setPin(null); setFromId(a.from); setToCity(a.to);
       if (a.twin) setTimeout(() => setSelected(a.twin!), 60);
     } else if (a.type === "focus") {
+      // a place in another fingerprinted city: show that city's blocks too
+      const near = ds.cities.map((c) => ({ c, d: Math.hypot(c.center[0] - a.lon, c.center[1] - a.lat) })).sort((x, y) => x.d - y.d)[0];
+      if (near && near.d < 0.8 && near.c.id !== toCity && near.c.id !== sourceCityId) {
+        setMode((m) => (m === "opportunity" ? "twin" : m)); setToCity(near.c.id);
+      }
       setFocus({ lat: a.lat, lon: a.lon, label: a.label, t: Date.now() });
     } else if (a.type === "focusHood") {
       const h = ds.hoods.find((x) => x.id === a.hood);
