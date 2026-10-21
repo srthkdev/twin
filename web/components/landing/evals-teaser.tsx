@@ -1,63 +1,51 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { loadEvals } from "@/lib/data";
-import type { Evals } from "@/lib/types";
+import { count, percent, useProof } from "./use-proof";
 
-const f2 = (x?: number) => (x == null ? "--" : x.toFixed(2));
-
-/** Three findings, stated plainly, including the one that doesn't flatter us. */
 export function EvalsTeaser() {
-  const [ev, setEv] = useState<Evals | null>(null);
-  useEffect(() => { loadEvals().then(setEv).catch(() => {}); }, []);
-  const c = ev?.census;
-  const row = (city: string, id: string) => c?.rows.find((r) => r.city === city && r.id === id);
-  const latin = row("los-angeles", "H01"), soul = row("new-york", "H12");
-
+  const { backtest: data, evals, failed } = useProof();
   const findings = [
     {
-      k: "bias",
-      claim: "raw Qloo says every neighbourhood is the same",
-      a: { v: f2(ev?.rawCollapse.raw_mean_cos), l: "mean cross-city cosine, raw" },
-      b: { v: f2(ev?.rawCollapse.twin_mean_cos), l: "after correction" },
-      note: "Raw affinity follows a popularity baseline; subtracting it is what makes neighbourhoods distinguishable at all.",
+      title: "Taste helps distinguish equally busy blocks.",
+      note: data ? `Across ${count(data.classes.taste.brands)} taste-led chains and ${count(data.classes.taste.pairs)} city-pair tests, Twin ranks a real site above a comparison block with similar busyness this often. This measures ranking, not the chance a business succeeds.` : "Loading chain placement results…",
+      metrics: [{ value: data ? percent(data.classes.taste.within[0]) : "—", label: "taste-led chains · similar busyness" }, { value: "50%", label: "chance" }],
     },
     {
-      k: "census",
-      claim: "the corrected maps track the census",
-      a: { v: f2(latin?.rhoCorrected), l: "latin artists ↔ % hispanic, LA (raw " + f2(latin?.rhoRaw) + ")" },
-      b: { v: f2(soul?.rhoCorrected), l: "soul food ↔ % black, NYC (raw " + f2(soul?.rhoRaw) + ")" },
-      note: c ? `Spearman ρ across cells. Corrected beats raw on ${c.summary.correctedBeatsRaw} of ${c.summary.n} pre-registered tests; it is worse on affluence.` : "",
+      title: "Taste alone does not beat footfall.",
+      note: data ? `Across all ${count(data.classes.all.brands)} chains and ${count(data.classes.all.pairs)} city-pair tests, busyness is stronger at finding real sites. Even combining taste and busyness with equal weight did not beat busyness alone. These are signals for a decision, not forecasts of sales.` : "Loading the comparison with busyness…",
+      metrics: [{ value: data ? percent(data.classes.all.twin[0]) : "—", label: "taste alone · real-site ranking" }, { value: data ? percent(data.classes.all.busy[0]) : "—", label: "busyness alone · real-site ranking" }],
     },
     {
-      k: "llm",
-      claim: "an LLM already knows the famous twins",
-      a: { v: f2(ev?.methods.llm.mrr), l: "MRR, Claude with no data" },
-      b: { v: f2(ev?.methods.twin.hit3), l: "Twin hit@3 from data alone (random " + f2(ev?.methods.random.hit3) + ")" },
-      note: "On published pairs the model wins — it has read the same blogs. Twin's agent pairs both: the LLM reasons, Qloo measures.",
+      title: "A language model knows more of the famous twins.",
+      note: evals ? `On ${count(evals.methods.twin.n)} held-out comparisons from published neighbourhood pairs, the language model puts the known twin in its top three more often. It may already know the articles. Twin adds measured evidence to the agent's reasoning.` : "Loading neighbourhood matching results…",
+      metrics: [{ value: evals ? percent(evals.methods.twin.hit3) : "—", label: "Twin · known twin in top three" }, { value: evals ? percent(evals.methods.llm.hit3) : "—", label: "language model alone · top three" }],
     },
   ];
 
   return (
-    <div className="border-t border-line">
-      {findings.map((x, i) => (
-        <div key={x.k} className="grid gap-4 border-b border-line py-6 md:grid-cols-[3rem_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="border-t border-line" aria-live="polite">
+      {failed && <p className="border-b border-line py-4 text-[12px] text-muted-foreground">Some proof data could not be loaded. The full method and data files are linked below.</p>}
+      {findings.map((finding, i) => (
+        <div key={finding.title} className="grid gap-4 border-b border-line py-6 md:grid-cols-[2rem_minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
           <span className="num text-dim">{String(i + 1).padStart(2, "0")}</span>
           <div>
-            <p className="text-[15px] text-foreground">{x.claim}</p>
-            <p className="mt-2 max-w-[48ch] text-[12px] leading-relaxed text-muted-foreground">{x.note}</p>
+            <p className="text-[15px] text-foreground">{finding.title}</p>
+            <p className="mt-2 max-w-[56ch] text-[12px] leading-relaxed text-muted-foreground">{finding.note}</p>
           </div>
-          {[x.a, x.b].map((m, j) => (
-            <div key={j}>
-              <div className={`num text-[34px] leading-none tracking-tight ${j === 0 ? "text-foreground" : "text-primary"}`}>{m.v}</div>
-              <div className="mt-2 text-[11px] text-dim">{m.l}</div>
+          {finding.metrics.map((metric, j) => (
+            <div key={metric.label}>
+              <div className={`num text-[34px] leading-none tracking-tight ${j === 0 ? "text-foreground" : "text-primary"}`}>{metric.value}</div>
+              <div className="mt-2 text-[11px] text-dim">{metric.label}</div>
             </div>
           ))}
         </div>
       ))}
-      <div className="flex items-center justify-between pt-4 text-[12px]">
-        <span className="text-dim">ground truth and hypotheses were committed before any result was computed</span>
-        <Link href="/evals" className="link text-muted-foreground">all evals →</Link>
+      {evals?.census && <p className="border-b border-line py-4 text-[12px] leading-relaxed text-muted-foreground">Against independent census data, accounting for busyness strengthens <span className="num text-foreground">{count(evals.census.summary.correctedBeatsRaw)} of {count(evals.census.summary.n)}</span> pre-registered relationships. It does not improve every relationship, including measures of affluence.</p>}
+      {data && <p className="mt-4 text-[11px] leading-relaxed text-dim">Study coverage: <span className="num">{count(data.sites)}</span> branded places in <span className="num">{count(data.cities.length)}</span> cities. Overture coverage is incomplete; chains do not represent all independent businesses. Results: {data.generatedAt}.</p>}
+      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[12px]">
+        <Link href="/evals" className="link text-muted-foreground">all results, confidence ranges and method →</Link>
+        <a href="/data/backtest.json" className="link text-dim">chain placement data</a>
+        <a href="/data/evals.json" className="link text-dim">matching and census data</a>
       </div>
     </div>
   );

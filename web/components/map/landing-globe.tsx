@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { useMediaQuery } from "usehooks-ts";
 import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { arcSegments, useDeckMap, type ArcSeg } from "./use-deck-map";
 
@@ -7,11 +8,11 @@ export interface GlobeArc { from: [number, number]; to: [number, number]; fromNa
 
 export default function LandingGlobe({ arcs }: { arcs: GlobeArc[] }) {
   const { containerRef, mapRef, overlayRef, ready } = useDeckMap({ center: [-30, 28], zoom: 1.5, pitch: 0, interactive: false });
+  const reduce = useMediaQuery("(prefers-reduced-motion: reduce)", { initializeWithValue: false });
 
   useEffect(() => {
     if (!ready) return;
     const map = mapRef.current!, overlay = overlayRef.current!;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     // Fit the whole globe inside its frame: at zoom z the globe is ~512·2^z/π px across.
     const box = map.getContainer();
     map.setZoom(Math.log2((Math.min(box.clientWidth, box.clientHeight) * 0.86 * Math.PI) / 512));
@@ -37,7 +38,7 @@ export default function LandingGlobe({ arcs }: { arcs: GlobeArc[] }) {
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [ready, arcs, mapRef, overlayRef]);
+  }, [ready, arcs, mapRef, overlayRef, reduce]);
 
   return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} className="bg-background" aria-hidden />;
 }

@@ -29,9 +29,8 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
 
       {mode === "raw" && (
         <div className="border-b border-line bg-raised px-4 py-3 text-[11.5px] leading-relaxed text-muted-foreground">
-          <span className="text-foreground">raw view.</span> Raw scores barely separate neighbourhoods: average spread{" "}
-          <span className="num text-foreground">{evals?.rawCollapse.raw_mean_cos_spread.toFixed(2) ?? "–"}</span> vs{" "}
-          <span className="num text-primary">{evals?.rawCollapse.twin_mean_cos_spread.toFixed(2) ?? "–"}</span> corrected. The ranking below is the corrected one.
+          <span className="text-foreground">popularity view.</span> Busy blocks score highly for almost every taste. The matches below still use distinctive local taste, with busyness accounted for.
+          {evals?.rawCollapse.raw_mean_cos != null && <span className="mt-1 block text-dim">Popularity alone makes neighbourhoods look {Math.round(evals.rawCollapse.raw_mean_cos * 100)}% alike on average.</span>}
         </div>
       )}
 
@@ -40,8 +39,8 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
           <tr className="h-7 border-b border-line text-[10.5px] text-dim">
             <th className="w-9 pl-4 text-left font-normal">#</th>
             <th className="text-left font-normal">neighbourhood</th>
-            <th className="w-[88px] font-normal" />
-            <th className="w-14 pr-4 text-right font-normal">cos</th>
+            <th className="w-[64px] font-normal" />
+            <th className="w-24 pr-4 text-right font-normal">taste match</th>
           </tr>
         </thead>
         <tbody>
@@ -56,7 +55,7 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
                   <button className={cn("truncate text-left", active ? "text-foreground" : "text-muted-foreground")} onClick={() => onSelect(m.hood)}>{h.name}</button>
                 </td>
                 <td className="text-[10px]"><Meter value={m.score} max={max} width={8} tone={active ? "accent" : "fg"} /></td>
-                <td className={cn("num pr-4 text-right", active ? "text-primary" : "text-muted-foreground")}>{m.score.toFixed(2)}</td>
+                <td className={cn("num whitespace-nowrap pr-4 text-right text-[11px]", active ? "text-primary" : "text-muted-foreground")}>{Math.round(m.score * 100)}% match</td>
               </tr>
             );
           })}

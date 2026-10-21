@@ -112,10 +112,10 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
           <Label>{pin ? "pin" : "profile"}</Label>
           <h2 className="mt-2 text-[17px] leading-tight tracking-[-0.02em] text-foreground">{pin ? pin.label : source?.name}</h2>
           <div className="mt-1 text-[11px] text-dim">
-            {city(sourceCityId)?.name.toLowerCase()}{pin ? " · 1.3 km blend around the pin" : source?.cells ? ` · ${source.cells} cells` : ""}
+            {city(sourceCityId)?.name.toLowerCase()}{pin ? " · within 1.3 km of the pin" : source?.cells ? ` · ${source.cells} blocks` : ""}
           </div>
           {!pin && source?.blurb && <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">{source.blurb}</p>}
-          <div className="mt-4"><Label className="mb-1">over-indexes on</Label><TraitList dims={topDims} vec={vec} basket={ds.basket} /></div>
+          <div className="mt-4"><Label className="mb-1">stands out for</Label><TraitList dims={topDims} vec={vec} basket={ds.basket} /></div>
         </section>
 
         {/* where to */}
@@ -133,7 +133,7 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
                       on ? "border-primary bg-raised" : "border-transparent hover:bg-accent")}>
                     <span className={cn("text-[11px]", on ? "text-primary" : "text-dim")}>{cityCode(c)}</span>
                     <span className="truncate text-muted-foreground"><span className="text-foreground">{c.name.toLowerCase()}</span>{name && <span className="text-dim"> → {name}</span>}</span>
-                    {top && <span className="num text-[11px] text-muted-foreground">{top.score.toFixed(2)}</span>}
+                    {top && <span className="num whitespace-nowrap text-[11px] text-muted-foreground">{Math.round(top.score * 100)}% match</span>}
                   </button>
                 </li>
               );
@@ -148,7 +148,7 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
             {progress && <p className="cursor-block mt-1.5 text-[11px] text-dim" aria-live="polite">{progress}</p>}
             {addError && <p className="mt-1.5 text-[11px] leading-relaxed text-destructive">{addError}</p>}
           </form>
-          <p className="mt-4 text-[11px] leading-relaxed text-dim">click any cell of {city(sourceCityId)?.name.toLowerCase()} on the map to use that exact block as the source.</p>
+          <p className="mt-4 text-[11px] leading-relaxed text-dim">click any block of {city(sourceCityId)?.name.toLowerCase()} on the map to use it as the starting point.</p>
         </section>
       </div>
     </div>

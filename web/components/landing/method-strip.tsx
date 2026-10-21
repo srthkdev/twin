@@ -1,8 +1,8 @@
 const STEPS = [
-  { n: "01", title: "sample", body: "One Qloo heatmap per basket item — artists, brands, films, place types — over ~1.2 × 0.6 km geohash cells.", stat: "116 items × 6 cities" },
-  { n: "02", title: "correct", body: "Percentile-rank each item across cells, subtract each cell's mean rank over the basket, z-score within the city.", stat: "removes the popularity baseline" },
-  { n: "03", title: "fingerprint", body: "Each cell becomes a vector over the basket. A neighbourhood is the mean of the cells within 1.3 km.", stat: "116 dims per place" },
-  { n: "04", title: "match", body: "Rank every neighbourhood of the target city by cosine similarity; explain with shared and diverging traits.", stat: "top 5 per city" },
+  { n: "01", title: "read the block", body: "Qloo shows where tastes in artists, brands, food and nightlife concentrate, block by block.", stat: "taste data from Qloo" },
+  { n: "02", title: "account for busyness", body: "Busy streets score highly for almost everything. Twin removes that baseline to see what makes each block distinctive.", stat: "local taste beyond popularity" },
+  { n: "03", title: "find its twin", body: "Compare neighbourhoods across cities using their shared tastes, and show where the match breaks down.", stat: "shared tastes and differences" },
+  { n: "04", title: "make the decision", body: "The agent weighs the match, demand and existing places, then builds a report with a verdict, charts and sources.", stat: "a report you can inspect and share" },
 ];
 
 export function MethodStrip() {

@@ -1,6 +1,8 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useSWRImmutable from "swr/immutable";
+import { useEventCallback, useEventListener } from "usehooks-ts";
 import { useSearchParams } from "next/navigation";
 import { useDataset } from "@/hooks/use-dataset";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -10,7 +12,7 @@ import { coreHoods, isLive, loadCells, loadCore, loadEvals } from "@/lib/data";
 import { cellSimilarities, neighbourhoodVector, rankHoods } from "@/lib/similarity";
 import { gradientCss } from "@/lib/colors";
 import { cn } from "@/lib/utils";
-import type { City, CoreFile, DataSet, Evals, Hood, OpportunityResult, PackedCells, TwinMatch } from "@/lib/types";
+import type { City, DataSet, Hood, OpportunityResult, TwinMatch } from "@/lib/types";
 import type { AgentAction } from "@/lib/agent/types";
 import type { BlockInfo, Mode, MapTwin } from "@/components/map/explore-map";
 import { MIX } from "@/components/map/mix";
@@ -19,6 +21,8 @@ import { SourcePanel, type SourcePin } from "./source-panel";
 import { TwinsPanel } from "./twins-panel";
 import { CommandPalette } from "./command-palette";
 import { AgentPanel } from "@/components/agent/agent-panel";
+import { runTour } from "@/components/tour/tour";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
 const ExploreMap = dynamic(() => import("@/components/map/explore-map"), {
   ssr: false,
@@ -26,27 +30,47 @@ const ExploreMap = dynamic(() => import("@/components/map/explore-map"), {
 });
 
 const DEFAULT_FROM = "los-angeles-silver-lake";
+
 type RightTab = "twins" | "agent";
 type MobileTab = "from" | RightTab;
 type ExploreView = "map" | "report";
+interface ExploreLocation { fromId: string; toCity: string | null; view: ExploreView; reportId: string | null }
+
+function syncLocation({ fromId, toCity, view, reportId }: ExploreLocation) {
+  const url = new URL(window.location.href);
+  for (const [key, value] of Object.entries({ from: fromId, to: toCity, view: view === "report" ? view : null, report: reportId })) {
+    if (value) url.searchParams.set(key, value); else url.searchParams.delete(key);
+  }
+  window.history.replaceState(null, "", url.toString());
+}
+
+async function loadCores([, ...ids]: string[]) {
+  return Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await loadCore(id)] as const)));
+}
 
 export function ExploreClient() {
   const sp = useSearchParams();
   const { ds: baseDs, error, refresh } = useDataset();
   const desktop = useMediaQuery("(min-width: 1024px)", true);
-  const [fromId, setFromId] = useState(sp.get("from") ?? DEFAULT_FROM);
-  const [toCity, setToCity] = useState<string | null>(sp.get("to"));
+  const [location, setLocation] = useState<ExploreLocation>(() => ({
+    fromId: sp.get("from") ?? DEFAULT_FROM, toCity: sp.get("to"),
+    view: sp.get("view") === "report" ? "report" : "map", reportId: sp.get("report"),
+  }));
+  const { fromId, toCity, view, reportId } = location;
+  const locationRef = useRef(location);
+  const changeLocation = useEventCallback((patch: Partial<ExploreLocation>) => {
+    const next = { ...locationRef.current, ...patch };
+    locationRef.current = next;
+    setLocation(next);
+    if (baseDs) syncLocation(next);
+  });
   const [pin, setPin] = useState<SourcePin | null>(null);
   const [mode, setMode] = useState<Mode>("twin");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [srcCells, setSrcCells] = useState<PackedCells | null>(null);
-  const [tgtCells, setTgtCells] = useState<PackedCells | null>(null);
-  const [evals, setEvals] = useState<Evals | null>(null);
+  const { data: evals = null, error: evalError } = useSWRImmutable("/data/evals.json", loadEvals, { shouldRetryOnError: false });
   const [cmdOpen, setCmdOpen] = useState(false);
   const [flying, setFlying] = useState(false);
   const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" || sp.get("q") || sp.get("view") === "report" ? "agent" : "twins");
-  const [view, setView] = useState<ExploreView>(sp.get("view") === "report" ? "report" : "map");
-  const [reportId, setReportId] = useState<string | null>(sp.get("report"));
+  const [sourceOpen, setSourceOpen] = useState(false);
   const leftP = usePanel("left", 300, 220, 460, "left");
   const rightP = usePanel("right", 400, 320, 680, "right");
   const setRightCollapsed = rightP.setCollapsed;
@@ -57,9 +81,9 @@ export function ExploreClient() {
   const [focus, setFocus] = useState<{ lat: number; lon: number; label?: string; t: number } | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>(sp.get("q") || sp.get("tab") === "agent" || sp.get("view") === "report" ? "agent" : "from");
   const [opp, setOpp] = useState<OpportunityResult | null>(null);
-  const [cores, setCores] = useState<Record<string, CoreFile>>({});
 
-  useEffect(() => { loadEvals().then(setEvals).catch(() => {}); }, []);
+  useEffect(() => { void runTour("explore", { delay: 1200 }); }, []);
+  useEffect(() => { if (baseDs) syncLocation(locationRef.current); }, [baseDs]);
 
   // Live cities only have the 40 core dims, so any pair that includes one is compared on core vectors on both sides.
   const rawHood = baseDs?.hoods.find((h) => h.id === fromId) ?? baseDs?.hoods[0] ?? null;
@@ -68,15 +92,13 @@ export function ExploreClient() {
   const tgtLive = isLive(toCity ? baseDs?.cities.find((c) => c.id === toCity) : null);
   const coreMode = srcLive || tgtLive;
   const coreIds = useMemo(() => (coreMode ? [sourceCityId, toCity].filter((x): x is string => !!x) : []), [coreMode, sourceCityId, toCity]);
-  useEffect(() => {
-    coreIds.forEach((id) => loadCore(id).then((f) => setCores((c) => (c[id] === f ? c : { ...c, [id]: f }))).catch(() => {}));
-  }, [coreIds]);
-  const coreReady = coreMode && coreIds.every((id) => cores[id]);
+  const { data: cores, error: coreError } = useSWRImmutable(coreIds.length ? ["twin:cores", ...coreIds] : null, loadCores, { shouldRetryOnError: false });
+  const coreReady = coreMode && !!cores;
 
   const ds: DataSet | null = useMemo(() => {
     if (!baseDs) return null;
     if (!coreMode) return baseDs;
-    const hoods = coreReady ? coreIds.flatMap((id) => coreHoods(cores[id], id)) : baseDs.hoods;
+    const hoods = coreReady && cores ? coreIds.flatMap((id) => coreHoods(cores[id], id)) : baseDs.hoods;
     return { ...baseDs, basket: coreReady || srcLive ? (baseDs.coreBasket ?? baseDs.basket) : baseDs.basket, hoods, twins: {} };
   }, [baseDs, coreMode, coreReady, coreIds, cores, srcLive]);
 
@@ -85,20 +107,10 @@ export function ExploreClient() {
   const targetCity = toCity ? ds?.cities.find((c) => c.id === toCity) ?? null : null;
   const oppCity = opp ? ds?.cities.find((c) => c.id === opp.city) ?? null : null;
 
-  useEffect(() => {
-    if (!sourceCityId) return;
-    let alive = true;
-    setSrcCells(null);
-    loadCells(sourceCityId, coreMode).then((c) => alive && setSrcCells(c)).catch(() => {});
-    return () => { alive = false; };
-  }, [sourceCityId, coreMode]);
-  useEffect(() => {
-    if (!toCity) { setTgtCells(null); return; }
-    let alive = true;
-    setTgtCells(null);
-    loadCells(toCity, coreMode).then((c) => alive && setTgtCells(c)).catch(() => {});
-    return () => { alive = false; };
-  }, [toCity, coreMode]);
+  const { data: srcCells = null, error: srcError } = useSWRImmutable(sourceCityId ? ["twin:cells", sourceCityId, coreMode] as const : null,
+    ([, id, core]) => loadCells(id, core), { shouldRetryOnError: false });
+  const { data: tgtCells = null, error: tgtError } = useSWRImmutable(toCity ? ["twin:cells", toCity, coreMode] as const : null,
+    ([, id, core]) => loadCells(id, core), { shouldRetryOnError: false });
 
   // A dropped pin keeps only its location; its vector is re-derived from whichever cells (116 or 40 dims) are loaded.
   const livePin: SourcePin | null = useMemo(() => {
@@ -109,16 +121,6 @@ export function ExploreClient() {
   }, [pin, srcCells]);
   const sourceVec = livePin ? (livePin.vec.length ? livePin.vec : null) : sourceHood?.v ?? null;
 
-  useEffect(() => {
-    if (!ds) return;
-    const u = new URL(window.location.href);
-    u.searchParams.set("from", fromId);
-    if (toCity) u.searchParams.set("to", toCity); else u.searchParams.delete("to");
-    if (view === "report") u.searchParams.set("view", "report"); else u.searchParams.delete("view");
-    if (reportId) u.searchParams.set("report", reportId); else u.searchParams.delete("report");
-    window.history.replaceState(null, "", u.toString());
-  }, [ds, fromId, toCity, view, reportId]);
-
   const srcSim = useMemo(() => (srcCells && sourceVec && sourceVec.length === srcCells.dim ? cellSimilarities(srcCells, sourceVec) : null), [srcCells, sourceVec]);
   const tgtSim = useMemo(() => (tgtCells && sourceVec && sourceVec.length === tgtCells.dim ? cellSimilarities(tgtCells, sourceVec) : null), [tgtCells, sourceVec]);
 
@@ -128,7 +130,9 @@ export function ExploreClient() {
     return rankHoods(sourceVec, ds.hoods, toCity, 5);
   }, [ds, toCity, sourceVec, pin, fromId, coreMode]);
 
-  useEffect(() => { setSelected(matches[0]?.hood ?? null); }, [matches]);
+  const [selection, setSelection] = useState<{ matches: TwinMatch[]; id: string | null } | null>(null);
+  const selected = selection?.matches === matches ? selection.id : matches[0]?.hood ?? null;
+  const setSelected = useEventCallback((id: string | null) => setSelection({ matches, id }));
 
   const mapTwins: MapTwin[] = useMemo(
     () => (ds ? matches.map((m) => ({ hood: ds.hoods.find((h) => h.id === m.hood)!, score: m.score })).filter((t) => t.hood) : []),
@@ -136,19 +140,20 @@ export function ExploreClient() {
   );
 
   const pickHood = useCallback((id: string) => {
-    setPin(null); setFromId(id);
-    setToCity((t) => (t && ds?.hoods.find((h) => h.id === id)?.city === t ? null : t));
-  }, [ds]);
-  const { recent, popular, visit } = usePairs();
-  const pickPair = useCallback((p: Pair) => { setPin(null); setFromId(p.from); setToCity(p.to); }, []);
+    setPin(null); setSourceOpen(false);
+    changeLocation({ fromId: id, toCity: toCity && ds?.hoods.find((h) => h.id === id)?.city === toCity ? null : toCity });
+  }, [ds, toCity, changeLocation]);
+  const { recent, popular, visit, error: pairsError } = usePairs();
+  const pickPair = useCallback((p: Pair) => { setPin(null); changeLocation({ fromId: p.from, toCity: p.to }); setSourceOpen(false); }, [changeLocation]);
   // every pair someone actually opens feeds "recent" (this browser) and "most opened" (everyone)
   useEffect(() => {
     if (!pin && toCity && ds?.hoods.some((h) => h.id === fromId)) visit(fromId, toCity);
   }, [fromId, toCity, pin, ds, visit]);
   const pickCity = useCallback((id: string | null) => {
-    setToCity(id);
-    if (id) { setRight("twins"); setMobileTab("twins"); }
-  }, []);
+    changeLocation({ toCity: id });
+    if (view === "report") { setSourceOpen(false); setRight("agent"); setMobileTab("agent"); }
+    else if (id) { setRight("twins"); setMobileTab("twins"); }
+  }, [view, changeLocation]);
 
   const onPickSourceCell = useCallback((i: number) => {
     if (!srcCells || !ds) return;
@@ -164,22 +169,23 @@ export function ExploreClient() {
     const target = selected ?? matches[0]?.hood;
     if (!target) return;
     const back = sourceCityId;
-    setPin(null); setFromId(target); setToCity(back);
-  }, [ds, toCity, selected, matches, sourceCityId]);
+    setPin(null); changeLocation({ fromId: target, toCity: back });
+  }, [ds, toCity, selected, matches, sourceCityId, changeLocation]);
 
   const cityAdded = useCallback((city: City) => {
     void refresh().then(() => {
-      if (city.id !== sourceCityId) setToCity(city.id); // the agent moves the map, never the panel away from the chat
+      if (city.id !== sourceCityId) changeLocation({ toCity: city.id }); // the agent moves the map, never the panel away from the chat
     });
-  }, [refresh, sourceCityId]);
+  }, [refresh, sourceCityId, changeLocation]);
   const userAddedCity = useCallback((city: City) => {
     void refresh().then(() => { if (city.id !== sourceCityId) pickCity(city.id); });
   }, [refresh, sourceCityId, pickCity]);
 
-  const changeView = useCallback((next: ExploreView) => {
-    setView(next);
+  const changeView = useCallback((next: ExploreView, id?: string) => {
+    changeLocation({ view: next, ...(id !== undefined ? { reportId: id } : {}) });
+    setSourceOpen(false);
     if (next === "report") { setRight("agent"); setMobileTab("agent"); setRightCollapsed(false); }
-  }, [setRightCollapsed]);
+  }, [setRightCollapsed, changeLocation]);
   useEffect(() => { if (view === "report") setRightCollapsed(false); }, [view, setRightCollapsed]);
 
   const onAgentAction = useCallback((act: AgentAction) => {
@@ -194,15 +200,15 @@ export function ExploreClient() {
       if (!ds.cities.some((c) => c.id === a.city)) void refresh();
       setOpp({ city: a.city, cells: a.cells });
       setMode("opportunity");
-      if (a.city !== sourceCityId) setToCity(a.city);
+      if (a.city !== sourceCityId) changeLocation({ toCity: a.city });
     } else if (a.type === "select" || a.type === "showTwins") {
-      setPin(null); setFromId(a.from); setToCity(a.to);
+      setPin(null); changeLocation({ fromId: a.from, toCity: a.to });
       if (a.twin) setTimeout(() => setSelected(a.twin!), 60);
     } else if (a.type === "focus") {
       // a place in another fingerprinted city: show that city's blocks too
       const near = ds.cities.map((c) => ({ c, d: Math.hypot(c.center[0] - a.lon, c.center[1] - a.lat) })).sort((x, y) => x.d - y.d)[0];
       if (near && near.d < 0.8 && near.c.id !== toCity && near.c.id !== sourceCityId) {
-        setMode((m) => (m === "opportunity" ? "twin" : m)); setToCity(near.c.id);
+        setMode((m) => (m === "opportunity" ? "twin" : m)); changeLocation({ toCity: near.c.id });
       }
       setFocus({ lat: a.lat, lon: a.lon, label: a.label, t: Date.now() });
     } else if (a.type === "focusHood") {
@@ -214,18 +220,18 @@ export function ExploreClient() {
         if (lh) setFocus({ lat: lh.lat, lon: lh.lon, label: a.label ?? lh.name, t: Date.now() });
       }).catch(() => {});
     } else if (a.type === "report") {
-      setReportId(a.id);
-      changeView("report");
+      void runTour("report");
+      changeView("report", a.id);
     } else if (a.type === "flyTo") {
       const h = ds.hoods.find((x) => x.id === a.hood);
       if (!h) return;
-      if (h.city === toCity) setSelected(h.id); else { setPin(null); setFromId(h.id); }
+      if (h.city === toCity) setSelected(h.id); else { setPin(null); changeLocation({ fromId: h.id }); }
     } else if (a.type === "highlightCells") {
       // Show where the item clusters: make the strongest neighbourhood for it the source.
       const best = ds.hoods.filter((h) => h.city === a.city).sort((x, y) => (y.v[a.item] ?? 0) - (x.v[a.item] ?? 0))[0];
-      if (best) { setPin(null); setFromId(best.id); setToCity((t) => (t === a.city ? null : t)); }
+      if (best) { setPin(null); changeLocation({ fromId: best.id, toCity: toCity === a.city ? null : toCity }); }
     }
-  }, [ds, toCity, sourceCityId, cityAdded, refresh, changeView]);
+  }, [ds, toCity, sourceCityId, cityAdded, refresh, changeView, changeLocation, setSelected]);
 
   const focusQueryHandled = useRef(false);
   useEffect(() => {
@@ -241,9 +247,10 @@ export function ExploreClient() {
     }
   }, [ds, sp, onAgentAction]);
 
+  const dataError = coreError || srcError || tgtError || evalError || pairsError;
   if (error) return <div className="grid min-h-dvh place-items-center text-destructive">failed to load data: {error}</div>;
   if (!ds || !sourceHood || !sourceVec) {
-    return <div className="grid min-h-dvh place-items-center text-[12px] text-dim"><span className="cursor-block">loading taste data</span></div>;
+    return <div className="grid min-h-dvh place-items-center text-[12px] text-dim"><span className={cn(!dataError && "cursor-block")}>{dataError ? "Some taste data could not be loaded." : "loading taste data"}</span></div>;
   }
 
   const sourcePoint = { lon: pin?.lon ?? sourceHood.lon, lat: pin?.lat ?? sourceHood.lat, name: pin ? "pin" : sourceHood.name, cityId: sourceCityId };
@@ -286,6 +293,7 @@ export function ExploreClient() {
               : <span>{sourceCity?.name.toLowerCase()}{targetCity ? <> <span className="text-dim">→</span> {targetCity.name.toLowerCase()}</> : ""}</span>}
         </div>
       </div>
+      {dataError && <p role="status" className="absolute left-3 top-14 z-10 border border-line bg-background/90 px-2 py-1 text-[11px] text-destructive">Some taste data could not be loaded.</p>}
       {ask && <AskBox block={ask} sourceName={sourceName} onClose={() => setAsk(null)} onAsk={(q) => askAgent(ask, q)}
         onUseAsSource={ask.isSource ? () => { onPickSourceCell(ask.index); setAsk(null); } : undefined} />}
       {mode === "twin" ? (
@@ -318,7 +326,7 @@ export function ExploreClient() {
       {desktop ? (
         <div className="relative flex h-full min-w-0">
           {leftP.collapsed || view === "report" ? (
-            <Rail label="from" side="left" onOpen={() => leftP.setCollapsed(false)} />
+            <Rail label="from" side="left" onOpen={() => view === "report" ? setSourceOpen(true) : leftP.setCollapsed(false)} />
           ) : (
             <aside className="relative flex min-h-0 shrink-0 flex-col border-r border-line" style={{ width: leftP.width }} aria-label="Source neighbourhood">
               <button onClick={() => leftP.setCollapsed(true)} aria-label="Collapse panel" title="collapse"
@@ -327,7 +335,7 @@ export function ExploreClient() {
               <Handle side="right" {...leftP.handle} />
             </aside>
           )}
-          <div className={cn("relative min-h-0 overflow-hidden", view === "report" ? "order-2 shrink-0 border-l border-line" : "order-1 min-w-0 flex-1")}
+          <div data-tour="map" className={cn("relative min-h-0 overflow-hidden", view === "report" ? "order-2 shrink-0 border-l border-line" : "order-1 min-w-0 flex-1")}
             style={view === "report" ? dockP.collapsed
               ? { position: "absolute", right: 12, bottom: 12, zIndex: 30, width: 260, height: 170, border: "1px solid var(--line-strong)" }
               : { width: dockP.width, flex: "0 0 auto" } : undefined}>
@@ -361,9 +369,9 @@ export function ExploreClient() {
         </div>
       ) : (
         <div className="flex h-full flex-col">
-          <div className="h-[42dvh] shrink-0 border-b border-line">{map}</div>
+          <div className={cn("shrink-0 border-b border-line", view === "report" ? "h-[28dvh]" : "h-[42dvh]")}>{map}</div>
           <div role="tablist" className="flex h-10 shrink-0 items-stretch border-b border-line">
-            {tabBtn("from", "from", mobileTab === "from", () => setMobileTab("from"))}
+            {tabBtn("from", "from", mobileTab === "from", () => view === "report" ? setSourceOpen(true) : setMobileTab("from"))}
             {tabBtn("twins", "twins", mobileTab === "twins", () => setMobileTab("twins"), !targetCity)}
             {tabBtn("agent", "agent", mobileTab === "agent", () => setMobileTab("agent"))}
           </div>
@@ -372,6 +380,16 @@ export function ExploreClient() {
           <div className={cn("min-h-0 flex-1", mobileTab !== "agent" && "hidden")}>{agentUI}</div>
         </div>
       )}
+      <Sheet open={sourceOpen && view === "report"} onOpenChange={setSourceOpen}>
+        <SheetContent side="left" showCloseButton={false} className="gap-0 border-line-strong bg-background p-0 data-[side=left]:w-[min(90vw,380px)]">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <SheetTitle className="label text-[10.5px]">From / source neighbourhood</SheetTitle>
+            <SheetClose className="text-[11px] text-dim hover:text-foreground">Close</SheetClose>
+          </div>
+          <SheetDescription className="sr-only">Choose the source neighbourhood and destination city for your report.</SheetDescription>
+          <div className="min-h-0 flex-1 overflow-hidden">{sourceUI}</div>
+        </SheetContent>
+      </Sheet>
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} ds={ds} sourceCity={sourceCityId} onPickHood={pickHood} onPickCity={pickCity} />
     </main>
   );
@@ -403,8 +421,7 @@ function AskBox({ block, sourceName, onClose, onAsk, onUseAsSource }: {
   block: BlockInfo; sourceName: string; onClose: () => void; onAsk: (q: string) => void; onUseAsSource?: () => void;
 }) {
   const [q, setQ] = useState("");
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  useEventListener("keydown", (e) => { if (e.key === "Escape") onClose(); });
   const quick = ["What's the vibe here?", "Where should I go here?", "What would do well here?"];
   return (
     <div className="absolute z-30 w-[290px] border border-line-strong bg-popover shadow-[0_8px_30px_rgba(0,0,0,.5)]"
@@ -415,7 +432,7 @@ function AskBox({ block, sourceName, onClose, onAsk, onUseAsSource }: {
       </div>
       <form onSubmit={(e) => { e.preventDefault(); if (q.trim()) onAsk(q.trim()); }} className="flex items-center gap-2 border-b border-line px-2.5 py-2">
         <span className="text-primary">›</span>
-        <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} placeholder="ask about this block…" className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-dim" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="ask about this block…" className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-dim" />
       </form>
       <div className="py-1">
         {quick.map((x) => (

@@ -17,9 +17,9 @@ export function Nav() {
   const path = usePathname();
   return (
     <header className="fixed inset-x-0 top-0 z-40 h-11 border-b border-line bg-background">
-      <nav aria-label="Primary" className="flex h-full items-center gap-8 px-4">
-        <Link href="/" aria-label="Twin home"><Logo /></Link>
-        <div className="flex h-full items-center gap-6">
+      <nav aria-label="Primary" className="flex h-full items-center gap-4 px-3 sm:gap-8 sm:px-4">
+        <Link href="/" aria-label="Twin home" className="shrink-0"><Logo /></Link>
+        <div className="flex h-full min-w-0 items-center gap-4 overflow-x-auto sm:gap-6">
           {LINKS.map((l) => {
             const active = path === l.href || path.startsWith(l.href + "/");
             return (
@@ -28,7 +28,7 @@ export function Nav() {
                 href={l.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex h-full items-center text-[12.5px] transition-colors",
+                  "relative flex h-full shrink-0 items-center text-[12.5px] transition-colors",
                   active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -38,7 +38,7 @@ export function Nav() {
             );
           })}
         </div>
-        <div className="ml-auto hidden items-center gap-4 text-[11px] text-dim sm:flex">
+        <div className="ml-auto hidden shrink-0 items-center gap-4 text-[11px] text-dim md:flex">
           <span>taste data via <a className="link text-muted-foreground" href="https://qloo.com" target="_blank" rel="noreferrer">qloo</a></span>
           <a className="link text-muted-foreground" href="https://github.com/srthkdev/twin" target="_blank" rel="noreferrer">source</a>
         </div>

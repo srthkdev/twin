@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useInterval } from "usehooks-ts";
 import { useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -27,11 +28,7 @@ export function MethodDiagram() {
   const reduce = useReducedMotion();
   const [hover, setHover] = useState<number | null>(null);
   const [auto, setAuto] = useState(0);
-  useEffect(() => {
-    if (reduce || hover !== null) return;
-    const t = setInterval(() => setAuto((a) => (a + 1) % STEPS.length), 2600);
-    return () => clearInterval(t);
-  }, [reduce, hover]);
+  useInterval(() => setAuto((a) => (a + 1) % STEPS.length), reduce || hover !== null ? null : 2600);
   const active = hover ?? auto;
 
   const blob = (x: number, y: number) => Math.exp(-(((x - 3.5) ** 2 + (y - 3.5) ** 2) / 7));

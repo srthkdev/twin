@@ -5,6 +5,12 @@ import { MethodStrip } from "@/components/landing/method-strip";
 import { EvalsTeaser } from "@/components/landing/evals-teaser";
 import { AgentSection } from "@/components/landing/agent-section";
 import { LogoMark } from "@/components/logo";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Twin — find what works, and where it works next",
+  description: "Qloo taste data turns into a decision: where to open, expand, move or tour. Get a live report with a verdict, charts and evidence.",
+};
 
 function Section({ n, label, title, children }: { n: string; label: string; title: string; children: React.ReactNode }) {
   return (
@@ -22,23 +28,19 @@ export default function Home() {
   return (
     <main>
       <Hero />
-      <Section n="01" label="the bias" title="Raw taste data mostly measures how busy a place is.">
+      <Section n="01" label="who it is for" title="A neighbourhood decision, for four different lives.">
+        <AgentSection />
+      </Section>
+      <Section n="02" label="the difference" title="A busy street is not the same as the right street.">
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <div className="space-y-4 text-[13px] leading-relaxed text-muted-foreground">
-            <p>We pulled Qloo heatmaps for a basket of artists, brands and place types. A cell&apos;s raw affinity tracks
-              Qloo&apos;s own popularity score at <span className="num text-foreground">r = 0.97</span>: wherever people are,
-              everything scores high.</p>
-            <p>Compare neighbourhoods on raw scores and they all come out near-identical. Subtract each cell&apos;s baseline and
-              the city&apos;s real texture comes back — Compton at the <span className="num text-foreground">99th</span> percentile
-              for Kendrick Lamar, East LA for Peso Pluma, Silver Lake near the bottom for it.</p>
+            <p>Popular blocks score highly for almost everything. That makes a busy shopping street and a music neighbourhood look more alike than they should.</p>
+            <p>Twin accounts for that busyness, then compares what is distinctive: the artists, brands, food and nightlife that stand out locally. Switch between popularity and taste to see the difference in actual Qloo data.</p>
           </div>
           <BugVisual />
         </div>
       </Section>
-      <Section n="02" label="the agent" title="Ask it to do the work, not just answer.">
-        <AgentSection />
-      </Section>
-      <Section n="03" label="method" title="Four steps from heatmaps to twins.">
+      <Section n="03" label="method" title="From local taste to a decision you can inspect.">
         <MethodStrip />
         <Link href="/method" className="link mt-6 inline-block text-[12px] text-muted-foreground">full method and limitations →</Link>
       </Section>

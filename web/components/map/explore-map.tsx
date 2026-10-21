@@ -117,7 +117,7 @@ function nearestHood(hoods: Hood[], lat: number, lon: number): string | null {
 function likeness(m: number | null, name: string) {
   const n = escapeHtml(name.toLowerCase());
   if (m == null) return n;
-  return m >= 0.15 ? `<span style="color:#f0a03c">${Math.round(m * 100)}%</span> like ${n}` : `<span style="color:#8d8a80">not much like ${n}</span>`;
+  return m >= 0.15 ? `<span style="color:#f0a03c">${Math.round(m * 100)}% match</span> with ${n}` : `<span style="color:#8d8a80">weak match with ${n}</span>`;
 }
 const card = (title: string, body: string, foot: string) =>
   `<div style="padding:7px 9px 8px"><div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5f5c55">${title}</div>${body}</div><div style="border-top:1px solid #22211d;padding:5px 9px;color:#f0a03c;font-size:10.5px">${foot}</div>`;
@@ -147,7 +147,7 @@ export default function ExploreMap(props: ExploreMapProps) {
         const c = p.opportunity?.cells[info.index];
         if (!c) return null;
         const near = nearestHood(p.hoods, c.lat, c.lon);
-        return { html: card(near ? escapeHtml(near) : "this block", `<div style="font-size:15px;margin:2px 0 6px">${c.supply === 0 ? "no" : c.supply} existing · demand ${c.demand >= 2 ? "very strong" : c.demand >= 1 ? "strong" : c.demand > 0 ? "above average" : "low"}</div><div style="color:#8d8a80">opportunity score ${c.score.toFixed(1)}</div>`, "click to ask about this spot"), style };
+        return { html: card(near ? escapeHtml(near) : "this block", `<div style="font-size:15px;margin:2px 0 6px">${c.supply === 0 ? "no" : c.supply} existing places · ${c.demand >= 2 ? "very strong" : c.demand >= 1 ? "strong" : c.demand > 0 ? "above average" : "low"} demand</div><div style="color:#8d8a80">opportunity compares demand with existing places</div>`, "click to ask about this spot"), style };
       }
       const b = blockAt(info);
       if (!b) return null;
@@ -156,7 +156,7 @@ export default function ExploreMap(props: ExploreMapProps) {
       const i = b.index;
       const stack = b.isSource ? colsRef.current.srcStack : colsRef.current.tgtStack;
       const head = p.mode === "raw"
-        ? `<div style="font-size:15px;margin:2px 0 6px">busyness ${Math.round(cells.d[i] * 100)}%</div><div style="color:#8d8a80;margin-bottom:6px">raw qloo — mostly how busy the block is</div>`
+        ? `<div style="font-size:15px;margin:2px 0 6px">popularity ${Math.round(cells.d[i] * 100)}%</div><div style="color:#8d8a80;margin-bottom:6px">how busy this block is in Qloo's data</div>`
         : `<div style="font-size:15px;margin:2px 0 6px">${likeness(b.match, p.sourceName)}</div>`;
       const mix = stack ? MIX.map((m, j) => {
         const v = stack.mix[i * 3 + j];
@@ -303,7 +303,7 @@ export default function ExploreMap(props: ExploreMapProps) {
       el.setAttribute("aria-label", `Twin ${idx + 1}: ${t.hood.name}`);
       el.dataset.twin = t.hood.id; el.dataset.rank = String(idx + 1);
       el.className = "twin-marker group flex cursor-pointer flex-col items-center border-0 bg-transparent p-0";
-      el.innerHTML = `<div class="twin-label" style="padding:2px 6px;background:#0b0b0a;border:1px solid #383631;color:#e6e3da;font:500 11px var(--font-geist-mono),monospace;white-space:nowrap;margin-bottom:3px">${escapeHtml(t.hood.name.toLowerCase())} <span style="color:#f0a03c">${t.score.toFixed(2)}</span></div><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font:600 11px var(--font-geist-mono),monospace;${idx === 0 ? "background:#f0a03c;color:#0b0b0a" : "background:#0b0b0a;color:#f0a03c;border:1px solid #f0a03c"}">${idx + 1}</div>`;
+      el.innerHTML = `<div class="twin-label" style="padding:2px 6px;background:#0b0b0a;border:1px solid #383631;color:#e6e3da;font:500 11px var(--font-geist-mono),monospace;white-space:nowrap;margin-bottom:3px">${escapeHtml(t.hood.name.toLowerCase())} <span style="color:#f0a03c">${Math.round(t.score * 100)}% match</span></div><div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font:600 11px var(--font-geist-mono),monospace;${idx === 0 ? "background:#f0a03c;color:#0b0b0a" : "background:#0b0b0a;color:#f0a03c;border:1px solid #f0a03c"}">${idx + 1}</div>`;
       el.addEventListener("click", (e) => { e.stopPropagation(); propsRef.current.onSelectTwin(t.hood.id); });
       markersRef.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([t.hood.lon, t.hood.lat]).addTo(map));
     });
