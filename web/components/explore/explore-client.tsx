@@ -28,6 +28,7 @@ const ExploreMap = dynamic(() => import("@/components/map/explore-map"), {
 const DEFAULT_FROM = "los-angeles-silver-lake";
 type RightTab = "twins" | "agent";
 type MobileTab = "from" | RightTab;
+type ExploreView = "map" | "report";
 
 export function ExploreClient() {
   const sp = useSearchParams();
@@ -43,14 +44,18 @@ export function ExploreClient() {
   const [evals, setEvals] = useState<Evals | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [flying, setFlying] = useState(false);
-  const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" || sp.get("q") ? "agent" : "twins");
+  const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" || sp.get("q") || sp.get("view") === "report" ? "agent" : "twins");
+  const [view, setView] = useState<ExploreView>(sp.get("view") === "report" ? "report" : "map");
+  const [reportId, setReportId] = useState<string | null>(sp.get("report"));
   const leftP = usePanel("left", 300, 220, 460, "left");
   const rightP = usePanel("right", 400, 320, 680, "right");
+  const setRightCollapsed = rightP.setCollapsed;
+  const dockP = usePanel("report-map", 520, 300, 900, "right");
   const [ask, setAsk] = useState<BlockInfo | null>(null);
   const [external, setExternal] = useState<{ text: string; t: number } | null>(null);
   const [agentFocus, setAgentFocus] = useState<{ lat: number; lon: number; label: string } | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number; label?: string; t: number } | null>(null);
-  const [mobileTab, setMobileTab] = useState<MobileTab>(sp.get("q") || sp.get("tab") === "agent" ? "agent" : "from");
+  const [mobileTab, setMobileTab] = useState<MobileTab>(sp.get("q") || sp.get("tab") === "agent" || sp.get("view") === "report" ? "agent" : "from");
   const [opp, setOpp] = useState<OpportunityResult | null>(null);
   const [cores, setCores] = useState<Record<string, CoreFile>>({});
 
@@ -109,8 +114,10 @@ export function ExploreClient() {
     const u = new URL(window.location.href);
     u.searchParams.set("from", fromId);
     if (toCity) u.searchParams.set("to", toCity); else u.searchParams.delete("to");
+    if (view === "report") u.searchParams.set("view", "report"); else u.searchParams.delete("view");
+    if (reportId) u.searchParams.set("report", reportId); else u.searchParams.delete("report");
     window.history.replaceState(null, "", u.toString());
-  }, [ds, fromId, toCity]);
+  }, [ds, fromId, toCity, view, reportId]);
 
   const srcSim = useMemo(() => (srcCells && sourceVec && sourceVec.length === srcCells.dim ? cellSimilarities(srcCells, sourceVec) : null), [srcCells, sourceVec]);
   const tgtSim = useMemo(() => (tgtCells && sourceVec && sourceVec.length === tgtCells.dim ? cellSimilarities(tgtCells, sourceVec) : null), [tgtCells, sourceVec]);
@@ -169,6 +176,12 @@ export function ExploreClient() {
     void refresh().then(() => { if (city.id !== sourceCityId) pickCity(city.id); });
   }, [refresh, sourceCityId, pickCity]);
 
+  const changeView = useCallback((next: ExploreView) => {
+    setView(next);
+    if (next === "report") { setRight("agent"); setMobileTab("agent"); setRightCollapsed(false); }
+  }, [setRightCollapsed]);
+  useEffect(() => { if (view === "report") setRightCollapsed(false); }, [view, setRightCollapsed]);
+
   const onAgentAction = useCallback((act: AgentAction) => {
     if (!ds) return;
     // addCity / opportunity come from the v2 backend; typed locally so this compiles either way.
@@ -200,6 +213,9 @@ export function ExploreClient() {
         const lh = core?.hoods.find((x) => x.id === a.hood);
         if (lh) setFocus({ lat: lh.lat, lon: lh.lon, label: a.label ?? lh.name, t: Date.now() });
       }).catch(() => {});
+    } else if (a.type === "report") {
+      setReportId(a.id);
+      changeView("report");
     } else if (a.type === "flyTo") {
       const h = ds.hoods.find((x) => x.id === a.hood);
       if (!h) return;
@@ -209,7 +225,21 @@ export function ExploreClient() {
       const best = ds.hoods.filter((h) => h.city === a.city).sort((x, y) => (y.v[a.item] ?? 0) - (x.v[a.item] ?? 0))[0];
       if (best) { setPin(null); setFromId(best.id); setToCity((t) => (t === a.city ? null : t)); }
     }
-  }, [ds, toCity, sourceCityId, cityAdded, refresh]);
+  }, [ds, toCity, sourceCityId, cityAdded, refresh, changeView]);
+
+  const focusQueryHandled = useRef(false);
+  useEffect(() => {
+    if (!ds || focusQueryHandled.current) return;
+    const requested = sp.get("focus");
+    if (!requested) return;
+    focusQueryHandled.current = true;
+    if (requested.startsWith("geo:")) {
+      const [lat, lon] = requested.slice(4).split(",").map(Number);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) setFocus({ lat, lon, t: Date.now() });
+    } else if (requested.startsWith("hood:")) {
+      onAgentAction({ type: "focusHood", hood: requested.slice(5) });
+    }
+  }, [ds, sp, onAgentAction]);
 
   if (error) return <div className="grid min-h-dvh place-items-center text-destructive">failed to load data: {error}</div>;
   if (!ds || !sourceHood || !sourceVec) {
@@ -229,7 +259,8 @@ export function ExploreClient() {
       to <span className="text-foreground">{sourceName.toLowerCase()}</span> light up.
     </div>
   );
-  const agentUI = <AgentPanel context={{ fromHood: pin ? null : fromId, toCity, focus: agentFocus }} onAction={onAgentAction} className="h-full" initialInput={sp.get("q") ?? undefined} external={external} />;
+  const agentUI = <AgentPanel context={{ fromHood: pin ? null : fromId, toCity, focus: agentFocus }} onAction={onAgentAction} className="h-full"
+    initialInput={sp.get("q") ?? undefined} external={external} view={view} reportId={reportId} onViewChange={changeView} />;
   const askAgent = (b: BlockInfo, question: string) => {
     const where = `${b.near ? `near ${b.near}` : "a block"}, ${ds.cities.find((c) => c.id === b.city)?.name ?? b.city}`;
     setAgentFocus({ lat: b.lat, lon: b.lon, label: where });
@@ -285,8 +316,8 @@ export function ExploreClient() {
   return (
     <main className="fixed inset-x-0 bottom-0 top-11 bg-background">
       {desktop ? (
-        <div className="flex h-full">
-          {leftP.collapsed ? (
+        <div className="relative flex h-full min-w-0">
+          {leftP.collapsed || view === "report" ? (
             <Rail label="from" side="left" onOpen={() => leftP.setCollapsed(false)} />
           ) : (
             <aside className="relative flex min-h-0 shrink-0 flex-col border-r border-line" style={{ width: leftP.width }} aria-label="Source neighbourhood">
@@ -296,13 +327,24 @@ export function ExploreClient() {
               <Handle side="right" {...leftP.handle} />
             </aside>
           )}
-          <div className="relative min-w-0 flex-1">{map}</div>
-          {rightP.collapsed ? (
+          <div className={cn("relative min-h-0 overflow-hidden", view === "report" ? "order-2 shrink-0 border-l border-line" : "order-1 min-w-0 flex-1")}
+            style={view === "report" ? dockP.collapsed
+              ? { position: "absolute", right: 12, bottom: 12, zIndex: 30, width: 260, height: 170, border: "1px solid var(--line-strong)" }
+              : { width: dockP.width, flex: "0 0 auto" } : undefined}>
+            {view === "report" && !dockP.collapsed && <Handle side="left" {...dockP.handle} />}
+            {map}
+            {view === "report" && <button type="button" onClick={() => dockP.setCollapsed(!dockP.collapsed)}
+              className="absolute right-2 top-11 z-20 border border-line bg-background/95 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+              {dockP.collapsed ? "expand map" : "minimise map"}
+            </button>}
+          </div>
+          {rightP.collapsed && view !== "report" ? (
             <Rail label={right === "agent" ? "agent" : "twins"} side="right" onOpen={() => rightP.setCollapsed(false)} />
           ) : (
-            <aside className="relative flex min-h-0 shrink-0 flex-col border-l border-line" style={{ width: rightP.width }} aria-label="Twins and agent">
-              <Handle side="left" {...rightP.handle} />
-              <div role="tablist" className="flex h-10 shrink-0 items-stretch border-b border-line">
+            <aside className={cn("relative flex min-h-0 flex-col", view === "report" ? "order-1 min-w-0 flex-1 border-r border-line" : "order-2 shrink-0 border-l border-line")}
+              style={view === "report" ? undefined : { width: rightP.width }} aria-label="Twins and agent">
+              {view === "map" && <Handle side="left" {...rightP.handle} />}
+              <div role="tablist" className={cn("flex h-10 shrink-0 items-stretch border-b border-line", view === "report" && "hidden")}>
                 {tabBtn("twins", "twins", right === "twins", () => setRight("twins"))}
                 {tabBtn("agent", "agent", right === "agent", () => setRight("agent"))}
                 <button onClick={() => setCmdOpen(true)} className="ml-auto px-3 text-[11.5px] text-dim transition-colors hover:text-foreground" aria-label="Open search (Command K)">
@@ -310,8 +352,10 @@ export function ExploreClient() {
                 </button>
                 <button onClick={() => rightP.setCollapsed(true)} aria-label="Collapse panel" title="collapse" className="px-3 text-dim transition-colors hover:text-foreground">›</button>
               </div>
-              <div className={cn("min-h-0 flex-1 overflow-y-auto", right !== "twins" && "hidden")}>{twinsUI}</div>
-              <div className={cn("min-h-0 flex-1", right !== "agent" && "hidden")}>{agentUI}</div>
+              <div className={cn("min-h-0 flex-1 overflow-y-auto", (right !== "twins" || view === "report") && "hidden")}>{twinsUI}</div>
+              <div className={cn("min-h-0 flex-1", view === "map" && right !== "agent" && "hidden")}>
+                <div className={cn("h-full", view === "report" && "mx-auto w-full max-w-[880px]")}>{agentUI}</div>
+              </div>
             </aside>
           )}
         </div>

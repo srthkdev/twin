@@ -10,6 +10,7 @@ import { AgentSettingsPanel } from "./agent-settings";
 import { Elapsed, Pulse, ToolTrace, type ToolStep } from "./tool-trace";
 import { ResultCard, hasCard } from "./result-cards";
 import { emptySettings, loadSettings, saveSettings, type AgentSettings, type Health } from "./settings";
+import { ReportView } from "./report-view";
 
 interface RecognitionEvent { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }
 interface Recognition {
@@ -122,10 +123,10 @@ function buildGroups(m: TwinUIMessage, times: Times, progress: Record<string, st
 }
 
 /** One assistant message. Memoised: finished messages never re-render while the next answer streams. */
-const MessageView = memo(function MessageView({ m, live, times, progress, files, onLink, onSend, onSave }: {
+const MessageView = memo(function MessageView({ m, live, times, progress, files, onLink, onSend, onSave, onReport, reportView }: {
   m: TwinUIMessage; live: boolean; times: Times; progress?: Record<string, string>;
   files?: { filename: string; markdown: string }[]; onLink: (href: string) => void; onSend: (q: string) => void;
-  onSave: (f: { filename: string; markdown: string }) => void;
+  onSave: (f: { filename: string; markdown: string }) => void; onReport?: (id: string, title: string) => void; reportView: boolean;
 }) {
   const groups = useMemo(() => buildGroups(m, times, progress), [m, times, progress]);
   const waiting = live && !m.parts.some((p) => isToolUIPart(p) && (p.state === "input-available" || p.state === "input-streaming"))
@@ -137,13 +138,13 @@ const MessageView = memo(function MessageView({ m, live, times, progress, files,
         if (g.kind === "tools") return (
           <div key={j}>
             <ToolTrace steps={g.steps} folded={!live} />
-            {g.cards.map((c) => <ResultCard key={c.id} name={c.name} data={c.data} />)}
+            {g.cards.map((c) => <ResultCard key={c.id} name={c.name} data={c.data} onLink={onLink} onOpenReport={onReport} />)}
           </div>
         );
         const { body, next } = splitNext(g.text);
         return (
           <div key={j} className="break-words">
-            <Markdown source={body} variant="chat" onLink={onLink} />
+            <Markdown source={body} variant={reportView ? "article" : "chat"} onLink={onLink} />
             {!live && next.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {next.map((q) => <button key={q} type="button" onClick={() => onSend(q)} className="border border-line px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary">{q}</button>)}
@@ -173,13 +174,16 @@ type Group =
   | { kind: "tools"; steps: ToolStep[]; cards: { name: string; data: unknown; id: string }[] }
   | { kind: "thinking"; text: string; done: boolean; key: string };
 
-export function AgentPanel({ context, onAction, className, initialInput, external }: {
+export function AgentPanel({ context, onAction, className, initialInput, external, view = "map", reportId, onViewChange }: {
   context: { fromHood: string | null; toCity: string | null; focus?: { lat: number; lon: number; label: string } | null };
   /** A question sent from elsewhere in the UI (e.g. the map's ask box); `t` changes per request. */
   external?: { text: string; t: number } | null;
   onAction: (a: AgentAction) => void;
   className?: string;
   initialInput?: string;
+  view?: "map" | "report";
+  reportId?: string | null;
+  onViewChange?: (view: "map" | "report") => void;
 }) {
   const [settings, setSettings] = useState<AgentSettings>(emptySettings);
   const [health, setHealth] = useState<Health | null>(null);
@@ -294,6 +298,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
       if (isFinite(lat) && isFinite(lon)) live.current.onAction({ type: "focus", lat, lon });
     }
   }, []);
+  const openReport = useCallback((id: string, title: string) => onAction({ type: "report", id, title }), [onAction]);
 
   const toggleMic = () => {
     if (listening) { recRef.current?.stop(); return; }
@@ -321,6 +326,10 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11px] text-dim">
         <span className="truncate">{modelLabel || "…"}</span>
         <div className="flex items-center gap-3">
+          {onViewChange && <div role="group" aria-label="Explore layout" className="flex items-center border border-line">
+            {(["map", "report"] as const).map((mode) => <button key={mode} type="button" aria-pressed={view === mode} onClick={() => onViewChange(mode)}
+              className={cn("px-1.5 py-0.5 transition-colors", view === mode ? "bg-raised text-primary" : "hover:text-foreground")}>{mode}</button>)}
+          </div>}
           <button type="button" onClick={() => setSpeak((s) => { if (s) window.speechSynthesis?.cancel(); return !s; })} aria-pressed={speak} className={cn("transition-colors hover:text-foreground", speak && "text-primary")}>
             voice {speak ? "on" : "off"}
           </button>
@@ -332,7 +341,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
       </div>
       {showSettings && <AgentSettingsPanel value={settings} onChange={setSettings} health={health} />}
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-3" aria-live="polite">
+      <div className={cn("min-h-0 flex-1 space-y-5 overflow-y-auto", view === "report" ? "px-4 py-5 md:px-8 md:py-7" : "px-3 py-3")} aria-live="polite">
         {!messages.length && (
           <div className="space-y-4">
             <p className="text-[12px] leading-relaxed text-muted-foreground">Ask about any neighbourhood in the world: its twin elsewhere, where to go, where to open something, where an artist should play.</p>
@@ -351,10 +360,12 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
               <div className="ml-6 border border-line bg-raised px-2.5 py-2 text-[12px] text-foreground">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</div>
             ) : (
               <MessageView m={m} live={busy && i === lastIdx} times={times.current} progress={busy && i === lastIdx ? progress : undefined}
-                files={files[m.id] ?? (i === lastIdx ? files.last : undefined)} onLink={onLink} onSend={send} onSave={save} />
+                files={files[m.id] ?? (i === lastIdx ? files.last : undefined)} onLink={onLink} onSend={send} onSave={save} reportView={view === "report"}
+                onReport={openReport} />
             )}
           </div>
         ))}
+        {view === "report" && reportId && <ReportView id={reportId} onLink={onLink} />}
         {status === "submitted" && messages[lastIdx]?.role === "user" && <p><Pulse label="planning" /></p>}
         {error && (
           <div className="flex items-start justify-between gap-3 border border-destructive/50 px-2.5 py-2 text-[11.5px] text-destructive">

@@ -10,6 +10,7 @@ export type AgentAction =
   | { type: "addCity"; city: AgentCity }
   | { type: "opportunity"; city: string; kind: string; taste: string; cells: OpportunityCell[] }
   | { type: "download"; filename: string; markdown: string }
+  | { type: "report"; id: string; title: string }
   | { type: "focus"; lat: number; lon: number; label?: string }
   | { type: "focusHood"; hood: string; label?: string };
 

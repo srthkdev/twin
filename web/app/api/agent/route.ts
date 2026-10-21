@@ -3,6 +3,7 @@ import { convertToModelMessages, createUIMessageStream, createUIMessageStreamRes
 import { loadServerDataSet } from "@/lib/agent/server-data";
 import { OPENROUTER_MODELS, aiTools, fallbackOptions, openrouter, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
+import type { AgentRunContext } from "@/lib/agent/report";
 import type { AgentContext } from "@/lib/agent/types";
 
 export const runtime = "nodejs";
@@ -47,6 +48,9 @@ export async function POST(req: Request) {
   const ctx = contextLine(body.context);
   const primary = body.model && OPENROUTER_MODELS.includes(body.model) ? body.model : OPENROUTER_MODELS[0];
   const meta: RunMeta = { qlooLive: 0, qlooCached: 0 };
+  const question = [...messages].reverse().find((m) => m.role === "user")?.parts.flatMap((p) => p.type === "text" ? [p.text] : []).join("\n").trim();
+  const reportRun = /\b(report|plan|analysis|comparison|compare|deep dive)\b/i.test(question ?? "");
+  const run: AgentRunContext = { evidence: [], charts: new Map(), nextChartId: 1, question, model: () => meta.model };
   const t0 = Date.now();
 
   const stream = createUIMessageStream<TwinUIMessage>({
@@ -66,10 +70,10 @@ export async function POST(req: Request) {
           model: openrouter(apiKey)(order[i]),
           instructions: SYSTEM_PROMPT,
           messages: modelMessages,
-          tools: aiTools(ds, writer, meta),
-          stopWhen: isStepCount(8),
+          tools: aiTools(ds, writer, meta, run),
+          stopWhen: isStepCount(reportRun ? 14 : 8),
           // the last step must be an answer, never another tool call
-          prepareStep: ({ stepNumber }) => (stepNumber >= 7 ? { toolChoice: "none" as const } : undefined),
+          prepareStep: ({ stepNumber }) => (stepNumber >= (reportRun ? 13 : 7) ? { toolChoice: "none" as const } : undefined),
           timeout: { firstChunkMs: 30_000, chunkMs: 45_000 },
           temperature: 0.4,
           providerOptions: fallbackOptions(order[i]),

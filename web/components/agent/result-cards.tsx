@@ -1,5 +1,8 @@
 "use client";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import type { MapLink, Report } from "@/lib/agent/report-types";
+import { isChartSpec, Chart } from "./chart";
 
 /* Visual summaries of tool results, so the chat text can stay short and human. Every card reads only the tool's own output. */
 
@@ -245,11 +248,96 @@ const CARDS: Record<string, (p: { d: Any }) => React.ReactNode> = {
   find_twins: Twins, twins_anywhere: Twins, explain_match: Match, local_scene: Places, opportunity: Gaps, tour: Tour,
   scene: Scene, trend: Trend, venue_supply: Supply, wiki: Wiki, web_search: Web, add_city: City,
 };
-export const hasCard = (name: string) => name in CARDS;
-export function ResultCard({ name, data }: { name: string; data: unknown }) {
+export const hasCard = (name: string) => name === "chart" || name === "report" || name in CARDS;
+export function ResultCard({ name, data, onLink, onOpenReport }: { name: string; data: unknown; onLink?: (link: MapLink) => void; onOpenReport?: (id: string, title: string) => void }) {
+  if (name === "chart") {
+    if (!data || typeof data !== "object") return null;
+    const d = data as Any;
+    const spec = isChartSpec(d.chart) ? d.chart : isChartSpec(data) ? data : null;
+    return spec ? <Chart spec={spec} onLink={onLink} /> : null;
+  }
+  if (name === "report") return <ReportCard data={data} onOpen={onOpenReport} />;
   const C = CARDS[name];
   if (!C || !data || typeof data !== "object") return null;
   return <C d={data as Any} />;
+}
+
+function ReportCard({ data, onOpen }: { data: unknown; onOpen?: (id: string, title: string) => void }) {
+  const d = data && typeof data === "object" ? data as Any : {};
+  const nested = d.report && typeof d.report === "object" ? d.report as Any : d;
+  const id = str(nested.id ?? d.report_id ?? d.id);
+  const title = str(nested.title ?? d.title) || "Twin report";
+  const [report, setReport] = useState<Report | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [downloadState, setDownloadState] = useState("");
+  useEffect(() => {
+    if (!id) return;
+    const controller = new AbortController();
+    fetch(`/api/reports/${encodeURIComponent(id)}`, { signal: controller.signal }).then((r) => r.ok ? r.json() as Promise<Report> : null).then((r) => { if (r) setReport(r); }).catch(() => {});
+    return () => controller.abort();
+  }, [id]);
+  if (!id) return null;
+  const kpis = report?.kpis ?? arr<Any>(nested.kpis).map((k) => ({ label: str(k.label), value: str(k.value), note: str(k.note) })).filter((k) => k.label || k.value);
+  const verdict = report?.verdict ?? (nested.verdict && typeof nested.verdict === "object" ? nested.verdict as Report["verdict"] : undefined);
+  const share = async () => {
+    try {
+      await navigator.clipboard.writeText(new URL(`/r/${encodeURIComponent(id)}`, window.location.origin).toString());
+      setCopied(true); setTimeout(() => setCopied(false), 1600);
+    } catch { setCopied(false); }
+  };
+  const download = async () => {
+    setDownloadState("loading");
+    try {
+      const response = await fetch(`/api/reports/${encodeURIComponent(id)}`);
+      if (!response.ok) throw new Error("Report unavailable");
+      const value = await response.json() as Report;
+      const markdown = reportMarkdown(value);
+      const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
+      const a = document.createElement("a"); a.href = url; a.download = `${slug(value.title) || "twin-report"}.md`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      setDownloadState("");
+    } catch { setDownloadState("unavailable"); }
+  };
+  return <div className="my-2 border border-primary/50 bg-card">
+    <div className="flex items-start justify-between gap-3 border-b border-line px-2.5 py-2">
+      <div className="min-w-0"><div className="label mb-1">Report ready</div><div className="text-[12px] font-medium text-foreground">{report?.title ?? title}</div></div>
+      {verdict && <span className="shrink-0 border border-primary/50 px-1.5 py-0.5 text-[10px] text-primary">{verdict.label}</span>}
+    </div>
+    <div className="flex flex-wrap gap-x-4 gap-y-2 px-2.5 py-2">
+      {kpis.slice(0, 4).map((k, i) => <div key={`${k.label}-${i}`}><div className="label">{k.label}</div><div className="num mt-0.5 text-[14px] text-foreground">{k.value}</div></div>)}
+    </div>
+    <div className="flex flex-wrap items-center gap-x-4 border-t border-line px-2.5 py-1.5 text-[10.5px]">
+      <button type="button" onClick={() => onOpen?.(id, report?.title ?? title)} className="text-primary hover:underline">open report</button>
+      <button type="button" onClick={() => void share()} className="text-muted-foreground hover:text-foreground">{copied ? "copied" : "share link"}</button>
+      <button type="button" onClick={() => void download()} className="text-muted-foreground hover:text-foreground">{downloadState === "loading" ? "loading…" : downloadState || "download"}</button>
+    </div>
+  </div>;
+}
+
+function slug(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+function reportMarkdown(report: Report) {
+  const out = [`# ${report.title}`, report.subtitle ?? "", report.question ? `> ${report.question}` : ""];
+  if (report.verdict) out.push(`## ${report.verdict.label}`, report.verdict.line);
+  if (report.kpis?.length) out.push("## Key numbers", ...report.kpis.map((k) => `- **${k.label}:** ${k.value}${k.note ? ` — ${k.note}` : ""}`));
+  const embedded = new Set<string>();
+  const linked = (label: string, link?: string | null) => link ? `[${label}](${link})` : label;
+  const chartMarkdown = (chart: Report["charts"][number]) => {
+    if (chart.kind === "scatter" && chart.points?.length) return [`### ${chart.title}`, `| Place | ${chart.axes?.x ?? "x"} | ${chart.axes?.y ?? "y"} |`, "| --- | ---: | ---: |", ...chart.points.map((p) => `| ${linked(p.label, p.link)} | ${p.x} | ${p.y} |`)].join("\n");
+    return [`### ${chart.title}`, `| Place | ${chart.series.map((s) => s.name).join(" | ")} |`, `| --- | ${chart.series.map(() => "---:").join(" | ")} |`, ...chart.labels.map((label, i) => `| ${linked(label, chart.links?.[i])} | ${chart.series.map((s) => s.values[i]).join(" | ")} |`)].join("\n");
+  };
+  for (const section of report.sections) {
+    const body = section.body.replace(/\[\[(fig-[^\]]+)\]\]/g, (marker, id: string) => {
+      const chart = report.charts.find((c) => c.id === id);
+      if (!chart) return marker;
+      embedded.add(id);
+      return chartMarkdown(chart);
+    });
+    out.push(`## ${section.heading}`, body);
+  }
+  report.charts.filter((chart) => !embedded.has(chart.id)).forEach((chart) => out.push(chartMarkdown(chart)));
+  if (report.places?.length) out.push("## Places", ...report.places.map((p) => `- [${p.label}](${p.link})${p.note ? ` — ${p.note}` : ""}`));
+  if (report.evidence.length) out.push("## Sources", ...report.evidence.map((e) => `- ${e.tool}: ${e.summary}`));
+  return out.filter(Boolean).join("\n\n");
 }
 
 /** A plain-language label for a tool step. */
@@ -279,6 +367,8 @@ export function stepLabel(name: string, a: Any = {}): string {
     case "read_page": return `Reading a page`;
     case "pin_twins": return "Matching your pin";
     case "brief": return "Writing your brief";
+    case "chart": return `Drawing ${str(a.title) || "a chart"}`;
+    case "report": return `Writing ${str(a.title) || "your report"}`;
     default: return name.replace(/_/g, " ");
   }
 }

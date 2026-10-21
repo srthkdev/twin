@@ -133,3 +133,25 @@
 }
 
 * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+
+@media print {
+  :root {
+    --background: #fff;
+    --foreground: #161616;
+    --card: #fff;
+    --muted-foreground: #4f4f4f;
+    --dim: #666;
+    --line: #ddd;
+    --line-strong: #aaa;
+    --primary: #9a5b00;
+    color-scheme: light;
+  }
+  body:has(.report-share) > header { display: none !important; }
+  body:has(.report-share) { background: #fff !important; color: #161616 !important; }
+  .report-share { min-height: 0 !important; padding: 0 !important; background: #fff !important; }
+  .print-hidden { display: none !important; }
+  .report-share .report-document { border: 0 !important; padding-top: 0 !important; }
+  .report-share .report-document figure, .report-share .report-document table { break-inside: avoid; }
+  .report-share .share-places { break-inside: avoid; }
+  .report-share a, .report-share button { color: #161616 !important; }
+}
