@@ -1,5 +1,6 @@
 "use client";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsClient, useUnmount } from "usehooks-ts";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai";
 import { cn } from "@/lib/utils";
@@ -9,8 +10,13 @@ import type { TwinUIMessage } from "@/lib/agent/ai";
 import { AgentSettingsPanel } from "./agent-settings";
 import { Elapsed, Pulse, ToolTrace, type ToolStep } from "./tool-trace";
 import { ResultCard, hasCard } from "./result-cards";
-import { emptySettings, loadSettings, saveSettings, type AgentSettings, type Health } from "./settings";
+import { emptySettings, type AgentSettings, type Health } from "./settings";
+import { useStoredState } from "@/hooks/use-stored-state";
+import { useJson } from "@/hooks/use-json";
 import { ReportView } from "./report-view";
+import { runTour } from "@/components/tour/tour";
+import { Chart, isChartSpec, streamingChart } from "./chart";
+import { StreamingReport } from "@/components/report/streaming-report";
 
 interface RecognitionEvent { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }
 interface Recognition {
@@ -36,12 +42,6 @@ function saveMarkdown(filename: string, markdown: string) {
 /** The conversation survives tab switches, panel collapses and reloads (this browser only). */
 const CHAT_KEY = "twin-chat-v1";
 interface SavedChat { messages: TwinUIMessage[]; files: Record<string, { filename: string; markdown: string }[]>; times: [string, { start: number; end?: number }][] }
-function loadChat(): SavedChat | null {
-  try { const raw = localStorage.getItem(CHAT_KEY); return raw ? (JSON.parse(raw) as SavedChat) : null; } catch { return null; }
-}
-function saveChat(c: SavedChat) {
-  try { if (c.messages.length) localStorage.setItem(CHAT_KEY, JSON.stringify(c)); else localStorage.removeItem(CHAT_KEY); } catch { /* storage full or blocked */ }
-}
 
 const SUGGEST = [
   "Find the Silver Lake of Berlin",
@@ -69,8 +69,7 @@ function splitNext(text: string): { body: string; next: string[] } {
 
 /** The model's reasoning: a live, moving ticker while it thinks; a one-line "thought for Ns" afterwards. */
 function Thinking({ text, done, since }: { text: string; done: boolean; since: number }) {
-  const [end, setEnd] = useState<number | undefined>(undefined);
-  useEffect(() => { if (done && !end) setEnd(Date.now()); }, [done, end]);
+  const end = useMemo(() => done ? Date.now() : undefined, [done]);
   const lines = text.trim().split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
   return (
     <details className="group my-1.5" open={!done ? true : undefined}>
@@ -109,7 +108,8 @@ function buildGroups(m: TwinUIMessage, times: Times, progress: Record<string, st
       let last = out[out.length - 1];
       if (last?.kind !== "tools") { last = { kind: "tools", steps: [], cards: [] }; out.push(last); }
       last.steps.push(step);
-      if (o?.ok && hasCard(name)) last.cards = [...last.cards.filter((c) => c.name !== name), { name, data: o.data, id: p.toolCallId }];
+      if (o?.ok && hasCard(name)) last.cards = [...last.cards.filter((c) => c.name !== name || name === "chart" || name === "report"), { name, data: o.data, id: p.toolCallId }];
+      else if (step.pending && (name === "report" || name === "chart")) last.cards.push({ name, data: p.input, id: p.toolCallId, pending: true });
     } else if (p.type === "reasoning" && p.text.trim()) {
       const last = out[out.length - 1];
       const done = (p as { state?: string }).state === "done";
@@ -129,6 +129,14 @@ const MessageView = memo(function MessageView({ m, live, times, progress, files,
   onSave: (f: { filename: string; markdown: string }) => void; onReport?: (id: string, title: string) => void; reportView: boolean;
 }) {
   const groups = useMemo(() => buildGroups(m, times, progress), [m, times, progress]);
+  const charts = useMemo(() => m.parts.flatMap((p) => {
+    if (!isToolUIPart(p) || getToolName(p) !== "chart" || p.state !== "output-available") return [];
+    const output = p.output as { ok?: boolean; data?: unknown };
+    if (!output.ok) return [];
+    const data = output.data;
+    const chart = isChartSpec(data) ? data : data && typeof data === "object" && "chart" in data && isChartSpec(data.chart) ? data.chart : null;
+    return chart ? [chart] : [];
+  }), [m]);
   const waiting = live && !m.parts.some((p) => isToolUIPart(p) && (p.state === "input-available" || p.state === "input-streaming"))
     && !m.parts.some((p) => p.type === "reasoning" && (p as { state?: string }).state !== "done");
   return (
@@ -138,7 +146,13 @@ const MessageView = memo(function MessageView({ m, live, times, progress, files,
         if (g.kind === "tools") return (
           <div key={j}>
             <ToolTrace steps={g.steps} folded={!live} />
-            {g.cards.map((c) => <ResultCard key={c.id} name={c.name} data={c.data} onLink={onLink} onOpenReport={onReport} />)}
+            {g.cards.map((c) => {
+              if (!c.pending) return <ResultCard key={c.id} name={c.name} data={c.data} onLink={onLink} onOpenReport={onReport} />;
+              if (!live) return null;
+              if (c.name === "report") return <StreamingReport key={c.id} input={c.data} charts={charts} onLink={onLink} />;
+              const spec = streamingChart(c.data, c.id);
+              return spec ? <div key={c.id} aria-busy="true"><p role="status" className="mt-3 text-[10.5px] text-dim">drawing chart…</p><Chart spec={spec} onLink={onLink} /></div> : null;
+            })}
           </div>
         );
         const { body, next } = splitNext(g.text);
@@ -171,7 +185,7 @@ const MessageView = memo(function MessageView({ m, live, times, progress, files,
 
 type Group =
   | { kind: "text"; text: string }
-  | { kind: "tools"; steps: ToolStep[]; cards: { name: string; data: unknown; id: string }[] }
+  | { kind: "tools"; steps: ToolStep[]; cards: { name: string; data: unknown; id: string; pending?: boolean }[] }
   | { kind: "thinking"; text: string; done: boolean; key: string };
 
 export function AgentPanel({ context, onAction, className, initialInput, external, view = "map", reportId, onViewChange }: {
@@ -185,13 +199,19 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
   reportId?: string | null;
   onViewChange?: (view: "map" | "report") => void;
 }) {
-  const [settings, setSettings] = useState<AgentSettings>(emptySettings);
-  const [health, setHealth] = useState<Health | null>(null);
+  const [settings, setSettings] = useStoredState<AgentSettings>("twin.agent.settings.v2", emptySettings, {
+    serializer: (s) => JSON.stringify(s.remember ? s : { ...s, key: "" }),
+    deserializer: (raw) => ({ ...emptySettings(), ...JSON.parse(raw) }),
+  });
+  const { data: health = null, error: healthError } = useJson<Health>("/api/agent/health");
+  const [savedChat, saveChat, clearChat] = useStoredState<SavedChat | null>(CHAT_KEY, null);
+  const [restored, setRestored] = useState(false);
+  const isClient = useIsClient();
   const [showSettings, setShowSettings] = useState(false);
   const [input, setInput] = useState(initialInput ?? "");
   const [listening, setListening] = useState(false);
   const [speak, setSpeak] = useState(false);
-  const [canListen, setCanListen] = useState(false);
+  const canListen = isClient && !!getRecognition();
   const [progress, setProgress] = useState<Record<string, string>>({});
   const [files, setFiles] = useState<Record<string, { filename: string; markdown: string }[]>>({});
   const times = useRef(new Map<string, { start: number; end?: number }>());
@@ -232,31 +252,27 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
   });
   const busy = status === "submitted" || status === "streaming";
 
+  useUnmount(() => { window.speechSynthesis?.cancel(); });
+  // Restore the chat before allowing persistence or a new request.
   useEffect(() => {
-    setCanListen(!!getRecognition());
-    const saved = loadSettings();
-    if (saved) setSettings(saved);
-    fetch("/api/agent/health").then((r) => r.json() as Promise<Health>).then(setHealth).catch(() => {});
-    return () => { window.speechSynthesis?.cancel(); };
-  }, []);
-  useEffect(() => {
-    const chat = loadChat();
-    if (!chat?.messages.length) return;
-    times.current = new Map(chat.times);
-    setFiles(chat.files ?? {});
-    setMessages(chat.messages);
-  }, [setMessages]);
-  useEffect(() => { saveSettings(settings); }, [settings]);
+    if (!isClient || restored) return;
+    setRestored(true);
+    if (!savedChat?.messages.length || initialInput?.trim()) return;
+    times.current = new Map(savedChat.times);
+    setFiles(savedChat.files ?? {});
+    setMessages(savedChat.messages);
+  }, [isClient, restored, savedChat, initialInput, setMessages]);
   // persist only between answers, never mid-stream
   useEffect(() => {
-    if (status !== "ready" && status !== "error") return;
+    if (!restored || (status !== "ready" && status !== "error")) return;
     const ids = new Set(messages.flatMap((m) => m.parts.map((p, i) => (isToolUIPart(p) ? p.toolCallId : `${m.id}:r${i}`))));
-    saveChat({ messages: messages.slice(-30), files, times: [...times.current].filter(([k]) => ids.has(k)) });
-  }, [messages, status, files]);
+    if (messages.length) saveChat({ messages: messages.slice(-30), files, times: [...times.current].filter(([k]) => ids.has(k)) });
+    else clearChat();
+  }, [messages, status, files, restored, saveChat, clearChat]);
   const newChat = useCallback(() => {
     if (busyRef.current) return;
-    setMessages([]); setFiles({}); setProgress({}); clearError(); times.current.clear(); saveChat({ messages: [], files: {}, times: [] });
-  }, [setMessages, clearError]);
+    setMessages([]); setFiles({}); setProgress({}); clearError(); times.current.clear(); clearChat();
+  }, [setMessages, clearError, clearChat]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, progress]);
   useEffect(() => {
     const t = taRef.current;
@@ -275,10 +291,23 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
 
   const lastExternal = useRef(0);
   useEffect(() => {
-    if (!external || external.t === lastExternal.current) return;
+    if (!restored || !external || external.t === lastExternal.current) return;
     lastExternal.current = external.t;
     if (status === "ready" || status === "error") void sendMessage({ text: external.text });
-  }, [external, status, sendMessage]);
+  }, [external, status, sendMessage, restored]);
+
+  // A question in the link (?q=…, e.g. from the landing tasks) runs once as a fresh conversation, then leaves the URL.
+  const autoSent = useRef(false);
+  useEffect(() => {
+    const q = initialInput?.trim();
+    if (!restored || autoSent.current || !q) return;
+    autoSent.current = true;
+    setMessages([]); setFiles({}); times.current.clear(); setInput("");
+    void sendMessage({ text: q });
+    const u = new URL(window.location.href);
+    u.searchParams.delete("q");
+    window.history.replaceState(null, "", u.toString());
+  }, [initialInput, sendMessage, setMessages, restored]);
 
   const busyRef = useRef(busy);
   busyRef.current = busy;
@@ -326,10 +355,11 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11px] text-dim">
         <span className="truncate">{modelLabel || "…"}</span>
         <div className="flex items-center gap-3">
-          {onViewChange && <div role="group" aria-label="Explore layout" className="flex items-center border border-line">
+          {onViewChange && <div role="group" aria-label="Explore layout" data-tour="view" className="flex items-center border border-line">
             {(["map", "report"] as const).map((mode) => <button key={mode} type="button" aria-pressed={view === mode} onClick={() => onViewChange(mode)}
               className={cn("px-1.5 py-0.5 transition-colors", view === mode ? "bg-raised text-primary" : "hover:text-foreground")}>{mode}</button>)}
           </div>}
+          <button type="button" onClick={() => void runTour(reportId ? "report" : "explore", { force: true, delay: 0 })} className="transition-colors hover:text-foreground">guide</button>
           <button type="button" onClick={() => setSpeak((s) => { if (s) window.speechSynthesis?.cancel(); return !s; })} aria-pressed={speak} className={cn("transition-colors hover:text-foreground", speak && "text-primary")}>
             voice {speak ? "on" : "off"}
           </button>
@@ -340,6 +370,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
         </div>
       </div>
       {showSettings && <AgentSettingsPanel value={settings} onChange={setSettings} health={health} />}
+      {healthError && <p role="status" className="border-b border-line px-3 py-2 text-[11px] text-dim">Couldn’t load agent availability.</p>}
 
       <div className={cn("min-h-0 flex-1 space-y-5 overflow-y-auto", view === "report" ? "px-4 py-5 md:px-8 md:py-7" : "px-3 py-3")} aria-live="polite">
         {!messages.length && (
@@ -378,7 +409,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
 
       <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="border-t border-line p-2.5">
         <div className="flex items-end gap-1 border border-line-strong bg-card px-2 py-1.5 transition-colors focus-within:border-primary">
-          <textarea ref={taRef} value={input} rows={1} onChange={(e) => setInput(e.target.value)}
+          <textarea data-tour="ask" ref={taRef} value={input} rows={1} onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
             aria-label="Message the Twin agent" placeholder={listening ? "listening…" : "ask about any neighbourhood…"}
             className="max-h-[120px] min-h-[22px] flex-1 resize-none bg-transparent py-0.5 text-[12.5px] leading-[1.45] outline-none placeholder:text-dim" />

@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { ReportDocument, SharedPlaces } from "@/components/agent/report-view";
-import { ShareActions } from "@/components/report/share-actions";
 import { storeGet } from "@/lib/agent/store";
 import type { Report } from "@/lib/agent/report-types";
 
@@ -14,7 +13,7 @@ export default async function SharedReportPage({ params }: { params: Promise<{ i
       <div className="mx-auto max-w-[1180px]">
         <div className="print-hidden mb-5 flex items-center justify-between gap-4 border-b border-line pb-3">
           <span className="label">Twin / shared report</span>
-          <ShareActions id={report.id} />
+          <a href="/explore" className="text-[10.5px] text-dim hover:text-primary">Explore Twin →</a>
         </div>
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
           <ReportDocument report={report} />

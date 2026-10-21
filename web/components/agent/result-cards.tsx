@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { MapLink, Report } from "@/lib/agent/report-types";
 import { isChartSpec, Chart } from "./chart";
+import { reportBlocks } from "@/lib/report/normalize";
+import { verdictClass } from "@/lib/report/web";
 
 /* Visual summaries of tool results, so the chat text can stay short and human. Every card reads only the tool's own output. */
 
@@ -269,7 +271,7 @@ function ReportCard({ data, onOpen }: { data: unknown; onOpen?: (id: string, tit
   const title = str(nested.title ?? d.title) || "Twin report";
   const [report, setReport] = useState<Report | null>(null);
   const [copied, setCopied] = useState(false);
-  const [downloadState, setDownloadState] = useState("");
+  const [copyError, setCopyError] = useState(false);
   useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
@@ -277,67 +279,31 @@ function ReportCard({ data, onOpen }: { data: unknown; onOpen?: (id: string, tit
     return () => controller.abort();
   }, [id]);
   if (!id) return null;
-  const kpis = report?.kpis ?? arr<Any>(nested.kpis).map((k) => ({ label: str(k.label), value: str(k.value), note: str(k.note) })).filter((k) => k.label || k.value);
-  const verdict = report?.verdict ?? (nested.verdict && typeof nested.verdict === "object" ? nested.verdict as Report["verdict"] : undefined);
+  const blocks = report ? reportBlocks(report) : [];
+  const kpis = blocks.flatMap((b) => b.type === "KpiRow" ? b.props.items : []);
+  const fallbackKpis = report?.kpis ?? arr<Any>(nested.kpis).map((k) => ({ label: str(k.label), value: str(k.value), note: str(k.note) })).filter((k) => k.label || k.value);
+  const verdict = blocks.find((b) => b.type === "Verdict")?.props ?? report?.verdict ?? (nested.verdict && typeof nested.verdict === "object" ? nested.verdict as Report["verdict"] : undefined);
   const share = async () => {
     try {
       await navigator.clipboard.writeText(new URL(`/r/${encodeURIComponent(id)}`, window.location.origin).toString());
-      setCopied(true); setTimeout(() => setCopied(false), 1600);
-    } catch { setCopied(false); }
-  };
-  const download = async () => {
-    setDownloadState("loading");
-    try {
-      const response = await fetch(`/api/reports/${encodeURIComponent(id)}`);
-      if (!response.ok) throw new Error("Report unavailable");
-      const value = await response.json() as Report;
-      const markdown = reportMarkdown(value);
-      const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
-      const a = document.createElement("a"); a.href = url; a.download = `${slug(value.title) || "twin-report"}.md`;
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      setDownloadState("");
-    } catch { setDownloadState("unavailable"); }
+      setCopyError(false); setCopied(true); setTimeout(() => setCopied(false), 1600);
+    } catch { setCopied(false); setCopyError(true); }
   };
   return <div className="my-2 border border-primary/50 bg-card">
     <div className="flex items-start justify-between gap-3 border-b border-line px-2.5 py-2">
       <div className="min-w-0"><div className="label mb-1">Report ready</div><div className="text-[12px] font-medium text-foreground">{report?.title ?? title}</div></div>
-      {verdict && <span className="shrink-0 border border-primary/50 px-1.5 py-0.5 text-[10px] text-primary">{verdict.label}</span>}
+      {verdict && <span className={`shrink-0 border px-1.5 py-0.5 text-[10px] ${verdictClass(verdict.label)}`}>{verdict.label}</span>}
     </div>
     <div className="flex flex-wrap gap-x-4 gap-y-2 px-2.5 py-2">
-      {kpis.slice(0, 4).map((k, i) => <div key={`${k.label}-${i}`}><div className="label">{k.label}</div><div className="num mt-0.5 text-[14px] text-foreground">{k.value}</div></div>)}
+      {(kpis.length ? kpis : fallbackKpis).slice(0, 4).map((k, i) => <div key={`${k.label}-${i}`}><div className="label">{k.label}</div><div className="num mt-0.5 text-[14px] text-foreground">{k.value}</div></div>)}
     </div>
     <div className="flex flex-wrap items-center gap-x-4 border-t border-line px-2.5 py-1.5 text-[10.5px]">
-      <button type="button" onClick={() => onOpen?.(id, report?.title ?? title)} className="text-primary hover:underline">open report</button>
-      <button type="button" onClick={() => void share()} className="text-muted-foreground hover:text-foreground">{copied ? "copied" : "share link"}</button>
-      <button type="button" onClick={() => void download()} className="text-muted-foreground hover:text-foreground">{downloadState === "loading" ? "loading…" : downloadState || "download"}</button>
+      {onOpen ? <button type="button" onClick={() => onOpen(id, report?.title ?? title)} className="text-primary hover:underline">Open</button> : <a href={`/r/${encodeURIComponent(id)}`} className="text-primary hover:underline">Open</a>}
+      <span aria-hidden className="text-dim">·</span><a href={`/api/reports/${encodeURIComponent(id)}/pdf`} download className="text-muted-foreground hover:text-foreground">PDF</a>
+      <span aria-hidden className="text-dim">·</span><button type="button" onClick={() => void share()} className="text-muted-foreground hover:text-foreground">{copied ? "Copied" : "Share"}</button>
+      {copyError && <a href={`/r/${encodeURIComponent(id)}`} className="text-muted-foreground underline">Open share link</a>}
     </div>
   </div>;
-}
-
-function slug(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
-function reportMarkdown(report: Report) {
-  const out = [`# ${report.title}`, report.subtitle ?? "", report.question ? `> ${report.question}` : ""];
-  if (report.verdict) out.push(`## ${report.verdict.label}`, report.verdict.line);
-  if (report.kpis?.length) out.push("## Key numbers", ...report.kpis.map((k) => `- **${k.label}:** ${k.value}${k.note ? ` — ${k.note}` : ""}`));
-  const embedded = new Set<string>();
-  const linked = (label: string, link?: string | null) => link ? `[${label}](${link})` : label;
-  const chartMarkdown = (chart: Report["charts"][number]) => {
-    if (chart.kind === "scatter" && chart.points?.length) return [`### ${chart.title}`, `| Place | ${chart.axes?.x ?? "x"} | ${chart.axes?.y ?? "y"} |`, "| --- | ---: | ---: |", ...chart.points.map((p) => `| ${linked(p.label, p.link)} | ${p.x} | ${p.y} |`)].join("\n");
-    return [`### ${chart.title}`, `| Place | ${chart.series.map((s) => s.name).join(" | ")} |`, `| --- | ${chart.series.map(() => "---:").join(" | ")} |`, ...chart.labels.map((label, i) => `| ${linked(label, chart.links?.[i])} | ${chart.series.map((s) => s.values[i]).join(" | ")} |`)].join("\n");
-  };
-  for (const section of report.sections) {
-    const body = section.body.replace(/\[\[(fig-[^\]]+)\]\]/g, (marker, id: string) => {
-      const chart = report.charts.find((c) => c.id === id);
-      if (!chart) return marker;
-      embedded.add(id);
-      return chartMarkdown(chart);
-    });
-    out.push(`## ${section.heading}`, body);
-  }
-  report.charts.filter((chart) => !embedded.has(chart.id)).forEach((chart) => out.push(chartMarkdown(chart)));
-  if (report.places?.length) out.push("## Places", ...report.places.map((p) => `- [${p.label}](${p.link})${p.note ? ` — ${p.note}` : ""}`));
-  if (report.evidence.length) out.push("## Sources", ...report.evidence.map((e) => `- ${e.tool}: ${e.summary}`));
-  return out.filter(Boolean).join("\n\n");
 }
 
 /** A plain-language label for a tool step. */
@@ -368,6 +334,7 @@ export function stepLabel(name: string, a: Any = {}): string {
     case "pin_twins": return "Matching your pin";
     case "brief": return "Writing your brief";
     case "chart": return `Drawing ${str(a.title) || "a chart"}`;
+    case "report_skill": return `using the ${(str(a.name) || str(a.skill) || "report").replace(/[-_]/g, " ")} playbook`;
     case "report": return `Writing ${str(a.title) || "your report"}`;
     default: return name.replace(/_/g, " ");
   }
