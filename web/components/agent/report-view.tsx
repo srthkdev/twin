@@ -50,7 +50,7 @@ export function ReportDocument({ report, onLink }: { report: Report; onLink?: (l
       <div className="mt-5"><ShareActions id={report.id} report={report} /></div>
     </header>
     <ReportBody blocks={blocks} charts={report.charts} onLink={handleLink} />
-    {report.question && <div className="mt-8"><BaselinePanel question={report.question} reportId={report.id} reportPlaces={reportPlaces(report)} /></div>}
+    {report.question && <div data-tour="baseline" className="mt-8"><BaselinePanel question={report.question} reportId={report.id} reportPlaces={reportPlaces(report)} /></div>}
     <details data-tour="evidence" className="report-method group mt-8 border-t border-line py-4">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] text-dim hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
         <span className="transition-transform group-open:rotate-90">›</span><span>How this was made</span>

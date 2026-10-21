@@ -70,11 +70,16 @@ export function ExploreClient() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [flying, setFlying] = useState(false);
   const [right, setRight] = useState<RightTab>(sp.get("tab") === "agent" || sp.get("q") || sp.get("view") === "report" ? "agent" : "twins");
+  // The guide demonstrates instead of only pointing: it can flip the map mode and open a tab while it explains them.
+  useEventListener("twin:tour-action" as keyof WindowEventMap, (e) => {
+    const [kind, value] = String((e as CustomEvent).detail).split(":");
+    if (kind === "mode") setMode(value as Mode);
+    if (kind === "tab") { setRight(value as RightTab); setMobileTab(value as MobileTab); }
+  });
   const [sourceOpen, setSourceOpen] = useState(false);
   const leftP = usePanel("left", 300, 220, 460, "left");
   const rightP = usePanel("right", 400, 320, 680, "right");
   const setRightCollapsed = rightP.setCollapsed;
-  const dockP = usePanel("report-map", 520, 300, 900, "right");
   const [ask, setAsk] = useState<BlockInfo | null>(null);
   const [external, setExternal] = useState<{ text: string; t: number } | null>(null);
   const [agentFocus, setAgentFocus] = useState<{ lat: number; lon: number; label: string } | null>(null);
@@ -314,7 +319,7 @@ export function ExploreClient() {
   );
 
   const tabBtn = (id: string, label: string, active: boolean, onClick: () => void, disabled = false) => (
-    <button key={id} role="tab" aria-selected={active} disabled={disabled} onClick={onClick}
+    <button key={id} role="tab" data-tour={`tab-${id}`} aria-selected={active} disabled={disabled} onClick={onClick}
       className={cn("relative h-full px-4 text-[12px] transition-colors disabled:opacity-40", active ? "text-foreground" : "text-dim hover:text-muted-foreground")}>
       {label}
       {active && <span className="absolute inset-x-3 -bottom-px h-px bg-primary" />}
@@ -335,34 +340,25 @@ export function ExploreClient() {
               <Handle side="right" {...leftP.handle} />
             </aside>
           )}
-          <div data-tour="map" className={cn("relative min-h-0 overflow-hidden", view === "report" ? "order-2 shrink-0 border-l border-line" : "order-1 min-w-0 flex-1")}
-            style={view === "report" ? dockP.collapsed
-              ? { position: "absolute", right: 12, bottom: 12, zIndex: 30, width: 260, height: 170, border: "1px solid var(--line-strong)" }
-              : { width: dockP.width, flex: "0 0 auto" } : undefined}>
-            {view === "report" && !dockP.collapsed && <Handle side="left" {...dockP.handle} />}
-            {map}
-            {view === "report" && <button type="button" onClick={() => dockP.setCollapsed(!dockP.collapsed)}
-              className="absolute right-2 top-11 z-20 border border-line bg-background/95 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-primary hover:text-primary">
-              {dockP.collapsed ? "expand map" : "minimise map"}
-            </button>}
-          </div>
+          <div data-tour="map" className="relative min-h-0 min-w-0 flex-1 overflow-hidden">{map}</div>
           {rightP.collapsed && view !== "report" ? (
             <Rail label={right === "agent" ? "agent" : "twins"} side="right" onOpen={() => rightP.setCollapsed(false)} />
           ) : (
-            <aside className={cn("relative flex min-h-0 flex-col", view === "report" ? "order-1 min-w-0 flex-1 border-r border-line" : "order-2 shrink-0 border-l border-line")}
-              style={view === "report" ? undefined : { width: rightP.width }} aria-label="Twins and agent">
+            // Reports widen this panel; the map stays put on the left, so there is one layout to learn.
+            <aside className="relative flex min-h-0 shrink-0 flex-col border-l border-line transition-[width] duration-300 ease-out"
+              style={{ width: view === "report" ? "min(64vw, 1180px)" : rightP.width }} aria-label="Twins and agent">
               {view === "map" && <Handle side="left" {...rightP.handle} />}
-              <div role="tablist" className={cn("flex h-10 shrink-0 items-stretch border-b border-line", view === "report" && "hidden")}>
+              <div role="tablist" className="flex h-10 shrink-0 items-stretch border-b border-line">
                 {tabBtn("twins", "twins", right === "twins", () => setRight("twins"))}
                 {tabBtn("agent", "agent", right === "agent", () => setRight("agent"))}
                 <button onClick={() => setCmdOpen(true)} className="ml-auto px-3 text-[11.5px] text-dim transition-colors hover:text-foreground" aria-label="Open search (Command K)">
                   search <span className="ml-1 text-line-strong">⌘K</span>
                 </button>
-                <button onClick={() => rightP.setCollapsed(true)} aria-label="Collapse panel" title="collapse" className="px-3 text-dim transition-colors hover:text-foreground">›</button>
+                {view === "map" && <button onClick={() => rightP.setCollapsed(true)} aria-label="Collapse panel" title="collapse" className="px-3 text-dim transition-colors hover:text-foreground">›</button>}
               </div>
-              <div className={cn("min-h-0 flex-1 overflow-y-auto", (right !== "twins" || view === "report") && "hidden")}>{twinsUI}</div>
-              <div className={cn("min-h-0 flex-1", view === "map" && right !== "agent" && "hidden")}>
-                <div className={cn("h-full", view === "report" && "mx-auto w-full max-w-[880px]")}>{agentUI}</div>
+              <div className={cn("min-h-0 flex-1 overflow-y-auto", right !== "twins" && "hidden")}>{twinsUI}</div>
+              <div className={cn("min-h-0 flex-1", right !== "agent" && "hidden")}>
+                <div className={cn("h-full", view === "report" && "mx-auto w-full max-w-[940px]")}>{agentUI}</div>
               </div>
             </aside>
           )}

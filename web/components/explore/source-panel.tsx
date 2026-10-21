@@ -115,7 +115,11 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
             {city(sourceCityId)?.name.toLowerCase()}{pin ? " · within 1.3 km of the pin" : source?.cells ? ` · ${source.cells} blocks` : ""}
           </div>
           {!pin && source?.blurb && <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">{source.blurb}</p>}
-          <div className="mt-4"><Label className="mb-1">stands out for</Label><TraitList dims={topDims} vec={vec} basket={ds.basket} /></div>
+          <div className="mt-4">
+            <Label className="mb-1">stands out for</Label>
+            <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">Compared with the rest of {city(sourceCityId)?.name ?? "the city"}.</p>
+            <TraitList dims={topDims} vec={vec} basket={ds.basket} />
+          </div>
         </section>
 
         {/* where to */}

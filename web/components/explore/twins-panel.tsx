@@ -11,7 +11,7 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
 }) {
   const sel = matches.find((m) => m.hood === selected) ?? matches[0];
   const hood = (id: string) => ds.hoods.find((h) => h.id === id)!;
-  const max = Math.max(0.01, ...matches.map((m) => m.score));
+  const traitMax = Math.max(1, ...(sel ? [...sel.shared, ...sel.diverge].flatMap((d) => [Math.abs(d.a), Math.abs(d.b)]) : []));
 
   return (
     <div className="text-[12.5px]">
@@ -34,12 +34,12 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
         </div>
       )}
 
-      <table className="w-full" aria-label="Top twins">
+      <table className="w-full table-fixed" aria-label="Top twins">
         <thead>
           <tr className="h-7 border-b border-line text-[10.5px] text-dim">
             <th className="w-9 pl-4 text-left font-normal">#</th>
             <th className="text-left font-normal">neighbourhood</th>
-            <th className="w-[64px] font-normal" />
+            <th className="w-16 font-normal"><span className="sr-only">Match from 0 to 100%</span></th>
             <th className="w-24 pr-4 text-right font-normal">taste match</th>
           </tr>
         </thead>
@@ -52,9 +52,9 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
                 className={cn("h-9 cursor-pointer border-b border-line transition-colors", active ? "bg-raised" : "hover:bg-accent")}>
                 <td className={cn("num pl-4", active ? "text-primary" : "text-dim")}>{i + 1}</td>
                 <td className="max-w-0 truncate pr-2">
-                  <button className={cn("truncate text-left", active ? "text-foreground" : "text-muted-foreground")} onClick={() => onSelect(m.hood)}>{h.name}</button>
+                  <button className={cn("block w-full truncate text-left", active ? "text-foreground" : "text-muted-foreground")} title={h.name} onClick={() => onSelect(m.hood)}>{h.name}</button>
                 </td>
-                <td className="text-[10px]"><Meter value={m.score} max={max} width={8} tone={active ? "accent" : "fg"} /></td>
+                <td><Meter value={m.score} tone={active ? "accent" : "fg"} /></td>
                 <td className={cn("num whitespace-nowrap pr-4 text-right text-[11px]", active ? "text-primary" : "text-muted-foreground")}>{Math.round(m.score * 100)}% match</td>
               </tr>
             );
@@ -69,13 +69,18 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
               <span className="text-foreground">{hood(sel.hood).name}.</span> {hood(sel.hood).blurb}
             </p>
           )}
+          <p className="border-b border-line px-4 py-3 text-[11.5px] leading-relaxed text-muted-foreground">
+            How strongly each place leans into a taste compared with the rest of its own city.
+          </p>
           <section className="border-b border-line px-4 py-4">
             <Label className="mb-1">shared</Label>
-            <DivergingBars dims={sel.shared} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} />
+            <p className="text-[11px] text-muted-foreground">The tastes that make them twins.</p>
+            <DivergingBars dims={sel.shared} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} max={traitMax} />
           </section>
           <section className="px-4 py-4">
             <Label className="mb-1">different</Label>
-            <DivergingBars dims={sel.diverge} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} />
+            <p className="text-[11px] text-muted-foreground">Where their tastes differ most.</p>
+            <DivergingBars dims={sel.diverge} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} max={traitMax} />
           </section>
         </div>
       )}

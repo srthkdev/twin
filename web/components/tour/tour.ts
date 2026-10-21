@@ -2,19 +2,25 @@
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
-/** Short in-product guides (driver.js). Each step points at an element marked data-tour="<target>". */
-interface Step { target: string; title: string; body: string }
+/** In-product guides (driver.js). A step points at data-tour="<target>" (or nothing, for a centred card) and may
+ *  run an action while it is on screen, so the guide shows the feature instead of only naming it. */
+interface Step { target?: string; title: string; body: string; action?: string; after?: string }
 
 export const TOURS = {
   explore: [
-    { target: "ask", title: "Ask for a decision", body: "Where to open, where to move, where an artist should play. Ask for a report to get a verdict, charts and a PDF." },
-    { target: "view", title: "Report or map", body: "Report puts the agent first with the map docked beside it. Map is the full-screen explorer." },
-    { target: "map-mode", title: "Taste, not just busy", body: "Popularity is how busy a block is. Taste takes that out, so what's left is what the block is actually into." },
+    { title: "Twin in one minute", body: "Twin reads Qloo's taste data block by block and matches neighbourhoods across cities. Use it to decide where to open, expand, move or play. Six quick stops." },
+    { target: "map", title: "A taste map", body: "Each column is a ~1 km block. The taller and brighter it is, the more that block shares the taste of the neighbourhood you picked." },
+    { target: "map-mode", title: "Taste, not just busy", body: "Watch the map: this is plain popularity, which mostly shows busy streets. Taste takes busyness out, so what is left is what a block is actually into.", action: "mode:raw", after: "mode:twin" },
+    { target: "tab-twins", title: "Its twins abroad", body: "The closest matches in other cities, with a % match and what they share. Click one and the map flies there.", action: "tab:twins" },
+    { target: "reports", title: "Ask for a decision", body: "Pick one of these and the agent pulls live Qloo, map and web data, then writes a report: a verdict, charts, places on the map and a PDF.", action: "tab:agent" },
+    { target: "ask", title: "Or ask anything", body: "Plain questions work too: the vibe of a neighbourhood, a twin, an artist's audience. Replay this guide any time from \"guide\"." },
   ],
   report: [
-    { target: "verdict", title: "The decision first", body: "GO, WATCH or SKIP with one line on why. Every number in the report was checked against the data the agent pulled." },
+    { target: "verdict", title: "The decision first", body: "GO, WATCH or SKIP with one line on why. Every number in this report was checked against the data the agent pulled; numbers it could not trace were rejected." },
     { target: "places", title: "Places fly the map", body: "Neighbourhoods and venues are links. Click one and the map goes there." },
-    { target: "evidence", title: "How this was made", body: "Every tool call behind the report, in order, and which source answered it. The PDF is one click at the top." },
+    { target: "pdf", title: "Take it with you", body: "Download a PDF or copy a share link. The link works for anyone." },
+    { target: "baseline", title: "Twin vs a plain AI", body: "Ask a model without Twin's tools the same question. Each place it names is checked: many can't be found or are in the wrong city." },
+    { target: "evidence", title: "How this was made", body: "Every tool call behind the report, in order, and which source answered it." },
   ],
 } satisfies Record<string, Step[]>;
 export type TourName = keyof typeof TOURS;
@@ -41,12 +47,20 @@ function whenPresent(selector: string, ms = 20_000) {
 export async function runTour(name: TourName, { force = false, delay = 600 } = {}) {
   if (!force && seenAll()[name]) return;
   const steps: Step[] = TOURS[name];
-  if (!(await whenPresent(sel(steps[0].target)))) return;
+  const first = steps.find((s) => s.target)!.target!;
+  if (!(await whenPresent(sel(first)))) return;
   await new Promise((r) => setTimeout(r, delay));
-  const present = steps.filter((s) => document.querySelector(sel(s.target)));
-  if (!present.length) return;
-  driver({
-    steps: present.map((s) => ({ element: sel(s.target), popover: { title: s.title, description: s.body } })),
+  const present = steps.filter((s) => !s.target || document.querySelector(sel(s.target)));
+  if (!present.some((s) => s.target)) return;
+  const act = (a?: string) => !!a && window.dispatchEvent(new CustomEvent("twin:tour-action", { detail: a }));
+  // An action can reveal its target (a tab), so re-measure once React has painted it.
+  const tour = driver({
+    steps: present.map((s) => ({
+      element: s.target ? sel(s.target) : undefined,
+      popover: { title: s.title, description: s.body },
+      onHighlightStarted: () => { if (act(s.action)) requestAnimationFrame(() => requestAnimationFrame(() => tour.refresh())); },
+      onDeselected: () => act(s.after),
+    })),
     showProgress: present.length > 1,
     progressText: "{{current}} of {{total}}",
     nextBtnText: "next",
@@ -59,5 +73,6 @@ export async function runTour(name: TourName, { force = false, delay = 600 } = {
     smoothScroll: true,
     popoverClass: "twin-tour",
     onDestroyed: () => markSeen(name),
-  }).drive();
+  });
+  tour.drive();
 }

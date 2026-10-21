@@ -1,6 +1,7 @@
 "use client";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useIsClient, useUnmount } from "usehooks-ts";
+import { useDebounceCallback, useIsClient, useUnmount } from "usehooks-ts";
+import useSWR from "swr";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,8 @@ import { Elapsed, Pulse, ToolTrace, type ToolStep } from "./tool-trace";
 import { ResultCard, hasCard } from "./result-cards";
 import { emptySettings, type AgentSettings, type Health } from "./settings";
 import { useStoredState } from "@/hooks/use-stored-state";
+import { fetchHistory, mergeHistory, pushHistory, useTwinUser, type SyncedHistory, type TwinUser } from "@/hooks/use-user";
+import { Account } from "./account";
 import { useJson } from "@/hooks/use-json";
 import { ReportView } from "./report-view";
 import { runTour } from "@/components/tour/tour";
@@ -43,11 +46,22 @@ function saveMarkdown(filename: string, markdown: string) {
 const CHAT_KEY = "twin-chat-v1";
 interface SavedChat { messages: TwinUIMessage[]; files: Record<string, { filename: string; markdown: string }[]>; times: [string, { start: number; end?: number }][] }
 
+/** Past chats and reports, this browser only (there are no accounts; a report's share link is its key). */
+const HISTORY_KEY = "twin-history-v1";
+type HistoryChat = { title: string; chat: SavedChat };
+type History = SyncedHistory<HistoryChat>;
+const emptyHistory = (): History => ({ chats: [], reports: [] });
+const chatTitle = (c: SavedChat) => c.messages.find((m) => m.role === "user")?.parts.map((p) => (p.type === "text" ? p.text : "")).join("").replace(/^make me a report:\s*/i, "").slice(0, 90) || "Untitled chat";
+
+const REPORTS = [
+  ["open a place", "Make me a report: Where in Berlin should I open a natural wine bar?"],
+  ["expand", "Make me a report: My café works in Shoreditch, London. Where in New York should I open the next one?"],
+  ["what's missing", "Make me a report: What thrives in the twins of Neukölln (Reuterkiez) abroad that is missing in Reuterkiez itself?"],
+  ["move", "Make me a report: I love Silver Lake, Los Angeles. I'm moving to Berlin. Which neighbourhood should I choose?"],
+  ["tour", "Make me a report: Where should Peso Pluma play in Europe? Compare London, Paris and Berlin."],
+] as const;
 const SUGGEST = [
   "Find the Silver Lake of Berlin",
-  "I love Silver Lake. I'm moving to Neukölln — where do I actually go?",
-  "Where in Berlin should I open a natural wine bar?",
-  "Plan a 3-city European tour for Peso Pluma",
   "What's the vibe of Shimokitazawa, Tokyo?",
   "Find the Shoreditch of Lisbon",
 ];
@@ -205,6 +219,19 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
   });
   const { data: health = null, error: healthError } = useJson<Health>("/api/agent/health");
   const [savedChat, saveChat, clearChat] = useStoredState<SavedChat | null>(CHAT_KEY, null);
+  const [history, setHistory] = useStoredState<History>(HISTORY_KEY, emptyHistory);
+  const [showHistory, setShowHistory] = useState(false);
+  // With a username, history also lives in Blob: merge the server copy once per sign-in, then push changes (debounced).
+  const { user, setUser, signOut } = useTwinUser();
+  const { data: remote } = useSWR(user ? ["history", user.name] : null, () => fetchHistory<HistoryChat>(user!), { revalidateOnFocus: false });
+  const mergedFor = useRef<string | null>(null);
+  const push = useDebounceCallback((u: TwinUser, h: History) => { void pushHistory(u, h as SyncedHistory).catch(() => {}); }, 1500);
+  useEffect(() => {
+    if (!user || !remote || mergedFor.current === user.name) return;
+    mergedFor.current = user.name;
+    setHistory((h) => mergeHistory(h, remote));
+  }, [user, remote, setHistory]);
+  useEffect(() => { if (user && mergedFor.current === user.name) push(user, history); }, [user, history, push]);
   const [restored, setRestored] = useState(false);
   const isClient = useIsClient();
   const [showSettings, setShowSettings] = useState(false);
@@ -240,6 +267,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
         const a = p.data as AgentAction;
         if (a.type === "download") setFiles((f) => ({ ...f, last: [...(f.last ?? []), { filename: a.filename, markdown: a.markdown }] }));
         else live.current.onAction(a);
+        if (a.type === "report") setHistory((h) => ({ ...h, reports: [{ id: a.id, title: a.title, at: Date.now() }, ...h.reports.filter((r) => r.id !== a.id)].slice(0, 20) }));
       }
     },
     onFinish: ({ message }) => {
@@ -269,10 +297,24 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     if (messages.length) saveChat({ messages: messages.slice(-30), files, times: [...times.current].filter(([k]) => ids.has(k)) });
     else clearChat();
   }, [messages, status, files, restored, saveChat, clearChat]);
+  const snapshot = useCallback((): SavedChat => ({ messages: messages.slice(-30), files, times: [...times.current] }), [messages, files]);
+  const archive = useCallback(() => {
+    if (!messages.length) return;
+    const chat = snapshot(), id = messages[0].id;
+    setHistory((h) => ({ ...h, chats: [{ id, title: chatTitle(chat), at: Date.now(), chat }, ...h.chats.filter((c) => c.id !== id)].slice(0, 10) }));
+  }, [messages, snapshot, setHistory]);
   const newChat = useCallback(() => {
     if (busyRef.current) return;
+    archive();
     setMessages([]); setFiles({}); setProgress({}); clearError(); times.current.clear(); clearChat();
-  }, [setMessages, clearError, clearChat]);
+  }, [archive, setMessages, clearError, clearChat]);
+  const openChat = useCallback((id: string) => {
+    const old = history.chats.find((c) => c.id === id);
+    if (!old || busyRef.current) return;
+    archive();
+    times.current = new Map(old.chat.times); setFiles(old.chat.files ?? {}); setProgress({}); clearError();
+    setMessages(old.chat.messages); setShowHistory(false);
+  }, [history, archive, setMessages, clearError]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, progress]);
   useEffect(() => {
     const t = taRef.current;
@@ -353,15 +395,15 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-background font-mono text-xs text-foreground", className)}>
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11px] text-dim">
-        <span className="truncate">{modelLabel || "…"}</span>
-        <div className="flex items-center gap-3">
-          {onViewChange && <div role="group" aria-label="Explore layout" data-tour="view" className="flex items-center border border-line">
-            {(["map", "report"] as const).map((mode) => <button key={mode} type="button" aria-pressed={view === mode} onClick={() => onViewChange(mode)}
-              className={cn("px-1.5 py-0.5 transition-colors", view === mode ? "bg-raised text-primary" : "hover:text-foreground")}>{mode}</button>)}
-          </div>}
+        <span className="min-w-0 truncate" title={modelLabel}>{modelLabel || "…"}</span>
+        <div className="flex shrink-0 items-center gap-2.5 whitespace-nowrap">
+          {onViewChange && <button type="button" data-tour="view" aria-pressed={view === "report"} onClick={() => onViewChange(view === "report" ? "map" : "report")}
+            title={view === "report" ? "Narrow the panel to see more map" : "Widen the panel for reading reports"}
+            className={cn("border border-line px-1.5 py-0.5 transition-colors hover:text-foreground", view === "report" && "text-primary")}>{view === "report" ? "⤡ narrow" : "⤢ wide"}</button>}
+          <button type="button" onClick={() => setShowHistory((s) => !s)} aria-expanded={showHistory} className={cn("transition-colors hover:text-foreground", showHistory && "text-primary")}>{user ? user.name : "history"}</button>
           <button type="button" onClick={() => void runTour(reportId ? "report" : "explore", { force: true, delay: 0 })} className="transition-colors hover:text-foreground">guide</button>
           <button type="button" onClick={() => setSpeak((s) => { if (s) window.speechSynthesis?.cancel(); return !s; })} aria-pressed={speak} className={cn("transition-colors hover:text-foreground", speak && "text-primary")}>
-            voice {speak ? "on" : "off"}
+            voice
           </button>
           {messages.length > 0 && <button type="button" onClick={newChat} disabled={busy} className="transition-colors hover:text-foreground disabled:opacity-40">new chat</button>}
           <button type="button" onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings} className="transition-colors hover:text-foreground">
@@ -370,18 +412,52 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
         </div>
       </div>
       {showSettings && <AgentSettingsPanel value={settings} onChange={setSettings} health={health} />}
+      {showHistory && <div className="max-h-[45%] shrink-0 space-y-4 overflow-y-auto border-b border-line px-3 py-3 text-[11.5px]">
+        <Account user={user} onUser={setUser} onSignOut={() => { mergedFor.current = null; signOut(); }}
+          onHistory={(h) => setHistory((cur) => mergeHistory(cur, h as History))} />
+        {!user && <p className="text-[10.5px] leading-relaxed text-dim">Without a name, history stays in this browser. Reports also live at their share link, which anyone with the link can open.</p>}
+        <div>
+          <div className="label mb-1.5">reports</div>
+          {history.reports.length ? history.reports.map((r) => <div key={r.id} className="flex items-baseline gap-2 border-t border-line py-1.5">
+            <button type="button" onClick={() => { onAction({ type: "report", id: r.id, title: r.title }); setShowHistory(false); }} className="min-w-0 flex-1 truncate text-left text-muted-foreground hover:text-primary">{r.title}</button>
+            <a href={`/r/${r.id}`} target="_blank" rel="noreferrer" className="shrink-0 text-[10px] text-dim hover:text-foreground">link ↗</a>
+            <span className="num shrink-0 text-[10px] text-dim">{new Date(r.at).toLocaleDateString()}</span>
+          </div>) : <p className="text-dim">No reports yet.</p>}
+        </div>
+        <div>
+          <div className="label mb-1.5">earlier chats</div>
+          {history.chats.length ? history.chats.map((c) => <div key={c.id} className="flex items-baseline gap-2 border-t border-line py-1.5">
+            <button type="button" onClick={() => openChat(c.id)} disabled={busy} className="min-w-0 flex-1 truncate text-left text-muted-foreground hover:text-primary disabled:opacity-40">{c.title}</button>
+            <span className="num shrink-0 text-[10px] text-dim">{new Date(c.at).toLocaleDateString()}</span>
+          </div>) : <p className="text-dim">Start a new chat and this one is kept here.</p>}
+        </div>
+      </div>}
       {healthError && <p role="status" className="border-b border-line px-3 py-2 text-[11px] text-dim">Couldn’t load agent availability.</p>}
 
       <div className={cn("min-h-0 flex-1 space-y-5 overflow-y-auto", view === "report" ? "px-4 py-5 md:px-8 md:py-7" : "px-3 py-3")} aria-live="polite">
         {!messages.length && (
-          <div className="space-y-4">
-            <p className="text-[12px] leading-relaxed text-muted-foreground">Ask about any neighbourhood in the world: its twin elsewhere, where to go, where to open something, where an artist should play.</p>
-            <div className="space-y-px border border-line bg-line">
-              {SUGGEST.map((s) => (
-                <button key={s} type="button" onClick={() => send(s)} className="block w-full bg-background px-2.5 py-2 text-left text-[11.5px] text-muted-foreground transition-colors hover:bg-raised hover:text-foreground">
-                  {s}
-                </button>
-              ))}
+          <div className="space-y-5">
+            <p className="text-[12px] leading-relaxed text-muted-foreground">Ask about any neighbourhood in the world: its twin elsewhere, where to go, where to open something, where an artist should play. Ask for a report to get a verdict, charts and a PDF.</p>
+            <div>
+              <div className="label mb-2">reports · a decision with the evidence</div>
+              <div data-tour="reports" className={cn("grid gap-px border border-line bg-line", view === "report" && "sm:grid-cols-2")}>
+                {REPORTS.map(([role, q]) => (
+                  <button key={role} type="button" onClick={() => send(q)} className="group bg-background px-3 py-2.5 text-left transition-colors hover:bg-raised">
+                    <span className="label text-[9.5px] text-primary">{role}</span>
+                    <span className="mt-1 block text-[11.5px] leading-snug text-muted-foreground group-hover:text-foreground">{q.replace(/^Make me a report:\s*/, "")}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="label mb-2">quick questions</div>
+              <div className="space-y-px border border-line bg-line">
+                {SUGGEST.map((s) => (
+                  <button key={s} type="button" onClick={() => send(s)} className="block w-full bg-background px-2.5 py-2 text-left text-[11.5px] text-muted-foreground transition-colors hover:bg-raised hover:text-foreground">
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

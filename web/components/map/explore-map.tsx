@@ -123,6 +123,9 @@ const card = (title: string, body: string, foot: string) =>
   `<div style="padding:7px 9px 8px"><div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5f5c55">${title}</div>${body}</div><div style="border-top:1px solid #22211d;padding:5px 9px;color:#f0a03c;font-size:10.5px">${foot}</div>`;
 
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Separate ground-level faces from MapLibre's globe depth without changing the bars' geometry.
+const columnParameters = { depthCompare: "less-equal" as const, depthWriteEnabled: true, depthBias: -1, depthBiasSlopeScale: -1 };
+const columnMaterial = { ambient: 0.6, diffuse: 0.55, shininess: 24, specularColor: [255, 230, 200] as [number, number, number] };
 
 export default function ExploreMap(props: ExploreMapProps) {
   const propsRef = useRef(props);
@@ -341,16 +344,15 @@ export default function ExploreMap(props: ExploreMapProps) {
     // only the city in view: the target once one is chosen, otherwise the source
     const showSrc = !p.targetCity || a.reveal < 1;
     const layers = [];
-    const mat = { ambient: 0.6, diffuse: 0.55, shininess: 24, specularColor: [255, 230, 200] as [number, number, number] };
     if (p.mode === "opportunity" && oppCols) {
       layers.push(new ColumnLayer({
         id: "opp-cells", data: oppCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
-        material: mat, opacity: 0.95, autoHighlight: true, highlightColor: [230, 227, 218, 110],
+        material: columnMaterial, parameters: columnParameters, opacity: 0.95, autoHighlight: true, highlightColor: [230, 227, 218, 110],
       }));
     }
     const pushStack = (id: string, st: StackData, opacity: number, rise = 1) => layers.push(new ColumnLayer({
       id, data: st.cols as never, diskResolution: 4, angle: 45, radius: 320, extruded: true, pickable: true,
-      elevationScale: rise, material: mat, opacity, autoHighlight: true, highlightColor: [230, 227, 218, 120],
+      elevationScale: rise, material: columnMaterial, parameters: columnParameters, opacity, autoHighlight: true, highlightColor: [230, 227, 218, 120],
     }));
     if (p.mode === "twin") {
       if (srcStack && showSrc) pushStack("src-stack", srcStack, p.targetCity ? 0.55 : 0.95);
@@ -359,11 +361,11 @@ export default function ExploreMap(props: ExploreMapProps) {
     if (p.mode === "raw") {
       if (srcCols && showSrc) layers.push(new ColumnLayer({
         id: "src-cells", data: srcCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
-        material: mat, opacity: p.targetCity ? 0.6 : 0.95, autoHighlight: true, highlightColor: [230, 227, 218, 110],
+        material: columnMaterial, parameters: columnParameters, opacity: p.targetCity ? 0.6 : 0.95, autoHighlight: true, highlightColor: [230, 227, 218, 110],
       }));
       if (tgtCols && p.targetCity) layers.push(new ColumnLayer({
         id: "tgt-cells", data: tgtCols as never, diskResolution: 4, angle: 45, radius: 330, extruded: true, pickable: true,
-        elevationScale: ease(a.reveal), material: mat, opacity: 0.1 + 0.9 * ease(a.reveal), autoHighlight: true, highlightColor: [230, 227, 218, 110],
+        elevationScale: ease(a.reveal), material: columnMaterial, parameters: columnParameters, opacity: 0.1 + 0.9 * ease(a.reveal), autoHighlight: true, highlightColor: [230, 227, 218, 110],
       }));
     }
     if (p.source && top && p.targetCity && a.arc > 0 && p.mode !== "opportunity") {
@@ -381,9 +383,11 @@ export default function ExploreMap(props: ExploreMapProps) {
     rafRef.current = requestAnimationFrame(loop);
   };
   useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+  const arcTarget = props.twins[0]?.hood;
+  const arcKey = arcTarget ? `${arcTarget.lon}|${arcTarget.lat}` : "";
   useEffect(() => {
     if (ready) kick.current();
-  }, [ready, tgtCols, srcCols, oppCols, tgtStack, srcStack, props.mode, props.targetCity, props.source, props.twins]);
+  }, [ready, tgtCols, srcCols, oppCols, tgtStack, srcStack, props.mode, tgtId, sourceKey, arcKey]);
 
   return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} className="bg-background" />;
 }
