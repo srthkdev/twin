@@ -283,7 +283,7 @@ const where_in_city = defineTool({
       const w = await liveWhere(city, item_or_group, kk, { stats, progress });
       const lead = w.top_hoods[0];
       return {
-        data: { city: w.city.name, query: w.sig.name, source: "live Qloo heatmap, popularity-corrected against this city's cells", cells_with_signal: w.present, top_hoods: w.top_hoods, top_cells: w.top_cells },
+        data: { city: w.city.name, query: w.sig.name, source: w.source, cells_with_signal: w.present, top_hoods: w.top_hoods, top_cells: w.top_cells },
         summary: `${w.sig.name} in ${w.city.name}: ${w.top_hoods.slice(0, 3).map((x) => x.name).join(", ")}`,
         uiActions: lead ? [{ type: "focus", lat: lead.lat, lon: lead.lon }] : [],
       };

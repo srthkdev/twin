@@ -27,6 +27,10 @@ export interface ReportSection { heading: string; body: string } // body: markdo
 export type VerdictTone = "go" | "watch" | "skip" | "info";
 
 export interface Report {
+  /** Composed report body (lib/report/catalog.ts). Older reports have only `sections`; renderers convert them. */
+  blocks?: import("../report/catalog").ReportBlock[];
+  /** The report skill (playbook) the agent followed, e.g. "site-selection". */
+  skill?: string;
   id: string;                 // short random id, also the share URL /r/<id>
   title: string;
   subtitle?: string;
@@ -34,7 +38,7 @@ export interface Report {
   question?: string;          // the user's request that produced it
   verdict?: { label: string; tone: VerdictTone; line: string };
   kpis?: { label: string; value: string; note?: string }[]; // ≤ 4
-  sections: ReportSection[];
+  sections?: ReportSection[]; // legacy body; new reports use `blocks`
   charts: ChartSpec[];
   places?: { label: string; link: MapLink; note?: string }[];
   evidence: { tool: string; summary: string }[]; // every tool call the run made, in order

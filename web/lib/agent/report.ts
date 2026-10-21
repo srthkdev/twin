@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import { blockSchema, catalogPrompt, mapLink, type ReportBlock } from "../report/catalog";
+import { evidenceSummary, reportBlocks } from "../report/normalize";
 import type { ChartSpec, Report, VerdictTone } from "./report-types";
 import { storePut } from "./store";
 import { ToolError, defineTool, type ToolContext } from "./tool-kit";
@@ -11,10 +13,10 @@ export interface AgentRunContext {
   nextChartId: number;
   question?: string;
   model?: () => string | undefined;
+  reportMode?: boolean;
+  skill?: string;
 }
 type ReportToolContext = ToolContext & { run?: AgentRunContext };
-
-const mapLink = z.string().regex(/^(?:hood:[A-Za-z0-9_-]+|geo:-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?)$/, "use hood:<id> or geo:<lat>,<lon>");
 
 export const chartInputSchema = z.object({
   kind: z.enum(["bar", "hbar", "line", "scatter", "table"]),
@@ -49,7 +51,7 @@ function rounded(n: number, places: number) {
 function matchesLedger(value: number, entries: EvidenceEntry[], percent: boolean) {
   const sources: string[] = [];
   for (const entry of entries) {
-    if (entry.tool === "chart" || entry.tool === "report") continue;
+    if (["chart", "report", "report_skill"].includes(entry.tool)) continue;
     const match = entry.numbers.some((base) => {
       const variants = [base, ...[0, 1, 2, 3].map((p) => rounded(base, p))];
       if (percent) variants.push(base * 100, ...[0, 1, 2, 3].map((p) => rounded(base * 100, p)));
@@ -88,6 +90,7 @@ export function validateChart(input: unknown, entries: EvidenceEntry[]): { ok: t
     return { ok: false, error: "Invalid chart: links must have one entry for every label.", bad: [] };
   }
   if (chart.kind !== "scatter" && chart.points?.length) return { ok: false, error: "Invalid chart: points are only allowed for scatter charts.", bad: [] };
+  if (chart.kind === "scatter" && !chart.points?.length) return { ok: false, error: "Invalid chart: scatter needs at least one point.", bad: [] };
   const values = chartValues(chart).map((value) => ({ value, percent: chart.unit === "%" }));
   const grounding = validateGrounding(values, entries);
   if (grounding.bad.length) return { ok: false, error: ungroundedError(grounding.bad), bad: grounding.bad };
@@ -99,28 +102,25 @@ function ungroundedError(values: number[]) {
   return `Ungrounded values: ${shown}. Call the relevant data tool first (for example find_twins, opportunity, venue_supply, tour, or trend), then retry.`;
 }
 
-const verdictSchema = z.object({ label: z.enum(["GO", "WATCH", "SKIP", "INFO"]), line: z.string().min(1) }).strict();
-const kpiSchema = z.object({ label: z.string().min(1), value: z.string().min(1), note: z.string().optional() }).strict();
-const inlineChartSchema = chartInputSchema;
-
 export const reportInputSchema = z.object({
   title: z.string().min(3),
   subtitle: z.string().optional(),
-  verdict: verdictSchema.optional(),
-  kpis: z.array(kpiSchema).max(4).optional(),
-  sections: z.array(z.object({ heading: z.string().min(1), body: z.string() }).strict()).min(3).max(6),
-  chart_ids: z.array(z.string()).max(4).optional(),
-  charts: z.array(inlineChartSchema).max(4).optional(),
-  places: z.array(z.object({ label: z.string().min(1), link: mapLink, note: z.string().optional() }).strict()).optional(),
+  skill: z.string().optional(),
+  blocks: z.array(blockSchema).min(5).max(24),
 }).strict();
 
 type ReportInput = z.infer<typeof reportInputSchema>;
 
 function numericText(text: string) {
   const values: { value: number; percent: boolean }[] = [];
+  const visible = text.replace(/\]\((?:[^()\n]|\([^()]*\))*\)/g, "]")
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    .replace(/^\s*\[[^\]]+\]:\s*\S+.*$/gm, "")
+    .replace(/<(?:https?:\/\/|hood:|geo:)[^>]*>/g, "");
   const re = /(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?\s*(%)?/g;
-  for (const match of text.matchAll(re)) {
+  for (const match of visible.matchAll(re)) {
     const value = Number(match[0].replace(/[%\s,]/g, ""));
+    if (!match[1] && Number.isInteger(value) && value >= 1900 && value <= 2100) continue;
     if (Number.isFinite(value)) values.push({ value, percent: !!match[1] });
   }
   return values;
@@ -137,31 +137,34 @@ function chartMarkdown(chart: ChartSpec) {
   const rows = chart.kind === "scatter" && chart.points?.length
     ? [`| Place | ${cleanCell(chart.axes?.x ?? "x")} | ${cleanCell(chart.axes?.y ?? "y")} |`, "| --- | ---: | ---: |", ...chart.points.map((point) => `| ${linkedLabel(point.label, point.link)} | ${point.x} | ${point.y} |`)]
     : [`| ${["Label", ...chart.series.map((series) => cleanCell(series.name))].join(" | ")} |`, `| ${["---", ...chart.series.map(() => "---:")].join(" | ")} |`, ...chart.labels.map((label, i) => `| ${[linkedLabel(label, chart.links?.[i]), ...chart.series.map((series) => String(series.values[i]))].join(" | ")} |`)];
-  return [`### ${chart.title}`, chart.caption, chart.unit ? `_Unit: ${chart.unit}_` : undefined, ...rows].filter(Boolean).join("\n\n");
+  return [`### ${chart.title}`, chart.caption, chart.unit ? `_Unit: ${chart.unit}_` : undefined, rows.join("\n")].filter(Boolean).join("\n\n");
 }
 
 export function reportMarkdown(report: Report) {
   const byId = new Map(report.charts.map((chart) => [chart.id, chart]));
-  const embedded = new Set<string>();
-  const sections = report.sections.map((section) => {
-    const body = section.body.replace(/\[\[(fig-[A-Za-z0-9_-]+)\]\]/g, (marker, id: string) => {
-      const chart = byId.get(id);
-      if (!chart) return marker;
-      embedded.add(id);
-      return `\n\n${chartMarkdown(chart)}\n\n`;
-    });
-    return `## ${section.heading}\n\n${body.trim()}`;
+  const table = (columns: string[], rows: string[][]) => [`| ${columns.map(cleanCell).join(" | ")} |`, `| ${columns.map(() => "---").join(" | ")} |`, ...rows.map((row) => `| ${row.map(cleanCell).join(" | ")} |`)].join("\n");
+  const blocks = reportBlocks(report).map((block) => {
+    switch (block.type) {
+      case "Verdict": return `**${block.props.label}:** ${block.props.line}`;
+      case "KpiRow": return table(["Measure", "Value", "Note"], block.props.items.map((item) => [linkedLabel(item.label, item.link), item.value, item.note ?? ""]));
+      case "Heading": return `## ${block.props.text}`;
+      case "Paragraph": return block.props.markdown;
+      case "Chart": { const chart = byId.get(block.props.id); return chart ? [chartMarkdown(chart), block.props.note].filter(Boolean).join("\n\n") : `Chart unavailable: ${block.props.id}`; }
+      case "Ranking": return `### ${block.props.title}\n\n${block.props.items.map((item, i) => `${i + 1}. ${linkedLabel(item.label, item.link)}${item.metric ? ` · ${item.metric}` : ""} — ${item.reason}`).join("\n")}`;
+      case "Compare": return table(["Measure", linkedLabel(block.props.left.title, block.props.left.link), linkedLabel(block.props.right.title, block.props.right.link)], block.props.rows.map((row) => [row.measure, row.left, row.right]));
+      case "Table": return [table(block.props.columns, block.props.rows), block.props.caption].filter(Boolean).join("\n\n");
+      case "Callout": return `> ${block.props.tone.toUpperCase()}: ${block.props.text}`;
+      case "Places": return `### Places\n\n${block.props.items.map((item) => `- ${linkedLabel(item.label, item.link)}${item.note ? ` — ${item.note}` : ""}`).join("\n")}`;
+      case "NextSteps": return `### Next steps\n\n${block.props.items.map((item, i) => `${i + 1}. ${item}`).join("\n")}`;
+    }
   });
   const parts = [
     `# ${report.title}`,
     report.subtitle,
     `_Generated by Twin · ${report.createdAt.slice(0, 10)}_`,
-    report.verdict ? `**${report.verdict.label}:** ${report.verdict.line}` : undefined,
-    report.kpis?.length ? `| Measure | Value | Note |\n| --- | --- | --- |\n${report.kpis.map((kpi) => `| ${cleanCell(kpi.label)} | ${cleanCell(kpi.value)} | ${cleanCell(kpi.note ?? "")} |`).join("\n")}` : undefined,
-    ...sections,
-    report.places?.length ? `## Places\n\n${report.places.map((place) => `- [${cleanCell(place.label)}](${place.link})${place.note ? ` — ${cleanCell(place.note)}` : ""}`).join("\n")}` : undefined,
-    ...report.charts.filter((chart) => !embedded.has(chart.id)).map(chartMarkdown),
-    report.evidence.length ? `## Evidence\n\n${report.evidence.map((item) => `- ${cleanCell(item.tool)}: ${cleanCell(item.summary)}`).join("\n")}` : undefined,
+    ...blocks,
+    report.evidence.length ? `## Evidence\n\n${report.evidence.map((item) => `- ${cleanCell(item.tool)}: ${cleanCell(evidenceSummary(item.tool, item.summary))}`).join("\n")}` : undefined,
+    `${report.grounding.grounded} of ${report.grounding.numbers} checked numbers matched tool evidence.`,
   ];
   return parts.filter(Boolean).join("\n\n");
 }
@@ -189,62 +192,100 @@ const chartTool = defineTool({
   },
 });
 
-export function validateReportGrounding(input: Pick<ReportInput, "kpis">, charts: ChartSpec[], entries: EvidenceEntry[]) {
-  const values = [
-    ...(input.kpis ?? []).flatMap((kpi) => [...numericText(kpi.label), ...numericText(kpi.value), ...numericText(kpi.note ?? "")]),
+function blockText(block: ReportBlock): [string, string][] {
+  switch (block.type) {
+    case "Verdict": return [["line", block.props.line]];
+    case "Paragraph": return [["markdown", block.props.markdown]];
+    case "Callout": return [["text", block.props.text]];
+    case "KpiRow": return block.props.items.flatMap((item, i) => Object.entries(item).filter(([key]) => key !== "link").map(([key, value]) => [`items.${i}.${key}`, value] as [string, string]));
+    case "Ranking": return [["title", block.props.title], ...block.props.items.flatMap((item, i) => Object.entries(item).filter(([key]) => key !== "link").map(([key, value]) => [`items.${i}.${key}`, value] as [string, string]))];
+    case "Compare": return block.props.rows.flatMap((row, i) => [[`rows.${i}.left`, row.left], [`rows.${i}.right`, row.right]] as [string, string][]);
+    case "Table": return block.props.rows.flatMap((row, i) => row.map((value, j) => [`rows.${i}.${j}`, value] as [string, string]));
+    default: return [];
+  }
+}
+
+export function validateReportGrounding(input: Pick<ReportInput, "blocks">, charts: ChartSpec[], entries: EvidenceEntry[]) {
+  return validateGrounding([
+    ...input.blocks.flatMap((block) => blockText(block).flatMap(([, value]) => numericText(value))),
     ...charts.flatMap(chartGroundingValues),
-  ];
-  return validateGrounding(values, entries);
+  ], entries);
+}
+
+export function validateReport(input: unknown, run: Pick<AgentRunContext, "charts" | "evidence">) {
+  const parsed = reportInputSchema.safeParse(input);
+  if (!parsed.success) throw new ToolError(`Invalid report: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "report"}: ${issue.message}`).join("; ")}`);
+  const report = parsed.data;
+  if (report.blocks[0].type !== "Verdict") throw new ToolError(`Block 1 (${report.blocks[0].type}): first block must be Verdict.`);
+  const charts: ChartSpec[] = [];
+  for (const [i, block] of report.blocks.entries()) {
+    const location = `Block ${i + 1} (${block.type})`;
+    if (i > 0 && block.type === "Verdict") throw new ToolError(`${location}: only the first block may be Verdict.`);
+    if (block.type === "Chart") {
+      if (charts.length >= 4) throw new ToolError(`${location}: ${block.props.id} exceeds the limit of 4 Chart blocks.`);
+      const chart = run.charts.get(block.props.id);
+      if (!chart) throw new ToolError(`${location}: unknown chart ${block.props.id}. Use an id returned by chart in this run.`);
+      const checked = validateGrounding(chartGroundingValues(chart), run.evidence);
+      if (checked.bad.length) throw new ToolError(`${location} (${chart.id}): ${ungroundedError(checked.bad)}`);
+      charts.push(chart);
+    }
+    for (const [field, text] of blockText(block)) {
+      const checked = validateGrounding(numericText(text), run.evidence);
+      if (checked.bad.length) throw new ToolError(`${location} props.${field} ${JSON.stringify(text)}: ${ungroundedError(checked.bad)}`);
+    }
+  }
+  return { input: report, charts: [...new Map(charts.map((chart) => [chart.id, chart])).values()], grounding: validateReportGrounding(report, charts, run.evidence) };
+}
+
+export function reportPlaces(blocks: ReportBlock[]): NonNullable<Report["places"]> {
+  const places = new Map<string, NonNullable<Report["places"]>[number]>();
+  const add = (label: string, link: string, note?: string) => {
+    if (mapLink.safeParse(link).success && !places.has(link)) places.set(link, { label, link, ...(note ? { note } : {}) });
+  };
+  const visit = (value: unknown) => {
+    if (typeof value === "string") {
+      for (const [, label, link] of value.matchAll(/\[([^\]]+)\]\((hood:[A-Za-z0-9_-]+|geo:-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?)\)/g)) add(label, link);
+    } else if (Array.isArray(value)) value.forEach(visit);
+    else if (value && typeof value === "object") {
+      const item = value as Record<string, unknown>;
+      if (typeof item.link === "string") add(String(item.label ?? item.title ?? "Place"), item.link, typeof item.note === "string" ? item.note : undefined);
+      Object.values(item).forEach(visit);
+    }
+  };
+  visit(blocks);
+  return [...places.values()];
 }
 
 const reportTool = defineTool({
   name: "report",
-  description: "Create a shareable Twin report with a verdict, grounded KPIs, short sections, charts from earlier chart calls or inline charts, and map-linked places. Also downloads a markdown copy.",
+  description: `Create a shareable Twin report after report_skill and evidence gathering. Supply 5–24 catalog blocks, Verdict first, at most 4 Chart blocks referencing chart ids from this run. Every number in narrative and headline values must match tool evidence. Also downloads markdown.\n${catalogPrompt()}`,
   schema: reportInputSchema,
   async run(input, ctx) {
     const run = (ctx as ReportToolContext).run;
     if (!run) throw new ToolError("Report creation needs an active agent run. Retry in the current conversation.");
-    const selected = (input.chart_ids ?? []).map((id) => {
-      const chart = run.charts.get(id);
-      if (!chart) throw new ToolError(`Unknown chart ${id}. Use a chart ID returned earlier in this run.`);
-      return chart;
-    });
-    if (new Set(input.chart_ids ?? []).size !== (input.chart_ids ?? []).length) throw new ToolError("Each chart ID can only be included once.");
-    if (selected.length + (input.charts?.length ?? 0) > 4) throw new ToolError("A report can include at most 4 charts.");
-
-    const charts = [...selected];
-    for (const chartInput of input.charts ?? []) {
-      const checked = validateChart(chartInput, run.evidence);
-      if (!checked.ok) throw new ToolError(checked.error);
-      charts.push(assignChart(chartInput, run, checked));
-    }
-    const includedIds = new Set(charts.map((chart) => chart.id));
-    for (const section of input.sections) {
-      for (const [, id] of section.body.matchAll(/\[\[(fig-[A-Za-z0-9_-]+)\]\]/g)) {
-        if (!includedIds.has(id)) throw new ToolError(`Section references ${id}, but that chart is not included. Add its chart ID to the report.`);
-      }
-    }
-
-    const grounding = validateReportGrounding(input, charts, run.evidence);
-    if (grounding.bad.length) throw new ToolError(ungroundedError(grounding.bad));
+    const { charts, grounding } = validateReport(input, run);
+    const verdict = input.blocks[0];
+    if (verdict.type !== "Verdict") throw new ToolError("Block 1 must be Verdict.");
+    const kpis = input.blocks.flatMap((block) => block.type === "KpiRow" ? block.props.items : []).slice(0, 4);
 
     const id = randomBytes(6).toString("base64url");
-    const verdictTone = input.verdict?.label.toLowerCase() as VerdictTone | undefined;
     const report: Report = {
       id,
       title: input.title,
       subtitle: input.subtitle,
       createdAt: new Date().toISOString(),
       question: run.question,
-      verdict: input.verdict ? { ...input.verdict, tone: verdictTone! } : undefined,
-      kpis: input.kpis,
-      sections: input.sections,
+      blocks: input.blocks,
+      skill: input.skill ?? run.skill,
+      verdict: { ...verdict.props, tone: verdict.props.label.toLowerCase() as VerdictTone },
+      kpis,
       charts,
-      places: input.places,
-      evidence: run.evidence.map(({ tool, summary }) => ({ tool, summary })),
+      places: reportPlaces(input.blocks),
+      evidence: run.evidence.map(({ tool, summary }) => ({ tool, summary: tool === "report" && summary === "report requested" ? `report ready: ${input.title}` : evidenceSummary(tool, summary) })),
       grounding: { numbers: grounding.numbers, grounded: grounding.grounded },
       model: run.model?.(),
     };
+    if (!run.evidence.some((entry) => entry.tool === "report" && entry.summary === "report requested")) report.evidence.push({ tool: "report", summary: `report ready: ${input.title}` });
     const markdown = reportMarkdown(report);
     const filename = `${slug(report.title) || "twin-report"}.md`;
     await storePut(`reports/${id}.json`, report);

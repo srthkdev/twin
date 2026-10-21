@@ -5,18 +5,20 @@
 //   Nominatim   -> place name -> coordinates.
 //   Wikipedia   -> background facts.   Web search -> current facts Qloo lacks (events, news, closures, rents), cited.
 import { z } from "zod";
+import { busyAt, type Busyness } from "./busy";
 import {
   CORE_BASKET, allCities, correctItem, ensureCity, fetchHeat, findCityAny, hoodVec, loadCore, qlooQueryFor,
   type CityMeta, type CoreFile, type CoreHood,
 } from "./city-live";
 import { cosine, hav } from "./geo";
 import { geocode } from "./net";
-import { BASKET_KEYS } from "./node-data";
+import { BASKET_KEYS, loadCellsFile, loadDataSet } from "./node-data";
 import { osmAround, osmSupplyGrid } from "./osm";
-import { OSM_FALLBACK, SUPPLY_KINDS, loadKindCategories, loadSupply, supplyAround, type SupplyKind } from "./supply";
+import { GAP_KINDS, OSM_FALLBACK, SUPPLY_KINDS, loadKindCategories, loadSupply, supplyAround, type SupplyKind } from "./supply";
 import { fmtHours, qlooCompare, qlooGet, qlooResolveTag, qlooScene, qlooSearchEntity, qlooTrend } from "./qloo";
 import { ToolError, defineTool, r2, r3, type ToolDef } from "./tool-kit";
 import { REPORT_TOOLS } from "./report";
+import { reportSkillTool } from "./skills";
 import type { AgentAction, OpportunityCell } from "./types";
 import { readPage, webSearch, wikiLookup } from "./web";
 import type { DataSet, Hood } from "../types";
@@ -24,6 +26,39 @@ import type { DataSet, Hood } from "../types";
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 const CORE_LABEL = new Map(CORE_BASKET.map((c) => [c.id, c.label]));
 const coreLabels = (core: CoreFile) => core.items.map((id) => CORE_LABEL.get(id) ?? id);
+
+async function staticDemand(ds: DataSet, city: string, taste: string) {
+  const singular = (s: string) => norm(s.replace(/_/g, " ")).split(" ").map((w) => w.replace(/s$/, "")).join(" ");
+  const q = singular(taste);
+  const item = ds.basket.find((b) => singular(b.label) === q || singular(b.id.replace(/^[a-z]+-/, "").replace(/-/g, " ")) === q);
+  const key = item && BASKET_KEYS[item.id];
+  if (!item || !key) return null;
+  const { cells } = await loadCellsFile(city);
+  return { cells, z: Float64Array.from(cells, (c) => c.v[item.i]), present: cells.length, sig: { ...key, name: item.label } };
+}
+
+async function twinSource(ds: DataSet, source: string, cities: CityMeta[]) {
+  const staticHood = ds.hoods.find((h) => h.id === source || norm(h.name) === norm(source));
+  for (const city of cities) {
+    if (staticHood && city.id !== staticHood.city) continue;
+    const core = await loadCore(city.id);
+    const hood = core?.hoods.find((h) => h.id === (staticHood?.id ?? source) || norm(h.name) === norm(source));
+    if (core && (hood || staticHood)) {
+      const h = hood ?? staticHood!;
+      const v = hood?.v ?? hoodVec(core.cells, h.lat, h.lon)?.v;
+      if (v) return { city, label: h.name, lat: h.lat, lon: h.lon, hoodId: h.id, v, staticHood: staticHood ?? null };
+    }
+  }
+  const g = (await geocode(source, 1).catch((e) => { throw new ToolError(`Could not resolve "${source}": ${e instanceof Error ? e.message : "geocoding failed"}`); }))[0];
+  if (!g) throw new ToolError(`Could not resolve "${source}".`);
+  for (const city of cities) {
+    if (hav(g.lat, g.lon, city.center[1], city.center[0]) > 80_000) continue;
+    const core = await loadCore(city.id);
+    const v = core && hoodVec(core.cells, g.lat, g.lon)?.v;
+    if (v) return { city, label: g.name, lat: g.lat, lon: g.lon, hoodId: null, v, staticHood: null };
+  }
+  throw new ToolError(`"${source}" is not inside a fingerprinted city. Call add_city for its city first.`);
+}
 
 /** A fingerprinted city by name. With `ctx`, a city that isn't fingerprinted yet is built live first (the user named it). */
 async function cityOrThrow(text: string, ctx?: Pick<ToolCtx, "stats" | "progress">): Promise<{ city: CityMeta; core: CoreFile }> {
@@ -95,12 +130,13 @@ export async function supplyKindFor(text: string, stats?: ToolCtx["stats"]): Pro
  */
 export async function liveWhere(cityText: string, taste: string, k: number, ctx: Pick<ToolCtx, "stats" | "progress">) {
   const { city, core } = await cityOrThrow(cityText, ctx);
-  const where = await qlooQueryFor(city.id);
-  let sig = await tasteSignal(taste, "place_type", ctx.stats).catch(() => tasteSignal(taste, "entity", ctx.stats));
-  ctx.progress(`qloo heatmap for ${sig.name} in ${city.name}`);
-  let heat = await fetchHeat(where, sig.key, sig.val, ctx.stats);
-  let { z, present } = correctItem(core, heat);
-  if (present < 50) {
+  const saved = city.source === "static" ? await staticDemand(await loadDataSet(), city.id, taste) : null;
+  const where = saved ? "" : await qlooQueryFor(city.id);
+  let sig = saved?.sig ?? await tasteSignal(taste, "place_type", ctx.stats).catch(() => tasteSignal(taste, "entity", ctx.stats));
+  if (!saved) ctx.progress(`qloo heatmap for ${sig.name} in ${city.name}`);
+  let heat = saved ? null : await fetchHeat(where, sig.key, sig.val, ctx.stats);
+  let { z, present } = saved ?? correctItem(core, heat!);
+  if (present < 50 && !saved) {
     const kind = await supplyKindFor(taste, ctx.stats);
     const broad = kind ? await qlooResolveTag(kind.replace(/_/g, " "), ctx.stats) : null;
     if (broad && broad.id !== sig.val) {
@@ -111,12 +147,13 @@ export async function liveWhere(cityText: string, taste: string, k: number, ctx:
     }
   }
   if (present < 20) throw new ToolError(`Qloo has too little data for "${sig.name}" in ${city.name}.`);
-  const idx = core.cells.map((_, i) => i).filter((i) => heat.has(core.cells[i].g)).sort((a, b) => z[b] - z[a]);
-  const top_cells = idx.slice(0, k).map((i) => { const c = core.cells[i]; return { lat: c.lat, lon: c.lon, near: nearestCoreHood(core, c.lat, c.lon)?.h.name, corrected_z: r2(z[i]) }; });
+  const cells = saved?.cells ?? core.cells;
+  const idx = cells.map((_, i) => i).filter((i) => saved || heat!.has(cells[i].g)).sort((a, b) => z[b] - z[a]);
+  const top_cells = idx.slice(0, k).map((i) => { const c = cells[i]; return { lat: c.lat, lon: c.lon, near: nearestCoreHood(core, c.lat, c.lon)?.h.name, corrected_z: r2(z[i]) }; });
   const hoods = new Map<string, { n: number; h: CoreHood }>();
-  for (const i of idx.slice(0, 30)) { const n = nearestCoreHood(core, core.cells[i].lat, core.cells[i].lon); if (n && n.m < 2500) hoods.set(n.h.id, { n: (hoods.get(n.h.id)?.n ?? 0) + 1, h: n.h }); }
+  for (const i of idx.slice(0, 30)) { const n = nearestCoreHood(core, cells[i].lat, cells[i].lon); if (n && n.m < 2500) hoods.set(n.h.id, { n: (hoods.get(n.h.id)?.n ?? 0) + 1, h: n.h }); }
   const top_hoods = [...hoods.values()].sort((a, b) => b.n - a.n).slice(0, k).map(({ n, h }) => ({ hood_id: h.id, name: h.name, lat: h.lat, lon: h.lon, cells_in_top30: n }));
-  return { city, sig, present, top_hoods, top_cells };
+  return { city, sig, present, top_hoods, top_cells, source: saved ? "precomputed Qloo heatmaps, popularity-corrected" : "live Qloo heatmap, popularity-corrected against this city's cells" };
 }
 
 // ───────────── geography ─────────────
@@ -156,24 +193,9 @@ const twins_anywhere = defineTool({
   }),
   async run({ source, target_city, k }, { ds, stats, progress }) {
     const tgt = await cityOrThrow(target_city, { stats, progress });
-    let srcVec: number[] | null = null, srcName = source, srcCity: CityMeta | null = null, srcHoodId: string | null = null;
-    for (const c of await allCities()) {
-      const core = await loadCore(c.id);
-      const h = core?.hoods.find((x) => x.id === source || norm(x.name) === norm(source));
-      if (h) { srcVec = h.v; srcName = h.name; srcCity = c; srcHoodId = h.id; break; }
-    }
-    if (!srcVec) {
-      const g = (await geocode(source, 1))[0];
-      if (!g) throw new ToolError(`Could not place "${source}".`);
-      for (const c of await allCities()) {
-        if (hav(g.lat, g.lon, c.center[1], c.center[0]) > 80_000) continue;
-        const core = await loadCore(c.id);
-        const hv = core && hoodVec(core.cells, g.lat, g.lon);
-        if (hv) { srcVec = hv.v; srcName = g.name; srcCity = c; break; }
-      }
-      if (!srcVec) throw new ToolError(`"${source}" is not inside a fingerprinted city. Call add_city for its city first.`);
-    }
-    if (srcCity?.id === tgt.city.id) throw new ToolError("Source and target are in the same city.");
+    const src = await twinSource(ds, source, await allCities());
+    const { v: srcVec, label: srcName, city: srcCity, hoodId: srcHoodId } = src;
+    if (srcCity.id === tgt.city.id) throw new ToolError("Source and target are in the same city.");
     const labels = coreLabels(tgt.core);
     const ranked = tgt.core.hoods.map((h) => ({ h, s: cosine(srcVec!, h.v) })).sort((a, b) => b.s - a.s);
     const top = ranked.slice(0, k ?? 5).map(({ h, s }, i) => {
@@ -192,6 +214,81 @@ const twins_anywhere = defineTool({
       data: { source: { name: srcName, city: srcCity?.name }, target_city: tgt.city.name, dims: "40-dim core basket", twins: top, coverage: tgt.city.coverage ?? null },
       summary: `${srcName} → ${tgt.city.name}: ${top[0]?.name} ${top[0]?.cosine}`,
       uiActions: ui,
+    };
+  },
+});
+
+const gap_scan = defineTool({
+  name: "gap_scan",
+  description: "Cross-city gaps: find a neighbourhood's strongest foreign twins, compare same-radius venue shares from Overture, and return kinds recurring in the twins but scarce at home. Uses saved taste fingerprints and supply; no live Qloo calls. Home accepts a neighbourhood id/name or any place/address. Generic bar and restaurant rollups are excluded to avoid double-counting.",
+  schema: z.object({
+    home: z.string().min(2),
+    cities: z.array(z.string()).min(1).optional().describe("target fingerprinted cities; default every other fingerprinted city"),
+    twins: z.number().int().min(1).max(5).default(3),
+    radius_m: z.number().min(600).max(1500).default(1000),
+  }),
+  async run({ home, cities: asked, twins: count, radius_m }, { ds }) {
+    const cities = await allCities();
+    const src = await twinSource(ds, home, cities);
+    const targets = asked ? await Promise.all(asked.map(async (text) => (await cityOrThrow(text)).city)) : cities;
+    const foreign = [...new Map(targets.filter((c) => c.id !== src.city.id).map((c) => [c.id, c])).values()];
+    if (!foreign.length) throw new ToolError("Choose at least one fingerprinted city other than the home's city.");
+    const ranked = [];
+    for (const city of foreign) {
+      if (src.staticHood && city.source === "static") {
+        const pre = ds.twins[src.staticHood.id]?.[city.id];
+        if (pre?.length) {
+          for (const match of pre) {
+            const h = ds.hoods.find((h) => h.id === match.hood);
+            if (h) ranked.push({ h, city, score: match.score });
+          }
+        } else {
+          for (const h of ds.hoods.filter((h) => h.city === city.id)) ranked.push({ h, city, score: cosine(src.staticHood.v, h.v) });
+        }
+      } else {
+        const core = await loadCore(city.id);
+        if (!core) throw new ToolError(`No fingerprint data for ${city.name}.`);
+        for (const h of core.hoods) ranked.push({ h, city, score: cosine(src.v, h.v) });
+      }
+    }
+    const twins = ranked.sort((a, b) => b.score - a.score).slice(0, count);
+    if (!twins.length) throw new ToolError("No foreign twins found in the selected fingerprinted cities.");
+    const places = [{ label: src.label, city: src.city, lat: src.lat, lon: src.lon }, ...twins.map(({ h, city }) => ({ label: h.name, city, lat: h.lat, lon: h.lon }))];
+    const supplies = await Promise.all(places.map(async (place) => {
+      const supply = await loadSupply(place.city.id);
+      if (!supply || !Object.keys(supply.cells).length) throw new ToolError(`No Overture venue supply data for ${place.city.name}; gap_scan needs supply for home and every twin.`);
+      const missing = GAP_KINDS.filter((k) => !supply.kinds.includes(k));
+      if (missing.length) throw new ToolError(`Incomplete venue supply data for ${place.city.name}: missing ${missing.join(", ")}.`);
+      const result = supplyAround(supply, place.lat, place.lon, radius_m, GAP_KINDS);
+      const total = Object.values(result.counts).reduce((sum, n) => sum + n, 0);
+      if (!result.cells || !total) throw new ToolError(`No counted venue supply near ${place.label} in ${place.city.name} within this radius; shares cannot be compared.`);
+      return { ...result, total, source: `${supply.source} ${supply.release}` };
+    }));
+    const rows = GAP_KINDS.map((kind) => {
+      const home_count = supplies[0].counts[kind], twin_counts = supplies.slice(1).map((s) => s.counts[kind]);
+      const homeShare = home_count / supplies[0].total;
+      const shares = supplies.slice(1).map((s) => s.counts[kind] / s.total);
+      const meanShare = shares.reduce((sum, n) => sum + n, 0) / shares.length;
+      return {
+        kind, home_count, twin_counts, home_share_pct: r2(homeShare * 100), twin_shares_pct: shares.map((s) => r2(s * 100)), twin_mean_share_pct: r2(meanShare * 100),
+        lift: homeShare ? r2(meanShare / homeShare) : null,
+        support: shares.filter((share, i) => twin_counts[i] >= 3 && share >= 1.5 * homeShare).length,
+        scarce: home_count <= 1 || homeShare < meanShare / 2,
+      };
+    });
+    const display = ({ kind, home_count, twin_counts, home_share_pct, twin_shares_pct, twin_mean_share_pct, lift }: typeof rows[number]) => ({ kind, home_count, twin_counts, home_share_pct, twin_shares_pct, twin_mean_share_pct, lift });
+    const gaps = rows.filter((r) => r.support >= Math.ceil(twins.length * 2 / 3) && r.scarce)
+      .sort((a, b) => (a.lift === b.lift ? b.twin_mean_share_pct - a.twin_mean_share_pct : a.lift === null ? -1 : b.lift === null ? 1 : b.lift - a.lift)).map(display);
+    const present_everywhere = rows.filter((r) => r.home_count > 0 && r.twin_counts.every((n) => n > 0)).sort((a, b) => b.home_count - a.home_count).map(display);
+    return {
+      data: {
+        home: { label: src.label, city: src.city.name, link: src.hoodId ? `hood:${src.hoodId}` : `geo:${src.lat},${src.lon}`, busy: await busyAt(src.city.id, src.lat, src.lon), total_counted: supplies[0].total },
+        twins: twins.map(({ h, city, score }, i) => ({ label: h.name, city: city.name, match_pct: Math.round(score * 100), link: `hood:${h.id}`, total_counted: supplies[i + 1].total })),
+        radius_m, kinds_counted: GAP_KINDS, supply_sources: [...new Set(supplies.map((s) => s.source))], gaps, present_everywhere,
+        note: "Shares use all counted kinds except overlapping bar and restaurant rollups. Twin counts and shares follow twins order. Counts sum map cells whose centres are inside the radius and are lower bounds. Lift is null when home share is zero; these gaps sort first. Presence does not prove demand or business survival.",
+      },
+      summary: `${gaps.length} recurring venue gaps near ${src.label} across ${twins.length} foreign twins`,
+      uiActions: src.hoodId ? [{ type: "focusHood", hood: src.hoodId, label: src.label }] : [{ type: "focus", lat: src.lat, lon: src.lon, label: src.label }],
     };
   },
 });
@@ -275,7 +372,7 @@ const trend = defineTool({
 // ───────────── demand vs supply ─────────────
 const opportunity = defineTool({
   name: "opportunity",
-  description: "Where to open something: Qloo DEMAND for a taste (corrected heatmap, per 1 km cell) against physical SUPPLY (how many venues of that kind exist there, from Overture Maps Places). High score = people here over-index on the taste but few such venues exist. Paints the map.",
+  description: "Where to open something: first screen for active or busy blocks, then rank Qloo taste demand against existing venues from Overture Maps Places. Saved heatmaps for built-in tastes/cities, live Qloo for other tastes. High score = strong taste demand and few existing venues. Quiet blocks are kept only when fewer than three active/busy candidates remain. Paints the map.",
   schema: z.object({
     city: z.string(),
     taste: z.string().describe("what people should love, e.g. 'wine bar', 'natural wine', 'Peggy Gou', 'ramen'"),
@@ -283,16 +380,17 @@ const opportunity = defineTool({
     supply_kind: z.string().optional().describe(`venue kind to count as existing supply, one of: ${SUPPLY_KINDS.join(", ")}. Inferred from the taste if omitted.`),
   }),
   live: true,
-  async run({ city, taste, taste_is, supply_kind: kindText }, { stats, progress }) {
+  async run({ city, taste, taste_is, supply_kind: kindText }, { ds, stats, progress }) {
     const supply_kind = (kindText && (await supplyKindFor(kindText, stats))) || (await supplyKindFor(taste, stats));
     if (!supply_kind) throw new ToolError(`No venue kind in the supply data matches "${kindText || taste}". Pass supply_kind, one of: ${SUPPLY_KINDS.join(", ")}.`);
     const { city: c, core } = await cityOrThrow(city, { stats, progress });
-    progress(`qloo demand for ${taste} in ${c.name}`);
-    const where = await qlooQueryFor(c.id);
-    let sig = await tasteSignal(taste, taste_is ?? "place_type", stats);
-    let heat = await fetchHeat(where, sig.key, sig.val, stats);
-    let { z: dz, present } = correctItem(core, heat);
-    if (present < 50 && (taste_is ?? "place_type") === "place_type") {
+    const saved = c.source === "static" ? await staticDemand(ds, c.id, taste) : null;
+    if (!saved) progress(`qloo demand for ${taste} in ${c.name}`);
+    const where = saved ? "" : await qlooQueryFor(c.id);
+    let sig = saved?.sig ?? await tasteSignal(taste, taste_is ?? "place_type", stats);
+    let heat = saved ? null : await fetchHeat(where, sig.key, sig.val, stats);
+    let { z: dz, present } = saved ?? correctItem(core, heat!);
+    if (present < 50 && !saved && (taste_is ?? "place_type") === "place_type") {
       // niche tag (e.g. "natural wine") -> fall back to the venue type itself as the Qloo demand signal
       const broad = await qlooResolveTag(supply_kind.replace(/_/g, " "), stats);
       if (broad && broad.id !== sig.val) {
@@ -307,6 +405,7 @@ const opportunity = defineTool({
     let supplyOf: (g: string, lat: number, lon: number) => number | null, supplySource: string;
     if (pre) {
       const ki = pre.kinds.indexOf(supply_kind);
+      if (ki < 0) throw new ToolError(`No ${supply_kind} supply counts for ${c.name}.`);
       supplyOf = (g) => pre.cells[g]?.[ki] ?? 0;
       supplySource = `${pre.source} ${pre.release}`;
     } else {
@@ -321,16 +420,21 @@ const opportunity = defineTool({
       };
       supplySource = "OpenStreetMap (live)";
     }
-    const rows = core.cells.map((cell, i) => ({ cell, demand: dz[i], supply: supplyOf(cell.g, cell.lat, cell.lon) }))
-      .filter((x): x is { cell: typeof x.cell; demand: number; supply: number } => x.supply !== null && heat.has(x.cell.g));
+    const rows = (saved?.cells ?? core.cells).map((cell, i) => ({ cell, demand: dz[i], supply: supplyOf(cell.g, cell.lat, cell.lon) }))
+      .filter((x): x is { cell: typeof x.cell; demand: number; supply: number } => x.supply !== null && (!!saved || heat!.has(x.cell.g)));
     if (rows.length < 30) throw new ToolError("Venue supply data is unavailable for most of the city right now. Try again shortly.");
     const sz = zs(rows.map((x) => Math.log1p(x.supply)));
-    const cells: OpportunityCell[] = rows.map((x, i) => ({ g: x.cell.g, lon: x.cell.lon, lat: x.cell.lat, demand: r2(x.demand), supply: x.supply, score: r2(x.demand - sz[i]) }));
-    const best = cells.filter((x) => x.demand > 0.5).sort((a, b) => b.score - a.score).slice(0, 10)
+    const cells: (OpportunityCell & { busy_pct: number; busy_tier: Busyness["tier"] })[] = await Promise.all(rows.map(async (x, i) => {
+      const busy = await busyAt(c.id, x.cell.lat, x.cell.lon);
+      return { g: x.cell.g, lon: x.cell.lon, lat: x.cell.lat, demand: r2(x.demand), supply: x.supply, score: r2(x.demand - sz[i]), busy_pct: busy.pct, busy_tier: busy.tier };
+    }));
+    const candidates = cells.filter((x) => x.demand > 0.5);
+    const active = candidates.filter((x) => x.busy_tier !== "quiet");
+    const best = (active.length >= 3 ? active : candidates).sort((a, b) => b.score - a.score).slice(0, 10)
       .map((x) => ({ ...x, near: nearestCoreHood(core, x.lat, x.lon)?.h.name }));
     const totalSupply = rows.reduce((s, x) => s + x.supply, 0);
     return {
-      data: { city: c.name, taste: sig.name, supply_kind, supply_source: supplySource, cells_scored: rows.length, venues_counted: totalSupply, top_opportunities: best, how: "score = Qloo demand z − z(log(1 + venue count)); open map data misses some venues, treat supply as a lower bound" },
+      data: { city: c.name, taste: sig.name, demand_source: saved ? "precomputed Qloo heatmaps, popularity-corrected" : "live Qloo heatmap, popularity-corrected", supply_kind, supply_source: supplySource, cells_scored: rows.length, venues_counted: totalSupply, top_opportunities: best, ranking: "busy enough → strongest taste demand → fewest existing venues", how: "score = Qloo demand z − z(log(1 + venue count)); open map data misses some venues, treat supply as a lower bound" },
       summary: `${best.length} gaps for ${sig.name} in ${c.name} (${totalSupply} existing ${supply_kind} counted)`,
       uiActions: [{ type: "opportunity", city: c.id, kind: supply_kind, taste: sig.name, cells }],
     };
@@ -434,11 +538,12 @@ const venue_supply = defineTool({
       const r = supplyAround(pre, la, lo, Math.max(radius, 700), kinds);
       const shown = all ? kinds.filter((k) => r.counts[k] > 0).sort((a, b) => r.counts[b] - r.counts[a]).slice(0, 8) : kinds;
       const counts = Object.fromEntries(shown.map((k) => [k, r.counts[k]]));
-      return { data: { where, radius_m: radius, source: `${pre.source} ${pre.release}`, counts, cells: r.cells, note: "counts are a lower bound" }, summary: shown.map((k) => `${r.counts[k]} ${k}`).join(", ") || "no venues counted" };
+      return { data: { where, radius_m: radius, source: `${pre.source} ${pre.release}`, counts, cells: r.cells, busy: await busyAt(city!.id, la, lo), note: "counts are a lower bound" }, summary: shown.map((k) => `${r.counts[k]} ${k}`).join(", ") || "no venues counted" };
     }
     const rows = await osmAround(la, lo, radius, kinds.slice(0, 6).map((k) => OSM_FALLBACK[k]));
-    return { data: { where, radius_m: radius, source: "OpenStreetMap (live)", kinds: rows }, summary: rows.map((r) => `${r.count} ${r.kind}`).join(", ") };
+    const busy = city ? await busyAt(city.id, la, lo).catch(() => null) : null;
+    return { data: { where, radius_m: radius, source: "OpenStreetMap (live)", kinds: rows, busy }, summary: rows.map((r) => `${r.count} ${r.kind}`).join(", ") };
   },
 });
 
-export const TOOLS_V2: ToolDef[] = [add_city, geocode_tool, twins_anywhere, scene, compare_taste, trend, opportunity, tour, web_search, read_page, wiki, venue_supply, ...REPORT_TOOLS];
+export const TOOLS_V2: ToolDef[] = [add_city, geocode_tool, twins_anywhere, gap_scan, scene, compare_taste, trend, opportunity, tour, web_search, read_page, wiki, venue_supply, reportSkillTool, ...REPORT_TOOLS];

@@ -18,6 +18,16 @@ export const OSM_FALLBACK: Record<SupplyKind, string> = {
 export interface Supply { city: string; source: string; release: string; kinds: string[]; cells: Record<string, number[]> }
 const mem = new Map<string, Supply | null>();
 
+/** Counts across all kinds, with specialised bars/cuisines counted once through their rollups. */
+export function supplyTotal(s: Supply, counts: number[]) {
+  const nested = new Set<string>();
+  if (s.kinds.includes("bar")) ["wine_bar", "cocktail_bar", "gay_bar"].forEach((k) => nested.add(k));
+  if (s.kinds.includes("restaurant")) ["vegan", "ramen", "sushi", "mexican", "korean"].forEach((k) => nested.add(k));
+  return s.kinds.reduce((total, kind, i) => total + (nested.has(kind) ? 0 : counts[i] ?? 0), 0);
+}
+
+export const GAP_KINDS = SUPPLY_KINDS.filter((k) => k !== "bar" && k !== "restaurant");
+
 export async function loadSupply(cityId: string): Promise<Supply | null> {
   if (mem.has(cityId)) return mem.get(cityId)!;
   let s: Supply | null = null;

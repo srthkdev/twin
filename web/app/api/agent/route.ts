@@ -12,7 +12,7 @@ export const maxDuration = 300;
 
 interface Body { messages: TwinUIMessage[]; context?: AgentContext; model?: string }
 
-// Server-key budget per client: each question can be up to 8 model calls on a free tier.
+// Server-key budget per client: up to 8 steps normally, 16 for report work.
 const WINDOW_MS = 10 * 60_000, MAX_PER_WINDOW = 20;
 const hits = new Map<string, number[]>();
 function allow(ip: string) {
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   const meta: RunMeta = { qlooLive: 0, qlooCached: 0 };
   const question = [...messages].reverse().find((m) => m.role === "user")?.parts.flatMap((p) => p.type === "text" ? [p.text] : []).join("\n").trim();
   const reportRun = /\b(report|plan|analysis|comparison|compare|deep dive)\b/i.test(question ?? "");
-  const run: AgentRunContext = { evidence: [], charts: new Map(), nextChartId: 1, question, model: () => meta.model };
+  const run: AgentRunContext = { evidence: [], charts: new Map(), nextChartId: 1, question, model: () => meta.model, reportMode: reportRun };
   const t0 = Date.now();
 
   const stream = createUIMessageStream<TwinUIMessage>({
@@ -71,9 +71,9 @@ export async function POST(req: Request) {
           instructions: SYSTEM_PROMPT,
           messages: modelMessages,
           tools: aiTools(ds, writer, meta, run),
-          stopWhen: isStepCount(reportRun ? 14 : 8),
+          stopWhen: (options) => isStepCount(run.reportMode ? 16 : 8)(options),
           // the last step must be an answer, never another tool call
-          prepareStep: ({ stepNumber }) => (stepNumber >= (reportRun ? 13 : 7) ? { toolChoice: "none" as const } : undefined),
+          prepareStep: ({ stepNumber }) => (stepNumber >= (run.reportMode ? 15 : 7) ? { toolChoice: "none" as const } : undefined),
           timeout: { firstChunkMs: 30_000, chunkMs: 45_000 },
           temperature: 0.4,
           providerOptions: fallbackOptions(order[i]),

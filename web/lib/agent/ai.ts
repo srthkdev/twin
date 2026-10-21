@@ -38,12 +38,16 @@ export function aiTools(ds: DataSet, writer: UIMessageStreamWriter, meta: RunMet
       description: t.description,
       inputSchema: t.schema,
       execute: async (args: unknown, { toolCallId }: { toolCallId: string }) => {
+        if (t.name === "report_skill") run.reportMode = true;
+        const entry = { tool: t.name, summary: `${t.name} requested`, numbers: [] as number[] };
+        run.evidence.push(entry);
         const r = await executeTool(t.name, args, ds, (note) => writer.write({ type: "data-progress", id: toolCallId, data: { toolCallId, note }, transient: true }), run);
         meta.qlooLive += r.qloo.live; meta.qlooCached += r.qloo.cached;
         for (const a of r.uiActions) writer.write({ type: "data-action", data: a, transient: true });
         let data: unknown;
         try { data = JSON.parse(r.content); } catch { data = r.content; }
-        if (r.ok) run.evidence.push({ tool: t.name, summary: r.summary, numbers: collectNumbers(r.data ?? data) });
+        entry.summary = r.summary;
+        entry.numbers = r.ok ? collectNumbers(r.data ?? data) : [];
         return { ok: r.ok, summary: r.summary, qloo: r.qloo, data };
       },
     } as never);
