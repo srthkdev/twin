@@ -12,3 +12,5 @@ probe/hm_la.json
 pipeline/*.log
 web/.cache/
 dev/
+.venv/
+pipeline/backtest/brands_*.csv

@@ -12,6 +12,7 @@ import { cosine } from "@/lib/similarity";
 import { CITY_CODES } from "@/lib/groups";
 import { cn } from "@/lib/utils";
 import type { Evals, Hood, MethodKey } from "@/lib/types";
+import { BacktestSection } from "@/components/evals/backtest-section";
 
 const INK = { accent: "#f0a03c", fg: "#e6e3da", muted: "#8d8a80", dim: "#5f5c55", grid: "#2a2925" };
 const COLORS: Record<MethodKey, string> = { twin: INK.accent, llm: INK.fg, raw: INK.muted, random: INK.dim };
@@ -105,6 +106,8 @@ export function EvalsClient() {
           {census && <span>census hypotheses <span className="text-muted-foreground">{census.preregisteredCommit.slice(0, 7)}</span></span>}
         </div>
       </div>
+
+      <BacktestSection />
 
       <div className="grid gap-4 sm:grid-cols-3">
         {ev ? (
