@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type ToolSet } from "ai";
+import { type ModelMessage, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type ToolSet } from "ai";
 import { loadServerDataSet } from "@/lib/agent/server-data";
 import { OPENROUTER_MODELS, aiTools, fallbackOptions, openrouter, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
@@ -61,23 +61,25 @@ export async function POST(req: Request) {
         if (last && typeof last.content === "string") last.content = ctx + last.content;
         else if (last && Array.isArray(last.content)) last.content = [{ type: "text", text: ctx }, ...last.content] as typeof last.content;
       }
-      // Free models occasionally stall or fail before saying anything. Then the same turn moves to the next model
-      // silently; once anything is on screen, an error is reported as is.
+      // Free models sometimes fail or stall (one kept "thinking" for 3+ minutes). Any step that errors or runs past
+      // its time limit hands the turn to the next model, which continues from every finished step and tool result;
+      // the user sees one continuous answer.
       const order = [primary, ...OPENROUTER_MODELS.filter((m) => m !== primary)];
+      const done: ModelMessage[] = [];
       for (let i = 0; i < order.length; i++) {
         const last = i === order.length - 1;
         const result = streamText({
           model: openrouter(apiKey)(order[i]),
           instructions: SYSTEM_PROMPT,
-          messages: modelMessages,
+          messages: [...modelMessages, ...done],
           tools: aiTools(ds, writer, meta, run),
           stopWhen: (options) => isStepCount(run.reportMode ? 16 : 8)(options),
           // the last step must be an answer, never another tool call
           prepareStep: ({ stepNumber }) => (stepNumber >= (run.reportMode ? 15 : 7) ? { toolChoice: "none" as const } : undefined),
-          timeout: { firstChunkMs: 30_000, chunkMs: 45_000 },
+          timeout: { firstChunkMs: 30_000, chunkMs: 45_000, stepMs: 100_000 },
           temperature: 0.4,
           providerOptions: fallbackOptions(order[i]),
-          onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; },
+          onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
         });
         let shown = false, retry = false;
         const parts = toUIMessageStream<ToolSet, TwinUIMessage>({
@@ -89,12 +91,12 @@ export async function POST(req: Request) {
         const reader = parts.getReader();
         for (let r = await reader.read(); !r.done; r = await reader.read()) {
           const chunk = r.value;
-          if (chunk.type === "error" && !shown && !last) { retry = true; void reader.cancel(); break; }
+          if (chunk.type === "error" && !last) { retry = true; void reader.cancel(); break; }
           if (chunk.type !== "start" && chunk.type !== "start-step" && chunk.type !== "finish-step") shown = true;
           writer.write(chunk);
         }
         if (!retry) break;
-        console.warn(`[agent] ${order[i]} failed before answering; trying ${order[i + 1]}`);
+        console.warn(`[agent] ${order[i]} failed or stalled${shown ? " mid-answer" : ""}; continuing with ${order[i + 1]} from ${done.length} finished messages`);
       }
     },
   });
