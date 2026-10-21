@@ -9,6 +9,9 @@ const PREFIX = "twin/";
 const blobOn = () => !!process.env.BLOB_READ_WRITE_TOKEN;
 const diskRoot = () => join(process.env.TWIN_WEB_ROOT ?? process.cwd(), ".cache", "twin");
 
+/** Blob calls must never hold up an answer: a slow read counts as a miss, a slow write is dropped. */
+const within = <T,>(p: Promise<T>, ms: number) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("store timeout")), ms))]);
+
 const MEM_MAX = 600;
 const mem = new Map<string, unknown>();
 const remember = (k: string, v: unknown) => {
@@ -22,8 +25,10 @@ export async function storeGet<T>(key: string, o: { fresh?: boolean } = {}): Pro
   let v: T | null = null;
   try {
     if (blobOn()) {
-      const r = await get(PREFIX + key, { access: "public", useCache: !o.fresh });
-      if (r?.statusCode === 200 && r.stream) v = JSON.parse(await new Response(r.stream).text()) as T;
+      v = await within((async () => {
+        const r = await get(PREFIX + key, { access: "public", useCache: !o.fresh });
+        return r?.statusCode === 200 && r.stream ? JSON.parse(await new Response(r.stream).text()) as T : null;
+      })(), 8000);
     } else {
       v = JSON.parse(await readFile(join(diskRoot(), key), "utf8")) as T;
     }
@@ -37,13 +42,24 @@ export async function storePut(key: string, data: unknown): Promise<void> {
   const body = JSON.stringify(data);
   try {
     if (blobOn()) {
-      await put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", cacheControlMaxAge: 60 });
+      await within(put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", cacheControlMaxAge: 60 }), 10000);
     } else {
       const f = join(diskRoot(), key);
       await mkdir(dirname(f), { recursive: true });
       await writeFile(f, body);
     }
   } catch { /* cache writes are best effort */ }
+}
+
+/** Create-only write: true if this call created the key, false if it already existed (atomic on Blob). */
+export async function storeCreate(key: string, data: unknown): Promise<boolean> {
+  const body = JSON.stringify(data);
+  try {
+    if (blobOn()) await within(put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: false, contentType: "application/json" }), 10000);
+    else { const f = join(diskRoot(), key); await mkdir(dirname(f), { recursive: true }); await writeFile(f, body, { flag: "wx" }); }
+  } catch { return false; }
+  remember(key, data);
+  return true;
 }
 
 /** Keys under a prefix (e.g. "cities/"), relative to the store root. */

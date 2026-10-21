@@ -556,7 +556,9 @@ export async function executeTool(name: string, rawArgs: unknown, ds?: DataSet, 
   try {
     const ctx = { ds: ds ?? (await loadDataSet()), stats, progress } as ToolContext & { run?: AgentRunContext };
     ctx.run = run;
-    const out = await t.run(parsed.data, ctx);
+    // One stuck upstream call must not freeze a whole run: the model gets a timeout error and works around it.
+    const limit = name === "add_city" ? 170_000 : 75_000;
+    const out = await Promise.race([t.run(parsed.data, ctx), new Promise<never>((_, rej) => setTimeout(() => rej(new ToolError(`${name} timed out after ${limit / 1000}s; continue without it or retry once`)), limit))]);
     let content = JSON.stringify(out.data);
     if (content.length > MAX_RESULT_CHARS) content = content.slice(0, MAX_RESULT_CHARS) + '..."[truncated]';
     return { ok: true, content, summary: out.summary + (stats.live + stats.cached ? ` [qloo ${stats.live} live${stats.cached ? `, ${stats.cached} cached` : ""}]` : ""), uiActions: out.uiActions ?? [], qloo: stats, data: out.data };
