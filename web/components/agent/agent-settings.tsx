@@ -5,7 +5,7 @@ import type { AgentSettings, Health } from "./settings";
 const LABEL: Record<string, string> = {
   "minimax/minimax-m3.1-flash:free": "MiniMax M3.1 Flash",
   "nvidia/nemotron-3-ultra-550b-a55b:free": "Nemotron 3 Ultra",
-  "thinkingmachines/inkling:free": "Inkling",
+  "google/gemma-4-31b-it:free": "Gemma 4 31B",
 };
 
 export function AgentSettingsPanel({ value, onChange, health }: { value: AgentSettings; onChange: (s: AgentSettings) => void; health: Health | null }) {

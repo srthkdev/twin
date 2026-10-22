@@ -7,7 +7,8 @@ import { collectNumbers } from "./report";
 import type { AgentRunContext } from "./report";
 
 /** Free OpenRouter models, best first (Artificial Analysis Intelligence Index v4.3.2: MiniMax M3.1 Flash 43, Nemotron 3 Ultra 23). */
-export const OPENROUTER_MODELS = ["minimax/minimax-m3.1-flash:free", "nvidia/nemotron-3-ultra-550b-a55b:free", "thinkingmachines/inkling:free"];
+// Inkling is free only inside agentic harnesses (403 over the API), so it is not a fallback. The daily free cap is per account.
+export const OPENROUTER_MODELS = ["minimax/minimax-m3.1-flash:free", "nvidia/nemotron-3-ultra-550b-a55b:free", "google/gemma-4-31b-it:free"];
 
 export function openrouter(apiKey: string) {
   return createOpenAICompatible({

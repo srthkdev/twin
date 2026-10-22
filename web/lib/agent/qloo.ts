@@ -15,7 +15,7 @@ const TTL_MS = 7 * 24 * 3600 * 1000;
 export class QlooError extends Error {}
 
 // Qloo's key allows ~5 requests/s; a report fires dozens. Pace live calls (cache hits skip this) and retry one 429.
-const GAP_MS = 250;
+const GAP_MS = 160; // Qloo allows 10 requests/s; leave headroom for parallel instances
 let nextSlot = 0;
 const slot = () => { const now = Date.now(), at = Math.max(now, nextSlot); nextSlot = at + GAP_MS; return new Promise((r) => setTimeout(r, at - now)); };
 
