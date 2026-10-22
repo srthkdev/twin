@@ -25,7 +25,7 @@ export function DivergingBars({ dims, basket, aName, bName, max = Math.max(1, ..
               <span aria-hidden="true" className={cn("size-2 shrink-0", i === 0 ? "bg-foreground" : "bg-primary")} />
               <span className="truncate" title={name}>{name}</span>
             </div>
-            <div className="mt-1.5 flex justify-between gap-1 text-[9.5px] text-muted-foreground">
+            <div className="mt-1.5 flex justify-between gap-1 text-[10px] text-muted-foreground">
               <span>← less</span><span>city avg</span><span>more →</span>
             </div>
           </div>
@@ -37,7 +37,7 @@ export function DivergingBars({ dims, basket, aName, bName, max = Math.max(1, ..
           return (
             <li key={d.i} className="py-2.5">
               <div className="flex items-baseline justify-between gap-3 leading-snug">
-                <span className="min-w-0 truncate text-[12px] text-foreground" title={label}>{label}</span>
+                <span className="min-w-0 truncate text-[12.5px] text-foreground" title={label}>{label}</span>
                 <span className={cn("max-w-[55%] shrink-0 break-words text-right text-[10.5px]", d.a > 0 && d.b <= 0 ? "text-foreground" : d.b > 0 && d.a <= 0 ? "text-primary" : "text-muted-foreground")}>
                   {reading(d.a, d.b, aName, bName)}
                 </span>

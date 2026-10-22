@@ -36,3 +36,11 @@ export async function verify(name: string, code: string): Promise<string | null>
 
 export const readHistory = async (key: string) => (await storeGet<UserHistory>(key, { fresh: true })) ?? { chats: [], reports: [] };
 export const writeHistory = (key: string, h: UserHistory) => storePut(key, h);
+
+/** Add a finished report to a user's history (server side, so it lands there even if the tab was closed). */
+export async function appendReport(name: string, code: string, report: { id: string; title: string; at: number }) {
+  const key = await verify(name, code);
+  if (!key) return;
+  const h = await readHistory(key);
+  await writeHistory(key, { ...h, reports: [report, ...h.reports.filter((r) => r.id !== report.id)].slice(0, 50) });
+}

@@ -40,8 +40,8 @@ export function Chart({ spec, onLink }: { spec: ChartSpec; onLink?: (link: MapLi
   return (
     <figure className="my-3 min-w-0 border border-line bg-card" aria-label={spec.title}>
       <figcaption className="border-b border-line px-3 py-2">
-        <div className="text-[12px] font-medium text-foreground">{spec.title}</div>
-        {spec.caption && <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{spec.caption}</div>}
+        <div className="text-[12.5px] font-medium text-foreground">{spec.title}</div>
+        {spec.caption && <div className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">{spec.caption}</div>}
       </figcaption>
       <div className="overflow-x-auto p-3">
         {spec.kind === "bar" && <BarChart spec={spec} scale={scale} linkAt={linkAt} onLink={onLink} />}
@@ -50,8 +50,8 @@ export function Chart({ spec, onLink }: { spec: ChartSpec; onLink?: (link: MapLi
         {spec.kind === "scatter" && <ScatterChart spec={spec} onLink={onLink} />}
         {spec.kind === "table" && <TableChart spec={spec} scale={scale} linkAt={linkAt} onLink={onLink} />}
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-          {spec.series.length > 1 && spec.series.map((s, i) => <span key={s.name} className="flex items-center gap-1.5 text-[10px] text-muted-foreground"><i className={`size-1.5 ${i === 0 ? "bg-primary" : "bg-foreground/70"}`} />{s.name}</span>)}
-          {spec.sources.length > 0 && <span className="ml-auto text-[10px] text-dim">source: {[...new Set(spec.sources.map(sourceText))].join(" · ")}</span>}
+          {spec.series.length > 1 && spec.series.map((s, i) => <span key={s.name} className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground"><i className={`size-1.5 ${i === 0 ? "bg-primary" : "bg-foreground/70"}`} />{s.name}</span>)}
+          {spec.sources.length > 0 && <span className="ml-auto text-[10.5px] text-dim">source: {[...new Set(spec.sources.map(sourceText))].join(" · ")}</span>}
         </div>
       </div>
     </figure>
@@ -88,7 +88,7 @@ function HorizontalChart({ spec, scale, linkAt, onLink }: { spec: ChartSpec; sca
       {spec.labels.map((label, i) => {
         const link = linkAt(i);
         return <button type="button" key={`${label}-${i}`} disabled={!link || !onLink} onClick={() => link && onLink?.(link)} className="group block w-full text-left hover:text-primary disabled:cursor-default">
-          <span className="mb-1 block max-w-full truncate text-[11px] text-muted-foreground group-hover:text-primary">{label}</span>
+          <span className="mb-1 block max-w-full truncate text-[11.5px] text-muted-foreground group-hover:text-primary">{label}</span>
           {spec.series.map((s, j) => <div key={s.name} className="mb-1 grid grid-cols-[minmax(0,1fr)_7rem] items-center gap-2">
             <span className="h-2 bg-line"><Mark value={s.values[i] ?? 0} scale={scale} index={j} unit={spec.unit} /></span>
             <span className="num text-right text-[10.5px] text-foreground">{valueText(s.values[i] ?? 0, spec.unit)}</span>
@@ -122,35 +122,41 @@ function LineChart({ spec, scale, linkAt, onLink }: { spec: ChartSpec; scale: nu
         })}
       </g>)}
     </svg>
-    <div className="flex justify-between gap-2 text-[10px] text-dim">{spec.labels.map((label, i) => <button key={`${label}-${i}`} type="button" disabled={!linkAt(i) || !onLink} onClick={() => { const link = linkAt(i); if (link) onLink?.(link); }} className="max-w-[7rem] truncate text-left hover:text-primary disabled:cursor-default">{label}</button>)}</div>
+    <div className="flex justify-between gap-2 text-[10.5px] text-dim">{spec.labels.map((label, i) => <button key={`${label}-${i}`} type="button" disabled={!linkAt(i) || !onLink} onClick={() => { const link = linkAt(i); if (link) onLink?.(link); }} className="max-w-[7rem] truncate text-left hover:text-primary disabled:cursor-default">{label}</button>)}</div>
     {isDemandUnit(spec.unit) && <div className="mt-3 border-t border-line pt-3"><HorizontalChart spec={spec} scale={scale} linkAt={linkAt} onLink={onLink} /></div>}
   </div>;
 }
 
 function ScatterChart({ spec, onLink }: { spec: ChartSpec; onLink?: (link: MapLink) => void }) {
   const points = spec.points ?? [];
-  if (!points.length || !points.every((p) => finite(p.x) && finite(p.y))) return <p className="text-[11px] text-dim">No points in this chart.</p>;
-  const minX = Math.min(...points.map((p) => p.x)), maxX = Math.max(...points.map((p) => p.x));
-  const minY = Math.min(...points.map((p) => p.y)), maxY = Math.max(...points.map((p) => p.y));
-  const width = 700, height = 220, pad = 28;
-  const x = (v: number) => pad + (v - minX) / (maxX - minX || 1) * (width - pad * 2);
-  const y = (v: number) => height - pad - (v - minY) / (maxY - minY || 1) * (height - pad * 2);
+  if (!points.length || !points.every((p) => finite(p.x) && finite(p.y))) return <p className="text-[11.5px] text-dim">No points in this chart.</p>;
+  const span = (vs: number[]) => { const lo = Math.min(...vs), hi = Math.max(...vs), pad = (hi - lo || Math.abs(hi) || 1) * 0.12; return [lo - pad, hi + pad] as const; };
+  const [minX, maxX] = span(points.map((p) => p.x)), [minY, maxY] = span(points.map((p) => p.y));
+  const width = 700, height = 260, left = 64, right = 24, top = 18, bottom = 46;
+  const x = (v: number) => left + (v - minX) / (maxX - minX) * (width - left - right);
+  const y = (v: number) => height - bottom - (v - minY) / (maxY - minY) * (height - top - bottom);
+  const tick = (v: number) => valueText(v, spec.unit);
+  const xs = points.map((p) => p.x), ys = points.map((p) => p.y);
   return <div className="overflow-x-auto">
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-48 min-w-[460px] w-full" role="img" aria-label={spec.title}>
-      <line x1={pad} x2={width - pad} y1={height - pad} y2={height - pad} stroke="var(--line-strong)" />
-      <line x1={pad} x2={pad} y1={pad} y2={height - pad} stroke="var(--line-strong)" />
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-56 min-w-[460px] w-full" role="img" aria-label={spec.title}>
+      <line x1={left} x2={width - right} y1={height - bottom} y2={height - bottom} stroke="var(--line-strong)" />
+      <line x1={left} x2={left} y1={top} y2={height - bottom} stroke="var(--line-strong)" />
+      {[Math.min(...xs), Math.max(...xs)].map((v, i) => <text key={`x${i}`} x={x(v)} y={height - bottom + 15} textAnchor="middle" fontSize="11" fill="var(--dim)">{tick(v)}</text>)}
+      {[Math.min(...ys), Math.max(...ys)].map((v, i) => <text key={`y${i}`} x={left - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--dim)">{tick(v)}</text>)}
+      <text x={(left + width - right) / 2} y={height - 8} textAnchor="middle" fontSize="11.5" fill="var(--muted-foreground)">{spec.axes?.x ?? "x"} →</text>
+      <text transform={`translate(16 ${(top + height - bottom) / 2}) rotate(-90)`} textAnchor="middle" fontSize="11.5" fill="var(--muted-foreground)">{spec.axes?.y ?? "y"} →</text>
       {points.map((p, i) => <g key={`${p.label}-${i}`} role={p.link && onLink ? "button" : undefined} tabIndex={p.link && onLink ? 0 : undefined}
         onClick={() => p.link && onLink?.(p.link)} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && p.link) { e.preventDefault(); onLink?.(p.link); } }} className={p.link && onLink ? "cursor-pointer" : ""}>
-        <circle cx={x(p.x)} cy={y(p.y)} r="10" fill="transparent" />
-        <circle cx={x(p.x)} cy={y(p.y)} r="4" fill="var(--primary)" />
+        <circle cx={x(p.x)} cy={y(p.y)} r="10" fill="var(--primary)" fillOpacity="0.9" />
+        <text x={x(p.x)} y={y(p.y) + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--primary-foreground)">{i + 1}</text>
+        <text x={x(p.x) + 14} y={y(p.y) + 4} fontSize="11" fill="var(--muted-foreground)">{p.label.length > 22 ? `${p.label.slice(0, 21)}…` : p.label}</text>
         <title>{`${p.label}: ${valueText(p.x, spec.unit)}, ${valueText(p.y, spec.unit)}`}</title>
       </g>)}
     </svg>
-    <div className="mt-1 flex justify-between text-[10px] text-dim"><span>{spec.axes?.x}</span><span>{spec.axes?.y}</span></div>
     <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[10.5px]">
       {points.map((p, i) => <li key={`${p.label}-${i}`}><button type="button" disabled={!p.link || !onLink} onClick={() => p.link && onLink?.(p.link)} className="block w-full text-left text-muted-foreground hover:text-primary disabled:cursor-default">
         <span className="block truncate"><span className="num mr-1 text-primary">{i + 1}.</span>{p.label}</span>
-        {isDemandUnit(spec.unit) ? <span className="mt-1 grid gap-1">{[p.x, p.y].map((value, j) => <span key={j} className="flex items-center gap-2 text-[10px] text-dim"><span className="h-1 w-10 shrink-0 bg-line"><Mark value={value} scale={Math.max(Math.abs(minX), Math.abs(maxX), Math.abs(minY), Math.abs(maxY), 0.0001)} index={j} unit={spec.unit} /></span><span>{[spec.axes?.x, spec.axes?.y][j] ?? (j ? "y" : "x")}: {valueText(value, spec.unit)}</span></span>)}</span>
+        {isDemandUnit(spec.unit) ? <span className="mt-1 grid gap-1">{[p.x, p.y].map((value, j) => <span key={j} className="flex items-center gap-2 text-[10.5px] text-dim"><span className="h-1 w-10 shrink-0 bg-line"><Mark value={value} scale={Math.max(Math.abs(minX), Math.abs(maxX), Math.abs(minY), Math.abs(maxY), 0.0001)} index={j} unit={spec.unit} /></span><span>{[spec.axes?.x, spec.axes?.y][j] ?? (j ? "y" : "x")}: {valueText(value, spec.unit)}</span></span>)}</span>
           : <span className="num text-dim">{valueText(p.x, spec.unit)}, {valueText(p.y, spec.unit)}</span>}
       </button></li>)}
     </ul>
@@ -158,7 +164,7 @@ function ScatterChart({ spec, onLink }: { spec: ChartSpec; onLink?: (link: MapLi
 }
 
 function TableChart({ spec, scale, linkAt, onLink }: { spec: ChartSpec; scale: number; linkAt: (i: number) => MapLink | null; onLink?: (link: MapLink) => void }) {
-  return <div className="overflow-x-auto"><table className="w-full min-w-[400px] text-[11px]">
+  return <div className="overflow-x-auto"><table className="w-full min-w-[400px] text-[11.5px]">
     <thead><tr><th className="border-b border-line-strong py-1.5 pr-3 text-left font-normal text-dim">{spec.axes?.x ?? ""}</th>{spec.series.map((s) => <th key={s.name} className="border-b border-line-strong px-2 py-1.5 text-right font-normal text-dim">{s.name}</th>)}</tr></thead>
     <tbody>{spec.labels.map((label, i) => <tr key={`${label}-${i}`}>
       <td className="border-b border-line py-1.5 pr-3"><button type="button" disabled={!linkAt(i) || !onLink} onClick={() => { const link = linkAt(i); if (link) onLink?.(link); }} className="max-w-full truncate text-left text-muted-foreground hover:text-primary disabled:cursor-default">{label}</button></td>

@@ -7,13 +7,13 @@ export function TraitList({ dims, vec, basket, limit = 7 }: { dims: number[]; ve
   const rows = dims.slice(0, limit).map((i) => ({ item: basket[i], value: vec[i] ?? 0 })).filter((r) => r.item);
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   return (
-    <table className="w-full table-fixed text-[12px]" aria-label="Distinctive local tastes">
+    <table className="w-full table-fixed text-[12.5px]" aria-label="Distinctive local tastes">
       <thead>
         <tr>
           <th className="w-10"><span className="sr-only">Group</span></th>
           <th><span className="sr-only">Taste</span></th>
           <th className="w-28 pb-1 pl-2 font-normal">
-            <div className="flex justify-between text-[9.5px] text-muted-foreground"><span>← less</span><span>avg</span><span>more →</span></div>
+            <div className="flex justify-between text-[10px] text-muted-foreground"><span>← less</span><span>avg</span><span>more →</span></div>
           </th>
         </tr>
       </thead>

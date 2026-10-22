@@ -34,7 +34,7 @@ export function Spinner({ className }: { className?: string }) {
 /** The "working" indicator: three amber blocks in a wave and a shimmering label. CSS only, no timers. */
 export function Pulse({ label, children, className }: { label: string; children?: ReactNode; className?: string }) {
   return (
-    <span role="status" className={cn("inline-flex items-center gap-2.5 text-[12px]", className)}>
+    <span role="status" className={cn("inline-flex items-center gap-2.5 text-[12.5px]", className)}>
       <span aria-hidden className="wave inline-flex h-4 items-end gap-[3px]"><i /><i /><i /></span>
       <span className="shimmer">{label}</span>{children}
     </span>
@@ -56,7 +56,7 @@ export const ToolTrace = memo(function ToolTrace({ steps, folded }: { steps: Too
     const rechecked = steps.filter((x) => recheckLabel(x)).length;
     return (
       <details className="group my-1.5">
-        <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] text-dim hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-[11.5px] text-dim hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
           <span className="inline-block w-3 text-center transition-transform group-open:rotate-90">›</span>
           <span>{steps.length} step{steps.length > 1 ? "s" : ""} · {srcs.join(" · ")}{rechecked ? ` · ${rechecked} re-checked` : ""}{failed ? <span className="text-destructive"> · {failed} failed</span> : ""}</span>
           <span className="num ml-auto">{secs.toFixed(1)}s</span>
@@ -83,7 +83,7 @@ function StepList({ steps }: { steps: ToolStep[] }) {
                   {rechecked ?? stepLabel(s.name, (s.args ?? {}) as Record<string, unknown>)}
                   {s.pending && s.progress && <span className="text-dim"> · {s.progress}</span>}
                 </span>
-                <span className={cn("shrink-0 text-[9.5px] uppercase tracking-wider", src === "qloo" ? "text-primary" : "text-dim")}>{src}</span>
+                <span className={cn("shrink-0 text-[10px] uppercase tracking-wider", src === "qloo" ? "text-primary" : "text-dim")}>{src}</span>
                 <span className="w-9 shrink-0 text-right text-[10.5px] text-dim"><Elapsed from={s.startedAt} to={s.endedAt} /></span>
               </summary>
               <div className="mb-1.5 ml-5 mt-0.5 border-l border-line pl-2 text-[10.5px] leading-relaxed">

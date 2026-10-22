@@ -70,10 +70,10 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
           <input
             value={q} onChange={(e) => setQ(e.target.value)} placeholder="neighbourhood or city"
             onKeyDown={(e) => { if (e.key === "Escape") setQ(""); if (e.key === "Enter" && found?.hoods[0]) { onPickHood(found.hoods[0].id); setQ(""); } }}
-            className="w-full bg-transparent text-[12px] text-foreground outline-none placeholder:text-dim"
+            className="w-full bg-transparent text-[12.5px] text-foreground outline-none placeholder:text-dim"
             aria-label="Search neighbourhoods and cities"
           />
-          {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="text-[11px] text-dim hover:text-foreground">esc</button>}
+          {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="text-[11.5px] text-dim hover:text-foreground">esc</button>}
         </label>
       </div>
 
@@ -111,13 +111,13 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
         <section className="border-b border-line px-4 py-4">
           <Label>{pin ? "pin" : "profile"}</Label>
           <h2 className="mt-2 text-[17px] leading-tight tracking-[-0.02em] text-foreground">{pin ? pin.label : source?.name}</h2>
-          <div className="mt-1 text-[11px] text-dim">
+          <div className="mt-1 text-[11.5px] text-dim">
             {city(sourceCityId)?.name.toLowerCase()}{pin ? " · within 1.3 km of the pin" : source?.cells ? ` · ${source.cells} blocks` : ""}
           </div>
-          {!pin && source?.blurb && <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">{source.blurb}</p>}
+          {!pin && source?.blurb && <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">{source.blurb}</p>}
           <div className="mt-4">
             <Label className="mb-1">stands out for</Label>
-            <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">Compared with the rest of {city(sourceCityId)?.name ?? "the city"}.</p>
+            <p className="mb-2 text-[11.5px] leading-relaxed text-muted-foreground">Compared with the rest of {city(sourceCityId)?.name ?? "the city"}.</p>
             <TraitList dims={topDims} vec={vec} basket={ds.basket} />
           </div>
         </section>
@@ -135,9 +135,9 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
                   <button onClick={() => onPickCity(on ? null : c.id)} aria-pressed={on}
                     className={cn("grid w-full grid-cols-[2.6rem_minmax(0,1fr)_auto] items-baseline gap-2 border-l-2 py-1.5 pl-2 pr-1 text-left transition-colors",
                       on ? "border-primary bg-raised" : "border-transparent hover:bg-accent")}>
-                    <span className={cn("text-[11px]", on ? "text-primary" : "text-dim")}>{cityCode(c)}</span>
+                    <span className={cn("text-[11.5px]", on ? "text-primary" : "text-dim")}>{cityCode(c)}</span>
                     <span className="truncate text-muted-foreground"><span className="text-foreground">{c.name.toLowerCase()}</span>{name && <span className="text-dim"> → {name}</span>}</span>
-                    {top && <span className="num whitespace-nowrap text-[11px] text-muted-foreground">{Math.round(top.score * 100)}% match</span>}
+                    {top && <span className="num whitespace-nowrap text-[11.5px] text-muted-foreground">{Math.round(top.score * 100)}% match</span>}
                   </button>
                 </li>
               );
@@ -147,12 +147,12 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
             <label className="flex items-center gap-2 border border-line bg-background px-2 py-1.5 focus-within:border-line-strong">
               <span className="text-dim">+</span>
               <input value={newCity} onChange={(e) => setNewCity(e.target.value)} disabled={adding} placeholder="add city"
-                className="w-full bg-transparent text-[12px] text-foreground outline-none placeholder:text-dim disabled:opacity-60" aria-label="Add a city" />
+                className="w-full bg-transparent text-[12.5px] text-foreground outline-none placeholder:text-dim disabled:opacity-60" aria-label="Add a city" />
             </label>
-            {progress && <p className="cursor-block mt-1.5 text-[11px] text-dim" aria-live="polite">{progress}</p>}
-            {addError && <p className="mt-1.5 text-[11px] leading-relaxed text-destructive">{addError}</p>}
+            {progress && <p className="cursor-block mt-1.5 text-[11.5px] text-dim" aria-live="polite">{progress}</p>}
+            {addError && <p className="mt-1.5 text-[11.5px] leading-relaxed text-destructive">{addError}</p>}
           </form>
-          <p className="mt-4 text-[11px] leading-relaxed text-dim">click any block of {city(sourceCityId)?.name.toLowerCase()} on the map to use it as the starting point.</p>
+          <p className="mt-4 text-[11.5px] leading-relaxed text-dim">click any block of {city(sourceCityId)?.name.toLowerCase()} on the map to use it as the starting point.</p>
         </section>
       </div>
     </div>

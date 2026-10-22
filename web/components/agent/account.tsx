@@ -23,7 +23,7 @@ export function Account({ user, onUser, onSignOut, onHistory }: {
     <div className="space-y-1.5">
       <div className="flex items-baseline gap-2">
         <span className="text-muted-foreground">signed in as <span className="text-foreground">{user.name}</span></span>
-        <button type="button" onClick={onSignOut} className="ml-auto text-[10px] text-dim hover:text-foreground">sign out</button>
+        <button type="button" onClick={onSignOut} className="ml-auto text-[10.5px] text-dim hover:text-foreground">sign out</button>
       </div>
       <p className="text-[10.5px] leading-relaxed text-dim">
         Sync code <button type="button" title="copy" onClick={() => { void navigator.clipboard?.writeText(user.code); setCopied(true); setTimeout(() => setCopied(false), 1200); }}
@@ -52,7 +52,7 @@ export function Account({ user, onUser, onSignOut, onHistory }: {
         {mode === "signin" && <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="sync code" aria-label="Sync code" autoComplete="one-time-code"
           className="w-28 border border-line bg-background px-2 py-1 text-[11.5px] outline-none focus:border-primary" />}
         <button type="submit" disabled={busy || clean.length < 3 || (mode === "claim" ? check?.available !== true : !code.trim())}
-          className="bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-30">{mode === "claim" ? "save" : "sign in"}</button>
+          className="bg-primary px-2.5 py-1 text-[11.5px] font-semibold text-primary-foreground disabled:opacity-30">{mode === "claim" ? "save" : "sign in"}</button>
       </div>
       <div className="flex items-baseline gap-2 text-[10.5px]">
         <span className={cn(check?.available ? "text-primary" : "text-dim", error && "text-destructive")}>{error || status}</span>

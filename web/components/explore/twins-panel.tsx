@@ -22,7 +22,7 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
             {sourceName.toLowerCase()} <span className="text-dim">→</span> {targetName.toLowerCase()}
           </h2>
         </div>
-        <button onClick={onSwap} className="shrink-0 border border-line px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-line-strong hover:text-foreground" aria-label="Swap direction">
+        <button onClick={onSwap} className="shrink-0 border border-line px-2 py-1 text-[11.5px] text-muted-foreground transition-colors hover:border-line-strong hover:text-foreground" aria-label="Swap direction">
           ⇄ swap
         </button>
       </div>
@@ -55,7 +55,7 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
                   <button className={cn("block w-full truncate text-left", active ? "text-foreground" : "text-muted-foreground")} title={h.name} onClick={() => onSelect(m.hood)}>{h.name}</button>
                 </td>
                 <td><Meter value={m.score} tone={active ? "accent" : "fg"} /></td>
-                <td className={cn("num whitespace-nowrap pr-4 text-right text-[11px]", active ? "text-primary" : "text-muted-foreground")}>{Math.round(m.score * 100)}% match</td>
+                <td className={cn("num whitespace-nowrap pr-4 text-right text-[11.5px]", active ? "text-primary" : "text-muted-foreground")}>{Math.round(m.score * 100)}% match</td>
               </tr>
             );
           })}
@@ -65,7 +65,7 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
       {sel && (
         <div key={sel.hood}>
           {hood(sel.hood).blurb && (
-            <p className="border-b border-line px-4 py-3 text-[12px] leading-relaxed text-muted-foreground">
+            <p className="border-b border-line px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
               <span className="text-foreground">{hood(sel.hood).name}.</span> {hood(sel.hood).blurb}
             </p>
           )}
@@ -74,12 +74,12 @@ export function TwinsPanel({ ds, matches, selected, onSelect, sourceName, target
           </p>
           <section className="border-b border-line px-4 py-4">
             <Label className="mb-1">shared</Label>
-            <p className="text-[11px] text-muted-foreground">The tastes that make them twins.</p>
+            <p className="text-[11.5px] text-muted-foreground">The tastes that make them twins.</p>
             <DivergingBars dims={sel.shared} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} max={traitMax} />
           </section>
           <section className="px-4 py-4">
             <Label className="mb-1">different</Label>
-            <p className="text-[11px] text-muted-foreground">Where their tastes differ most.</p>
+            <p className="text-[11.5px] text-muted-foreground">Where their tastes differ most.</p>
             <DivergingBars dims={sel.diverge} basket={ds.basket} aName={sourceName} bName={hood(sel.hood).name} max={traitMax} />
           </section>
         </div>

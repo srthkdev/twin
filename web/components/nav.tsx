@@ -19,7 +19,7 @@ export function Nav() {
     <header className="fixed inset-x-0 top-0 z-40 h-11 border-b border-line bg-background">
       <nav aria-label="Primary" className="flex h-full items-center gap-4 px-3 sm:gap-8 sm:px-4">
         <Link href="/" aria-label="Twin home" className="shrink-0"><Logo /></Link>
-        <div className="flex h-full min-w-0 items-center gap-4 overflow-x-auto [scrollbar-width:none] sm:gap-6 [&::-webkit-scrollbar]:hidden">
+        <div className="flex h-full min-w-0 items-center gap-4 sm:gap-6">
           {LINKS.map((l) => {
             const active = path === l.href || path.startsWith(l.href + "/");
             return (

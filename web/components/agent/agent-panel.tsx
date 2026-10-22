@@ -87,16 +87,16 @@ function Thinking({ text, done, since }: { text: string; done: boolean; since: n
   const lines = text.trim().split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
   return (
     <details className="group my-1.5" open={!done ? true : undefined}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] text-dim [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-[11.5px] text-dim [&::-webkit-details-marker]:hidden">
         {done ? <><span className="inline-block w-3 text-center">◇</span><span>thought for <Elapsed from={since} to={end} /></span></>
-          : <Pulse label="thinking"><span className="text-[11px] text-dim"><Elapsed from={since} /></span></Pulse>}
+          : <Pulse label="thinking"><span className="text-[11.5px] text-dim"><Elapsed from={since} /></span></Pulse>}
       </summary>
       {!done ? (
-        <div className="relative ml-5 mt-1 h-[2.9em] overflow-hidden border-l border-line pl-2 text-[11px] leading-[1.45] text-dim [mask-image:linear-gradient(to_bottom,transparent,black_45%)]">
+        <div className="relative ml-5 mt-1 h-[2.9em] overflow-hidden border-l border-line pl-2 text-[11.5px] leading-[1.45] text-dim [mask-image:linear-gradient(to_bottom,transparent,black_45%)]">
           <div className="absolute bottom-0 left-2 right-0">{lines.slice(-3).map((l, i) => <p key={lines.length - 3 + i} className="animate-in fade-in slide-in-from-bottom-1 duration-300 truncate">{l}</p>)}</div>
         </div>
       ) : (
-        <p className="ml-5 mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap border-l border-line pl-2 text-[11px] leading-relaxed text-dim">{text.trim()}</p>
+        <p className="ml-5 mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap border-l border-line pl-2 text-[11.5px] leading-relaxed text-dim">{text.trim()}</p>
       )}
     </details>
   );
@@ -175,7 +175,7 @@ const MessageView = memo(function MessageView({ m, live, times, progress, files,
             <Markdown source={body} variant={reportView ? "article" : "chat"} onLink={onLink} />
             {!live && next.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {next.map((q) => <button key={q} type="button" onClick={() => onSend(q)} className="border border-line px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary">{q}</button>)}
+                {next.map((q) => <button key={q} type="button" onClick={() => onSend(q)} className="border border-line px-2 py-1 text-left text-[11.5px] text-muted-foreground transition-colors hover:border-primary hover:text-primary">{q}</button>)}
               </div>
             )}
           </div>
@@ -189,7 +189,7 @@ const MessageView = memo(function MessageView({ m, live, times, progress, files,
         </button>
       ))}
       {m.metadata && !live && (
-        <p className="mt-2 text-[10px] text-dim">
+        <p className="mt-2 text-[10.5px] text-dim">
           {[`qloo ${m.metadata.qlooLive} live · ${m.metadata.qlooCached} cached`, m.metadata.ms ? `${(m.metadata.ms / 1000).toFixed(1)}s` : ""].filter(Boolean).join(" · ")}
         </p>
       )}
@@ -245,14 +245,15 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
   const recRef = useRef<Recognition | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const live = useRef({ settings, context, onAction });
-  live.current = { settings, context, onAction };
+  const live = useRef({ settings, context, onAction, user: null as TwinUser | null });
+  live.current = { settings, context, onAction, user };
 
   const transport = useMemo(() => new DefaultChatTransport<TwinUIMessage>({
     api: "/api/agent",
     prepareSendMessagesRequest: ({ messages }) => {
-      const { settings: s, context: ctx } = live.current;
-      return { headers: s.key ? { "x-agent-key": s.key } : undefined, body: { messages, context: ctx, model: s.model || undefined } };
+      const { settings: s, context: ctx, user: u } = live.current;
+      const headers: Record<string, string> = { ...(s.key ? { "x-agent-key": s.key } : {}), ...(u ? { "x-twin-user": u.name, "x-twin-code": u.code } : {}) };
+      return { headers, body: { messages, context: ctx, model: s.model || undefined } };
     },
   }), []);
 
@@ -279,6 +280,8 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     },
   });
   const busy = status === "submitted" || status === "streaming";
+  const lastAsk = [...messages].reverse().find((m) => m.role === "user")?.parts.map((p) => (p.type === "text" ? p.text : "")).join(" ") ?? "";
+  const reportAsked = /\b(report|plan|analysis|compare|deep dive)\b/i.test(lastAsk);
 
   useUnmount(() => { window.speechSynthesis?.cancel(); });
   // Restore the chat before allowing persistence or a new request.
@@ -393,8 +396,8 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
   const lastIdx = messages.length - 1;
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col bg-background font-mono text-xs text-foreground", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11px] text-dim">
+    <div className={cn("flex h-full min-h-0 flex-col bg-background font-mono text-[12.5px] text-foreground", className)}>
+      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[11.5px] text-dim">
         <span className="min-w-0 truncate" title={modelLabel}>{modelLabel || "…"}</span>
         <div className="flex shrink-0 items-center gap-2.5 whitespace-nowrap">
           {onViewChange && <button type="button" data-tour="view" aria-pressed={view === "report"} onClick={() => onViewChange(view === "report" ? "map" : "report")}
@@ -420,30 +423,30 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
           <div className="label mb-1.5">reports</div>
           {history.reports.length ? history.reports.map((r) => <div key={r.id} className="flex items-baseline gap-2 border-t border-line py-1.5">
             <button type="button" onClick={() => { onAction({ type: "report", id: r.id, title: r.title }); setShowHistory(false); }} className="min-w-0 flex-1 truncate text-left text-muted-foreground hover:text-primary">{r.title}</button>
-            <a href={`/r/${r.id}`} target="_blank" rel="noreferrer" className="shrink-0 text-[10px] text-dim hover:text-foreground">link ↗</a>
-            <span className="num shrink-0 text-[10px] text-dim">{new Date(r.at).toLocaleDateString()}</span>
+            <a href={`/r/${r.id}`} target="_blank" rel="noreferrer" className="shrink-0 text-[10.5px] text-dim hover:text-foreground">link ↗</a>
+            <span className="num shrink-0 text-[10.5px] text-dim">{new Date(r.at).toLocaleDateString()}</span>
           </div>) : <p className="text-dim">No reports yet.</p>}
         </div>
         <div>
           <div className="label mb-1.5">earlier chats</div>
           {history.chats.length ? history.chats.map((c) => <div key={c.id} className="flex items-baseline gap-2 border-t border-line py-1.5">
             <button type="button" onClick={() => openChat(c.id)} disabled={busy} className="min-w-0 flex-1 truncate text-left text-muted-foreground hover:text-primary disabled:opacity-40">{c.title}</button>
-            <span className="num shrink-0 text-[10px] text-dim">{new Date(c.at).toLocaleDateString()}</span>
+            <span className="num shrink-0 text-[10.5px] text-dim">{new Date(c.at).toLocaleDateString()}</span>
           </div>) : <p className="text-dim">Start a new chat and this one is kept here.</p>}
         </div>
       </div>}
-      {healthError && <p role="status" className="border-b border-line px-3 py-2 text-[11px] text-dim">Couldn’t load agent availability.</p>}
+      {healthError && <p role="status" className="border-b border-line px-3 py-2 text-[11.5px] text-dim">Couldn’t load agent availability.</p>}
 
       <div className={cn("min-h-0 flex-1 space-y-5 overflow-y-auto", view === "report" ? "px-4 py-5 md:px-8 md:py-7" : "px-3 py-3")} aria-live="polite">
         {!messages.length && (
           <div className="space-y-5">
-            <p className="text-[12px] leading-relaxed text-muted-foreground">Ask about any neighbourhood in the world: its twin elsewhere, where to go, where to open something, where an artist should play. Ask for a report to get a verdict, charts and a PDF.</p>
+            <p className="text-[12.5px] leading-relaxed text-muted-foreground">Ask about any neighbourhood in the world: its twin elsewhere, where to go, where to open something, where an artist should play. Ask for a report to get a verdict, charts and a PDF.</p>
             <div>
               <div className="label mb-2">reports · a decision with the evidence</div>
               <div data-tour="reports" className={cn("grid gap-px border border-line bg-line", view === "report" && "sm:grid-cols-2")}>
                 {REPORTS.map(([role, q]) => (
                   <button key={role} type="button" onClick={() => send(q)} className="group bg-background px-3 py-2.5 text-left transition-colors hover:bg-raised">
-                    <span className="label text-[9.5px] text-primary">{role}</span>
+                    <span className="label text-[10px] text-primary">{role}</span>
                     <span className="mt-1 block text-[11.5px] leading-snug text-muted-foreground group-hover:text-foreground">{q.replace(/^Make me a report:\s*/, "")}</span>
                   </button>
                 ))}
@@ -464,7 +467,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
         {messages.map((m, i) => (
           <div key={m.id}>
             {m.role === "user" ? (
-              <div className="ml-6 border border-line bg-raised px-2.5 py-2 text-[12px] text-foreground">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</div>
+              <div className="ml-6 border border-line bg-raised px-2.5 py-2 text-[12.5px] text-foreground">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</div>
             ) : (
               <MessageView m={m} live={busy && i === lastIdx} times={times.current} progress={busy && i === lastIdx ? progress : undefined}
                 files={files[m.id] ?? (i === lastIdx ? files.last : undefined)} onLink={onLink} onSend={send} onSave={save} reportView={view === "report"}
@@ -474,10 +477,14 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
         ))}
         {view === "report" && reportId && <ReportView id={reportId} onLink={onLink} />}
         {status === "submitted" && messages[lastIdx]?.role === "user" && <p><Pulse label="planning" /></p>}
+        {busy && reportAsked && <p className="border-l border-line-strong pl-3 text-[11.5px] leading-relaxed text-dim">
+          Reports take one to three minutes: the agent pulls live data, charts it and checks every number.{" "}
+          {user ? "It keeps running if you close this tab and will be in your history." : <>It keeps running if you close this tab; <button type="button" onClick={() => setShowHistory(true)} className="underline decoration-dotted hover:text-foreground">pick a username</button> to find it in your history later.</>}
+        </p>}
         {error && (
           <div className="flex items-start justify-between gap-3 border border-destructive/50 px-2.5 py-2 text-[11.5px] text-destructive">
             <span>{friendlyError(error.message)}</span>
-            <button type="button" onClick={() => { clearError(); void regenerate(); }} className="shrink-0 border border-destructive/60 px-1.5 text-[11px] transition-colors hover:bg-destructive hover:text-background">retry</button>
+            <button type="button" onClick={() => { clearError(); void regenerate(); }} className="shrink-0 border border-destructive/60 px-1.5 text-[11.5px] transition-colors hover:bg-destructive hover:text-background">retry</button>
           </div>
         )}
         <div ref={endRef} />

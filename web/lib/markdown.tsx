@@ -47,11 +47,11 @@ const STYLES = {
   },
   chat: {
     h1: "mt-2 text-[14px] font-medium text-foreground",
-    h2: "mt-3 text-[12.5px] font-medium text-foreground",
+    h2: "mt-3 text-[13px] font-medium text-foreground",
     h3: "mt-2 text-[12px] font-medium text-foreground",
-    p: "my-1.5 text-[12px] leading-[1.65] text-foreground/90",
-    li: "text-[12px] leading-[1.6] text-foreground/85",
-    list: "my-1.5 space-y-1", table: "my-2", td: "h-6 text-[11.5px]", fig: "my-2",
+    p: "my-1.5 text-[12.5px] leading-[1.65] text-foreground/90",
+    li: "text-[12.5px] leading-[1.6] text-foreground/85",
+    list: "my-1.5 space-y-1", table: "my-2", td: "h-6 text-[12px]", fig: "my-2",
   },
 };
 
