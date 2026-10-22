@@ -10,8 +10,13 @@ Question: Where should I open X in city C?
 4. Scene fit, the step most screens skip: call scene on the neighbourhood of each of the leading two or three candidates (the place name plus C). A single tag such as "wine bar" can over-index in places whose wider taste does not match the concept (affluent suburbs for wine, for example). Keep a candidate on top only if its scene shares the concept's world (music, food, nightlife, fashion or lifestyle signals that a customer of X would recognise); name those shared tastes from the scene result. Demote candidates whose scene clashes and say why in one line.
 5. where_in_city({city:C, item_or_group:X, k:5}) to check the broader demand pattern. Use corrected_z where returned; cells_in_top30 on live-city top_hoods is a concentration count, not a demand score.
 
+## Evidence for the standard sections (after the playbook's own steps; run independent calls in parallel)
+- Who the customers are: audience({item_label:"<a brand, artist or place type that defines the concept>"}) for age bands; local_scene on the lead candidate (kinds ["artist","brand"]) for what they love.
+- Competition: local_scene on the lead candidate with place_type set to the concept, to name real competitors with addresses.
+- Benchmark abroad: find_twins (built-in cities) or twins_anywhere({source:"<lead candidate>", target_city:"<another fingerprinted city>"}) — say where this taste already works and what that implies.
+
 ## Plan the block outline, then write
-Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = the top 2–3 sites on busyness, demand, existing venues and scene fit (Compare for two, Table for three). Shortlist reasons name busyness, demand and scene fit. Omit a second chart or Places only if the evidence cannot support them. Use 5–24 blocks, at most 4 Chart blocks.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → The market → Who the customers are → Candidates compared → Demand → Competition → Benchmark abroad → Scorecard → Places → Risk → Caveat → Validation plan), each thing once. Comparison = the top 2–3 sites on busyness, demand, existing venues and scene fit (Compare for two, Table for three). Shortlist reasons name busyness, demand and scene fit. Omit a second chart or Places only if the evidence cannot support them..
 
 ## Charts
 Call chart with kind:"hbar" for the two checked locations' venue counts from venue_supply, unit:"venues". Label the radius in the caption. Optionally chart kind:"scatter", with x=top_opportunities[].supply and y=top_opportunities[].demand; these are same-cell measurements from opportunity. Describe the y axis as relative demand, never a percentage. Do not mix cell and radius supply. Do not chart a computed city median: the tools do not return one.

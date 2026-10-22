@@ -80,6 +80,8 @@ export async function POST(req: Request) {
           prepareStep: ({ stepNumber }) => (stepNumber >= (run.reportMode ? 15 : 7) ? { toolChoice: "none" as const } : undefined),
           timeout: { firstChunkMs: 30_000, chunkMs: 45_000, stepMs: 100_000 },
           temperature: 0.4,
+          // a 429 means a daily or per-minute cap: retrying the same model only waits; the next model answers now
+          maxRetries: 0,
           repairToolCall,
           providerOptions: fallbackOptions(order[i]),
           onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },

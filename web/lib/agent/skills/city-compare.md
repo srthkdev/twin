@@ -8,8 +8,13 @@ Question: Compare A and B.
 2. venue_supply({place:A, radius_m:1000}) and venue_supply({place:B, radius_m:1000}) to discover common venue kinds. Then call both again with kinds:[...the_same_up_to_six_returned_kinds] and radius_m:1000. Absent keys in the default top-kind lists are not zero. For cities, these are areas around the returned geocoded centres, not whole-city totals. Prefer lat/lon from geocode({query:A}) and geocode({query:B}) if a particular district or centre must be made explicit.
 3. scene({place:A}) and scene({place:B}) for place_types, audiences, artists and brands. Reuse same-run results gathered for the fallback in step one.
 
+## Evidence for the standard sections (after the playbook's own steps; run independent calls in parallel)
+- Who the customers are: audience({item_label:"<a brand, artist or place type that defines the concept>"}) for age bands; local_scene on the lead candidate (kinds ["artist","brand"]) for what they love.
+- Competition: local_scene on the lead candidate with place_type set to the concept, to name real competitors with addresses.
+- Benchmark abroad: find_twins (built-in cities) or twins_anywhere({source:"<lead candidate>", target_city:"<another fingerprinted city>"}) — say where this taste already works and what that implies.
+
 ## Plan the block outline, then write
-Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = the two places on the same measures (Compare), plus a Table if there are more than four measures. Omit KpiRow if it would overstate partial coverage; use 5–24 blocks.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → The market → Who the customers are → Candidates compared → Demand → Competition → Benchmark abroad → Scorecard → Places → Risk → Caveat → Validation plan), each thing once. Comparison = the two places on the same measures (Compare), plus a Table if there are more than four measures. Omit KpiRow if it would overstate partial coverage.
 
 ## Charts
 chart kind:"bar", unit:"venues", labels=the same explicitly checked kinds, series=the two venue_supply counts maps or kinds[].count results. Caption the radius and the exact areas sampled. Optional hbar of shared_characteristics[].score uses "shared taste strength", no percent unit. Only an actual explain_match.cosine_similarity supports an overall percentage; shared-characteristic scores do not.

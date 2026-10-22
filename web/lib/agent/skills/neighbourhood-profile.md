@@ -9,8 +9,13 @@ Question: What is X like / who is part of the scene there?
 3. local_scene({hood_id:X, kinds:["place","artist","brand"], radius_m:1500, take:6}) for concrete venues, returned ratings/affinities, addresses and hours.
 4. wiki({place:X}) for cited background only. Cite the returned URL; never source taste claims from Wikipedia. Use geocode({query:X}) only if a location link is needed and no coordinates/id was returned.
 
+## Evidence for the standard sections (after the playbook's own steps; run independent calls in parallel)
+- Who the customers are: audience({item_label:"<a brand, artist or place type that defines the concept>"}) for age bands; local_scene on the lead candidate (kinds ["artist","brand"]) for what they love.
+- Competition: local_scene on the lead candidate with place_type set to the concept, to name real competitors with addresses.
+- Benchmark abroad: find_twins (built-in cities) or twins_anywhere({source:"<lead candidate>", target_city:"<another fingerprinted city>"}) — say where this taste already works and what that implies.
+
 ## Plan the block outline, then write
-Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison may be omitted; if used, compare the place with its city on what it over-indexes on. Where to go = real venues. KpiRow is optional and only uses returned numeric fields. Omit Chart when there are no numeric evidence fields after these calls; do not convert capped text lists to invented measurements.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → The market → Who the customers are → Candidates compared → Demand → Competition → Benchmark abroad → Scorecard → Places → Risk → Caveat → Validation plan), each thing once. Comparison may be omitted; if used, compare the place with its city on what it over-indexes on. Where to go = real venues. KpiRow is optional and only uses returned numeric fields. Omit Chart when there are no numeric evidence fields after these calls; do not convert capped text lists to invented measurements.
 
 ## Charts
 Prefer chart kind:"hbar" with taste_profile.top[].z and a "relative local interest" axis, without a percent unit. Translate strength to plain words in prose. If taste_profile delegated to scene, use a table chart of returned local_scene place.rating or place.qloo_affinity values only when numeric values exist. The two metrics need separate charts because they use different scales.

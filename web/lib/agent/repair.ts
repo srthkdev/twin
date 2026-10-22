@@ -66,6 +66,15 @@ function fixTool(name: string, args: unknown): unknown {
   const a = { ...(args as Obj) };
   if (name === "report" && Array.isArray(a.blocks)) a.blocks = a.blocks.flatMap(fixBlock);
   if (name === "chart" && typeof a.kind === "string" && !["bar", "hbar", "line", "scatter", "table"].includes(a.kind)) a.kind = CHART_KINDS[a.kind.toLowerCase()] ?? "bar";
+  // a chart sent in Table-block shape ({columns, rows}) → labels from the first column, one series per numeric column
+  if (name === "chart" && Array.isArray(a.rows) && Array.isArray(a.columns) && !Array.isArray(a.series)) {
+    const rows = (a.rows as unknown[]).map((r) => (Array.isArray(r) ? r : Object.values(r as Obj)));
+    const num = (v: unknown) => Number(String(v).replace(/[^0-9.+-]/g, ""));
+    a.labels = rows.map((r) => text(r[0]));
+    a.series = (a.columns as unknown[]).slice(1).map((c, j) => ({ name: text(c), values: rows.map((r) => num(r[j + 1])) }))
+      .filter((s) => s.values.every(Number.isFinite)).slice(0, 3);
+    delete a.rows; delete a.columns;
+  }
   return a;
 }
 

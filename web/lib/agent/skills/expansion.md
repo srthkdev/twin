@@ -9,8 +9,13 @@ Question: My concept works in neighbourhood A — where is A's twin in city B an
 3. local_scene({hood_id:top_twin.hood_id, taste_of:A, kinds:["place"], place_type:concept_kind, radius_m:1000, take:6}). Omit place_type if the concept is still unknown.
 4. compare_taste({a:A, b:top_twin.hood_id}) for shared_characteristics[].name/score. These scores describe shared characteristics, not overall neighbourhood match.
 
+## Evidence for the standard sections (after the playbook's own steps; run independent calls in parallel)
+- Who the customers are: audience({item_label:"<a brand, artist or place type that defines the concept>"}) for age bands; local_scene on the lead candidate (kinds ["artist","brand"]) for what they love.
+- Competition: local_scene on the lead candidate with place_type set to the concept, to name real competitors with addresses.
+- Benchmark abroad: find_twins (built-in cities) or twins_anywhere({source:"<lead candidate>", target_city:"<another fingerprinted city>"}) — say where this taste already works and what that implies.
+
 ## Plan the block outline, then write
-Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = the home neighbourhood against its best twin in the target city on match, existing venues and scene (Compare). Shortlist = twins ranked by fit.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → The market → Who the customers are → Candidates compared → Demand → Competition → Benchmark abroad → Scorecard → Places → Risk → Caveat → Validation plan), each thing once. Comparison = the home neighbourhood against its best twin in the target city on match, existing venues and scene (Compare). Shortlist = twins ranked by fit.
 
 ## Charts
 chart({kind:"hbar", unit:"%", ...}) for the returned twin match percentages. A second bar chart may compare same-kind supply counts for the home and checked twins from venue_supply, unit:"venues"; caption the common radius and data sources. Reference only returned chart ids in Chart blocks.

@@ -9,8 +9,13 @@ Question: What thrives in this neighbourhood's twins abroad but is missing here?
 3. Optionally confirm explicit counts with venue_supply at the returned places using radius_m from gap_scan and kinds:[...candidate_kinds], up to six kinds per call. A missing/error key is unknown, not zero. Keep radius counts separate from opportunity's cell counts.
 4. Optionally use scene({place:"<home with city>"}) and scene({place:"<best matched twin with city>"}) for taste context. Its capped lists cannot establish supply.
 
+## Evidence for the standard sections (after the playbook's own steps; run independent calls in parallel)
+- Who the customers are: audience({item_label:"<a brand, artist or place type that defines the concept>"}) for age bands; local_scene on the lead candidate (kinds ["artist","brand"]) for what they love.
+- Competition: local_scene on the lead candidate with place_type set to the concept, to name real competitors with addresses.
+- Benchmark abroad: find_twins (built-in cities) or twins_anywhere({source:"<lead candidate>", target_city:"<another fingerprinted city>"}) — say where this taste already works and what that implies.
+
 ## Plan the block outline, then write
-Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = a Table of the gap kinds: home count vs each twin's count. Shortlist = the gaps ranked by lift, each with where in the city demand for it sits. Use a separate row for each measured kind and place; explain what is missing and what remains uncertain.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → The market → Who the customers are → Candidates compared → Demand → Competition → Benchmark abroad → Scorecard → Places → Risk → Caveat → Validation plan), each thing once. Comparison = a Table of the gap kinds: home count vs each twin's count. Shortlist = the gaps ranked by lift, each with where in the city demand for it sits. Use a separate row for each measured kind and place; explain what is missing and what remains uncertain.
 
 ## Charts
 Use chart kind:"bar", unit:"%", labels=returned gap kinds, and series for home_share_pct and twin_mean_share_pct; caption these as shares of counted venues, not demand. A second chart can show home_count and twin_counts with unit:"venues", at most three places per chart. Optional hbar uses twins[].match_pct and unit:"%". Use returned numbers directly, including present_everywhere for context. Never chart null lift or invent a finite lift when none were counted at home. No counts of scene's text lists.

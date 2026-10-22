@@ -100,11 +100,11 @@ function Places({ d }: { d: Any }) {
   return (
     <Shell title={`in ${where || "the area"}`} meta="picked by qloo for this taste">
       {places.length > 0 && (
-        <ul className="grid gap-1.5">
+        <ul className="grid min-w-0 grid-cols-1 gap-1.5">
           {places.slice(0, 5).map((p) => {
             const hrs = str(p.hours).split("; ").find((h) => h.startsWith(today)) ?? "";
             return (
-              <li key={str(p.name)} className="border-l-2 border-primary/60 pl-2">
+              <li key={str(p.name)} className="min-w-0 border-l-2 border-primary/60 pl-2">
                 <div className="flex items-baseline justify-between gap-2 text-[11.5px]">
                   <span className="truncate text-foreground">{str(p.name)}</span>
                   {num(p.qloo_affinity) != null && <span className="num shrink-0 text-[10.5px] text-primary">{pct(num(p.qloo_affinity))} fit</span>}
@@ -294,7 +294,8 @@ function ReportCard({ data, onOpen }: { data: unknown; onOpen?: (id: string, tit
     </div>
     {verdict?.line && <p className="line-clamp-2 px-2.5 py-2 text-[12px] leading-relaxed text-muted-foreground">{verdict.line}</p>}
     <div className="flex flex-wrap items-center gap-x-4 border-t border-line px-2.5 py-1.5 text-[10.5px]">
-      {onOpen ? <button type="button" onClick={() => onOpen(id, report?.title ?? title)} className="text-primary hover:underline">Open</button> : <a href={`/r/${encodeURIComponent(id)}`} className="text-primary hover:underline">Open</a>}
+      <a href={`/r/${encodeURIComponent(id)}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">Open report ↗</a>
+      {onOpen && <><span aria-hidden className="text-dim">·</span><button type="button" onClick={() => onOpen(id, report?.title ?? title)} className="text-muted-foreground hover:text-foreground">read here</button></>}
       <span aria-hidden className="text-dim">·</span><a href={`/api/reports/${encodeURIComponent(id)}/pdf`} download className="text-muted-foreground hover:text-foreground">PDF</a>
       <span aria-hidden className="text-dim">·</span><button type="button" onClick={() => void share()} className="text-muted-foreground hover:text-foreground">{copied ? "Copied" : "Share"}</button>
       {copyError && <a href={`/r/${encodeURIComponent(id)}`} className="text-muted-foreground underline">Open share link</a>}

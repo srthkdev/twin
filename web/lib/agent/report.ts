@@ -142,7 +142,7 @@ export const reportInputSchema = z.object({
   title: z.string().min(3),
   subtitle: z.string().optional(),
   skill: z.string().optional(),
-  blocks: z.array(blockSchema).min(5).max(24),
+  blocks: z.array(blockSchema).min(5).max(36),
 }).strict();
 
 type ReportInput = z.infer<typeof reportInputSchema>;
@@ -265,7 +265,7 @@ export function validateReport(input: unknown, run: Pick<AgentRunContext, "chart
     const location = `Block ${i + 1} (${block.type})`;
     if (i > 0 && block.type === "Verdict") throw new ToolError(`${location}: only the first block may be Verdict.`);
     if (block.type === "Chart") {
-      if (charts.length >= 4) throw new ToolError(`${location}: ${block.props.id} exceeds the limit of 4 Chart blocks.`);
+      if (charts.length >= 6) throw new ToolError(`${location}: ${block.props.id} exceeds the limit of 6 Chart blocks.`);
       const chart = run.charts.get(block.props.id);
       if (!chart) throw new ToolError(`${location}: unknown chart ${block.props.id}. Use an id returned by chart in this run.`);
       const checked = validateGrounding(chartGroundingValues(chart), run.evidence);
@@ -325,7 +325,7 @@ export function tidyBlocks(blocks: ReportBlock[]): ReportBlock[] {
 
 const reportTool = defineTool({
   name: "report",
-  description: `Create a shareable Twin report after report_skill and evidence gathering. Supply 5–24 catalog blocks, Verdict first, at most 4 Chart blocks referencing chart ids from this run. Every number in narrative and headline values must match tool evidence. Also downloads markdown.\n${catalogPrompt()}`,
+  description: `Create a shareable Twin report after report_skill and evidence gathering. Supply 12–36 catalog blocks, Verdict first, at most 6 Chart blocks referencing chart ids from this run. Every number in narrative and headline values must match tool evidence. Also downloads markdown.\n${catalogPrompt()}`,
   schema: reportInputSchema,
   async run(input, ctx) {
     const run = (ctx as ReportToolContext).run;

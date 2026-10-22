@@ -70,6 +70,7 @@ const SUGGEST = [
 function friendlyError(raw: string): string {
   let msg = raw;
   try { msg = (JSON.parse(raw) as { error?: string }).error ?? raw; } catch { /* plain text */ }
+  if (/free-models-per-day|per day|daily/i.test(msg)) return "Today's free AI quota for this demo is used up. Add your own free OpenRouter key in settings and keep going — it takes a minute.";
   if (/rate|429|too many/i.test(msg)) return msg.length < 160 ? msg : "Too many questions in a short time. Wait a minute, or add your own OpenRouter key in settings.";
   if (/fetch|network|failed to/i.test(msg)) return "Lost the connection to the agent. Retry?";
   return msg.length < 200 ? msg : "The model didn't answer this time. Retry — it falls back to another free model.";
@@ -437,7 +438,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
       </div>}
       {healthError && <p role="status" className="border-b border-line px-3 py-2 text-[11.5px] text-dim">Couldn’t load agent availability.</p>}
 
-      <div className={cn("min-h-0 flex-1 space-y-5 overflow-y-auto", view === "report" ? "px-4 py-5 md:px-8 md:py-7" : "px-3 py-3")} aria-live="polite">
+      <div className={cn("min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden", view === "report" ? "px-4 py-5 md:px-8 md:py-7" : "px-3 py-3")} aria-live="polite">
         {!messages.length && (
           <div className="space-y-5">
             <p className="text-[12.5px] leading-relaxed text-muted-foreground">Ask about any neighbourhood in the world: its twin elsewhere, where to go, where to open something, where an artist should play. Ask for a report to get a verdict, charts and a PDF.</p>
