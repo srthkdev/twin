@@ -25,8 +25,9 @@ export const chartInputSchema = z.object({
   title: z.string().min(1),
   caption: z.string().optional(),
   unit: z.string().optional(),
-  labels: z.array(z.string()).min(1).max(25),
-  series: z.array(z.object({ name: z.string().min(1), values: z.array(z.number().finite()) }).strict()).min(1).max(3),
+  // scatter charts use points; every other kind needs labels and 1–3 series (checked in validateChart)
+  labels: z.array(z.string()).max(25).default([]),
+  series: z.array(z.object({ name: z.string().min(1), values: z.array(z.number().finite()) }).strict()).max(3).default([]),
   points: z.array(z.object({ label: z.string(), x: z.number().finite(), y: z.number().finite(), link: mapLink.optional() }).strict()).optional(),
   axes: z.object({ x: z.string().optional(), y: z.string().optional() }).strict().optional(),
   links: z.array(mapLink.nullable()).optional(),
@@ -115,6 +116,9 @@ export function validateChart(input: unknown, entries: EvidenceEntry[]): { ok: t
   const parsed = chartInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: `Invalid chart: ${parsed.error.issues.map((i) => `${i.path.join(".") || "chart"} ${i.message}`).join("; ")}`, bad: [] };
   const chart = parsed.data;
+  if (chart.kind === "scatter" ? !chart.points?.length : !chart.labels.length || !chart.series.length) {
+    return { ok: false, error: chart.kind === "scatter" ? "Invalid chart: a scatter needs points [{label, x, y}]." : "Invalid chart: give labels and 1–3 series.", bad: [] };
+  }
   if (chart.series.some((series) => series.values.length !== chart.labels.length)) {
     return { ok: false, error: "Invalid chart: each series must have one value for every label.", bad: [] };
   }
@@ -271,7 +275,8 @@ export function validateReport(input: unknown, run: Pick<AgentRunContext, "chart
     // Headline numbers must trace to tool results; numbers in prose are counted (and shown) but don't block the report.
     for (const [field, text] of blockText(block)) {
       if (block.type !== "KpiRow" || !/\.value$/.test(field)) continue;
-      const checked = validateGrounding(numericText(text), run.evidence);
+      // small whole numbers ("6 of 6", "3 sites") are counts of listed things, not measurements
+      const checked = validateGrounding(numericText(text).filter((n) => n.percent || !Number.isInteger(n.value) || n.value > 12), run.evidence);
       if (checked.bad.length) throw new ToolError(`${location} props.${field} ${JSON.stringify(text)}: ${ungroundedError(checked.bad)}`);
     }
   }
