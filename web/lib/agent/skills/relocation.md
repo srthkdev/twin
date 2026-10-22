@@ -9,7 +9,7 @@ Question: I love A, I'm moving to city B — where should I start?
 3. explain_match({hood_a:A, hood_b:top_twin.hood_id}). For live-added places it delegates to compare_taste and may return shared_characteristics without an overall match: use the original twin result for the percentage.
 
 ## Plan the block outline, then write
-Verdict → KpiRow → Heading → Paragraph → Chart → Ranking → Heading → Paragraph → Places → Callout → NextSteps.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = the top two neighbourhoods side by side on match and the scene you'd recognise (Compare). Where to go = real venues to try first.
 
 ## Charts
 chart kind:"hbar", unit:"%", labels=twin names, series values=100 times the returned match values. Optional table chart for numeric place ratings/affinities only when present. Do not present Qloo venue affinity as a citywide neighbourhood match.

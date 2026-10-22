@@ -11,7 +11,7 @@ Question: Where should I open X in city C?
 5. where_in_city({city:C, item_or_group:X, k:5}) to check the broader demand pattern. Use corrected_z where returned; cells_in_top30 on live-city top_hoods is a concentration count, not a demand score.
 
 ## Plan the block outline, then write
-Verdict → KpiRow → Heading → Paragraph → Chart → Ranking (each item's reason names its busyness, demand and scene fit) → Heading → Paragraph → Chart → Places → Callout → NextSteps. Omit a second chart or Places only if the evidence cannot support them. Use 5–24 blocks, at most 4 Chart blocks.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = the top 2–3 sites on busyness, demand, existing venues and scene fit (Compare for two, Table for three). Shortlist reasons name busyness, demand and scene fit. Omit a second chart or Places only if the evidence cannot support them. Use 5–24 blocks, at most 4 Chart blocks.
 
 ## Charts
 Call chart with kind:"hbar" for the two checked locations' venue counts from venue_supply, unit:"venues". Label the radius in the caption. Optionally chart kind:"scatter", with x=top_opportunities[].supply and y=top_opportunities[].demand; these are same-cell measurements from opportunity. Describe the y axis as relative demand, never a percentage. Do not mix cell and radius supply. Do not chart a computed city median: the tools do not return one.

@@ -9,7 +9,7 @@ Question: Compare A and B.
 3. scene({place:A}) and scene({place:B}) for place_types, audiences, artists and brands. Reuse same-run results gathered for the fallback in step one.
 
 ## Plan the block outline, then write
-Verdict → KpiRow → Heading → Paragraph → Compare → Chart → Heading → Paragraph → Table → Callout → NextSteps. Omit KpiRow if it would overstate partial coverage; use 5–24 blocks.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = the two places on the same measures (Compare), plus a Table if there are more than four measures. Omit KpiRow if it would overstate partial coverage; use 5–24 blocks.
 
 ## Charts
 chart kind:"bar", unit:"venues", labels=the same explicitly checked kinds, series=the two venue_supply counts maps or kinds[].count results. Caption the radius and the exact areas sampled. Optional hbar of shared_characteristics[].score uses "shared taste strength", no percent unit. Only an actual explain_match.cosine_similarity supports an overall percentage; shared-characteristic scores do not.

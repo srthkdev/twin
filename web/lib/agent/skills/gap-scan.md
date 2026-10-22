@@ -10,7 +10,7 @@ Question: What thrives in this neighbourhood's twins abroad but is missing here?
 4. Optionally use scene({place:"<home with city>"}) and scene({place:"<best matched twin with city>"}) for taste context. Its capped lists cannot establish supply.
 
 ## Plan the block outline, then write
-Verdict → KpiRow → Heading → Paragraph → Chart → Ranking → Table → Heading → Paragraph → Callout → NextSteps. Use a separate row for each measured kind and place; explain what is missing and what remains uncertain.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = a Table of the gap kinds: home count vs each twin's count. Shortlist = the gaps ranked by lift, each with where in the city demand for it sits. Use a separate row for each measured kind and place; explain what is missing and what remains uncertain.
 
 ## Charts
 Use chart kind:"bar", unit:"%", labels=returned gap kinds, and series for home_share_pct and twin_mean_share_pct; caption these as shares of counted venues, not demand. A second chart can show home_count and twin_counts with unit:"venues", at most three places per chart. Optional hbar uses twins[].match_pct and unit:"%". Use returned numbers directly, including present_everywhere for context. Never chart null lift or invent a finite lift when none were counted at home. No counts of scene's text lists.

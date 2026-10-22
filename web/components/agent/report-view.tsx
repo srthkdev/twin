@@ -47,6 +47,14 @@ export function ReportDocument({ report, onLink }: { report: Report; onLink?: (l
       <h1 className="text-balance text-[clamp(24px,3vw,38px)] font-medium leading-[1.15] tracking-[-0.045em]">{report.title}</h1>
       {report.subtitle && <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">{report.subtitle}</p>}
       {report.question && <div className="mt-4 border-l border-line-strong pl-3"><div className="label mb-1">The question</div><p className="text-[11.5px] leading-relaxed text-dim">{report.question}</p></div>}
+      <dl className="mt-4 grid grid-cols-2 gap-px border border-line bg-line text-[11px] sm:grid-cols-4">
+        {[
+          ["Sources", [...new Set(report.evidence.map((e) => sourceLabel(e.tool)).filter((s) => !/report|chart|playbook/i.test(s)))].join(" · ")],
+          ["Tool calls", String(report.evidence.filter((e) => !/^(chart|report|report_skill)$/.test(e.tool)).length)],
+          ["Numbers traced", `${report.grounding.grounded} of ${report.grounding.numbers}`],
+          ["Model", (report.model ?? "—").split("/").pop()!.replace(/:free$/, "")],
+        ].map(([k, v]) => <div key={k} className="bg-background px-2.5 py-2"><dt className="label text-[9.5px]">{k}</dt><dd className="mt-0.5 truncate text-muted-foreground" title={v}>{v}</dd></div>)}
+      </dl>
       <div className="mt-5"><ShareActions id={report.id} report={report} /></div>
     </header>
     <ReportBody blocks={blocks} charts={report.charts} onLink={handleLink} />

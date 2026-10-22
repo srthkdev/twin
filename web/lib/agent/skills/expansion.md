@@ -10,7 +10,7 @@ Question: My concept works in neighbourhood A — where is A's twin in city B an
 4. compare_taste({a:A, b:top_twin.hood_id}) for shared_characteristics[].name/score. These scores describe shared characteristics, not overall neighbourhood match.
 
 ## Plan the block outline, then write
-Verdict → KpiRow → Heading → Paragraph → Chart → Ranking → Compare → Heading → Paragraph → Places → Callout → NextSteps.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = the home neighbourhood against its best twin in the target city on match, existing venues and scene (Compare). Shortlist = twins ranked by fit.
 
 ## Charts
 chart({kind:"hbar", unit:"%", ...}) for the returned twin match percentages. A second bar chart may compare same-kind supply counts for the home and checked twins from venue_supply, unit:"venues"; caption the common radius and data sources. Reference only returned chart ids in Chart blocks.

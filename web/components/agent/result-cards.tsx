@@ -82,7 +82,7 @@ function Match({ d }: { d: Any }) {
   const diff = arr<Any>(d.diverging_traits).map((x) => `${str(x.trait)} (${(num(x.z_a) ?? 0) > (num(x.z_b) ?? 0) ? a : b})`);
   return (
     <Shell title={`${a} × ${b}`} meta={`${pct(num(d.cosine_similarity))} match`}>
-      <div className="space-y-2 text-[11px]">
+      <div className="space-y-2 text-[11.5px]">
         <div><div className="mb-1 text-dim">both love</div><Chips items={shared.slice(0, 6)} accent /></div>
         {diff.length > 0 && <div><div className="mb-1 text-dim">where they differ</div><Chips items={diff.slice(0, 4)} /></div>}
       </div>
@@ -116,7 +116,7 @@ function Places({ d }: { d: Any }) {
         </ul>
       )}
       {(artists.length > 0 || brands.length > 0) && (
-        <div className="mt-2 space-y-1.5 text-[11px]">
+        <div className="mt-2 space-y-1.5 text-[11.5px]">
           {artists.length > 0 && <div><span className="mr-1.5 text-dim">sound</span><Chips items={artists.slice(0, 5)} /></div>}
           {brands.length > 0 && <div><span className="mr-1.5 text-dim">brands</span><Chips items={brands.slice(0, 5)} /></div>}
         </div>
@@ -131,7 +131,7 @@ function Gaps({ d }: { d: Any }) {
   const maxD = Math.max(...rows.map((r) => num(r.demand) ?? 0), 1);
   return (
     <Shell title={`where to open · ${str(d.taste)}`} meta={`${str(d.supply_kind).replace(/_/g, " ")} supply: ${str(d.supply_source).split(" 20")[0] || "open data"}`}>
-      <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_5rem_3.2rem] gap-2 text-[10px] text-dim"><span>near</span><span>demand</span><span className="text-right">existing</span></div>
+      <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_5rem_3.2rem] gap-2 text-[10.5px] text-dim"><span>near</span><span>demand</span><span className="text-right">existing</span></div>
       <ol className="space-y-1.5">
         {rows.map((r, i) => (
           <li key={i} className="grid grid-cols-[minmax(0,1fr)_5rem_3.2rem] items-center gap-2 text-[11.5px]">
@@ -173,7 +173,7 @@ function Tour({ d }: { d: Any }) {
 function Scene({ d }: { d: Any }) {
   return (
     <Shell title={`the scene · ${str(d.place)}`} meta="what it over-indexes on (qloo)">
-      <div className="space-y-1.5 text-[11px]">
+      <div className="space-y-1.5 text-[11.5px]">
         <Chips items={arr<string>(d.place_types).slice(0, 8)} accent />
         {arr<string>(d.artists).length > 0 && <div><span className="mr-1.5 text-dim">sound</span><Chips items={arr<string>(d.artists).slice(0, 6)} /></div>}
         {arr<string>(d.brands).length > 0 && <div><span className="mr-1.5 text-dim">brands</span><Chips items={arr<string>(d.brands).slice(0, 6)} /></div>}
@@ -206,7 +206,7 @@ function Supply({ d }: { d: Any }) {
     <Shell title="what exists nearby" meta={str(d.source).split(" 20")[0]}>
       <ul className="space-y-1">
         {counts.map(([k, v]) => (
-          <li key={k} className="grid grid-cols-[6.5rem_minmax(0,1fr)_2.2rem] items-center gap-2 text-[11px]">
+          <li key={k} className="grid grid-cols-[6.5rem_minmax(0,1fr)_2.2rem] items-center gap-2 text-[11.5px]">
             <span className="truncate text-muted-foreground">{k.replace(/_/g, " ")}</span><Bar v={v} max={max} tone="fg" /><span className="num text-right text-foreground">{v}</span>
           </li>
         ))}
@@ -218,7 +218,7 @@ function Supply({ d }: { d: Any }) {
 function Wiki({ d }: { d: Any }) {
   return (
     <Shell title={str(d.title)} meta={(d.population as Any)?.value ? `pop ${Number((d.population as Any).value).toLocaleString("en")}` : "wikipedia"}>
-      <p className="line-clamp-3 text-[11px] leading-relaxed text-muted-foreground">{str(d.summary)}</p>
+      <p className="line-clamp-3 text-[11.5px] leading-relaxed text-muted-foreground">{str(d.summary)}</p>
       <a href={str(d.url)} target="_blank" rel="noreferrer" className="link mt-1 inline-block text-[10.5px] text-dim">wikipedia ↗</a>
     </Shell>
   );
@@ -230,7 +230,7 @@ function Web({ d }: { d: Any }) {
   return (
     <Shell title="from the web" meta={str(d.provider)}>
       <ul className="space-y-1">
-        {rows.map((r) => <li key={str(r.url)} className="truncate text-[11px]"><a href={str(r.url)} target="_blank" rel="noreferrer" className="link text-muted-foreground">{str(r.title)}</a></li>)}
+        {rows.map((r) => <li key={str(r.url)} className="truncate text-[11.5px]"><a href={str(r.url)} target="_blank" rel="noreferrer" className="link text-muted-foreground">{str(r.title)}</a></li>)}
       </ul>
     </Shell>
   );
@@ -241,7 +241,7 @@ function City({ d }: { d: Any }) {
   if (!c) return null;
   return (
     <Shell title={`${str(c.name)} fingerprinted`} meta={str(c.country)}>
-      <div className="text-[11px] text-muted-foreground"><span className="num text-foreground">{num(c.cells)}</span> blocks · <span className="num text-foreground">{num(c.neighbourhoods)}</span> neighbourhoods · now on the map</div>
+      <div className="text-[11.5px] text-muted-foreground"><span className="num text-foreground">{num(c.cells)}</span> blocks · <span className="num text-foreground">{num(c.neighbourhoods)}</span> neighbourhoods · now on the map</div>
     </Shell>
   );
 }
@@ -280,8 +280,6 @@ function ReportCard({ data, onOpen }: { data: unknown; onOpen?: (id: string, tit
   }, [id]);
   if (!id) return null;
   const blocks = report ? reportBlocks(report) : [];
-  const kpis = blocks.flatMap((b) => b.type === "KpiRow" ? b.props.items : []);
-  const fallbackKpis = report?.kpis ?? arr<Any>(nested.kpis).map((k) => ({ label: str(k.label), value: str(k.value), note: str(k.note) })).filter((k) => k.label || k.value);
   const verdict = blocks.find((b) => b.type === "Verdict")?.props ?? report?.verdict ?? (nested.verdict && typeof nested.verdict === "object" ? nested.verdict as Report["verdict"] : undefined);
   const share = async () => {
     try {
@@ -291,12 +289,10 @@ function ReportCard({ data, onOpen }: { data: unknown; onOpen?: (id: string, tit
   };
   return <div className="my-2 border border-primary/50 bg-card">
     <div className="flex items-start justify-between gap-3 border-b border-line px-2.5 py-2">
-      <div className="min-w-0"><div className="label mb-1">Report ready</div><div className="text-[12px] font-medium text-foreground">{report?.title ?? title}</div></div>
-      {verdict && <span className={`shrink-0 border px-1.5 py-0.5 text-[10px] ${verdictClass(verdict.label)}`}>{verdict.label}</span>}
+      <div className="min-w-0"><div className="label mb-1">Report ready</div><div className="text-[12.5px] font-medium text-foreground">{report?.title ?? title}</div></div>
+      {verdict && <span className={`shrink-0 border px-1.5 py-0.5 text-[10.5px] ${verdictClass(verdict.label)}`}>{verdict.label}</span>}
     </div>
-    <div className="flex flex-wrap gap-x-4 gap-y-2 px-2.5 py-2">
-      {(kpis.length ? kpis : fallbackKpis).slice(0, 4).map((k, i) => <div key={`${k.label}-${i}`}><div className="label">{k.label}</div><div className="num mt-0.5 text-[14px] text-foreground">{k.value}</div></div>)}
-    </div>
+    {verdict?.line && <p className="line-clamp-2 px-2.5 py-2 text-[12px] leading-relaxed text-muted-foreground">{verdict.line}</p>}
     <div className="flex flex-wrap items-center gap-x-4 border-t border-line px-2.5 py-1.5 text-[10.5px]">
       {onOpen ? <button type="button" onClick={() => onOpen(id, report?.title ?? title)} className="text-primary hover:underline">Open</button> : <a href={`/r/${encodeURIComponent(id)}`} className="text-primary hover:underline">Open</a>}
       <span aria-hidden className="text-dim">·</span><a href={`/api/reports/${encodeURIComponent(id)}/pdf`} download className="text-muted-foreground hover:text-foreground">PDF</a>

@@ -9,7 +9,7 @@ Question: Where should artist Z play?
 3. audience({item_label:Z}) for age_bands_sorted[].skew and gender[].skew. These are deviations from a baseline, not audience sizes or shares.
 
 ## Plan the block outline, then write
-Verdict → KpiRow → Heading → Paragraph → Chart → Ranking → Heading → Paragraph → Chart → Table → Callout → NextSteps. Places may be added only after geocode({query:"<returned venue and city>"}) supplies real coordinates; tour venues themselves do not return map coordinates.
+Follow the standard report outline from the system prompt (Verdict → KpiRow → Summary → Comparison → Evidence → Shortlist → Where to go → Risks and limits → Next steps), each thing once. Comparison = the cities side by side on fan signal, momentum and audience (Table). Shortlist = cities in play order with the room to book. Places may be added only after geocode({query:"<returned venue and city>"}) supplies real coordinates; tour venues themselves do not return map coordinates.
 
 ## Charts
 First chart: hbar, unit:"%", reach multiplied by 100 per successful tour city; call it "Where a fan signal appears" and explain it is share of sampled map cells, not population or ticket buyers. Second: line with trend.points dates and their raw percentile values (no invented rescaling), caption "relative popularity over time". Optional third chart shows audience skew as a relative measure, never percentages or headcounts. Use returned numbers only; tour's ranking product is not an available measured field.
