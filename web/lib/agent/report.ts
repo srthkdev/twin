@@ -4,10 +4,12 @@ import { blockSchema, catalogPrompt, mapLink, type ReportBlock } from "../report
 import { evidenceSummary, reportBlocks } from "../report/normalize";
 import type { ChartSpec, Report, VerdictTone } from "./report-types";
 import { storePut } from "./store";
+import { appendReport } from "../user-store";
 import { ToolError, defineTool, type ToolContext } from "./tool-kit";
 
 export interface EvidenceEntry { tool: string; summary: string; numbers: number[] }
 export interface AgentRunContext {
+  user?: { name: string; code: string };
   evidence: EvidenceEntry[];
   charts: Map<string, ChartSpec>;
   nextChartId: number;
@@ -48,18 +50,48 @@ function rounded(n: number, places: number) {
   return Math.round(n * scale) / scale;
 }
 
+const SKIP = new Set(["chart", "report", "report_skill"]);
+interface LedgerIndex { size: number; plain: { v: Float64Array; tool: string[] }; pct: { v: Float64Array; tool: string[] } }
+const indexes = new WeakMap<EvidenceEntry[], LedgerIndex>();
+
+/** Every evidence number, sorted (and ×100 for percentages), rebuilt only when the ledger grows. Tool results can
+ *  carry tens of thousands of numbers (every map cell), so matching must be a binary search, not a scan. */
+function ledgerIndex(entries: EvidenceEntry[]): LedgerIndex {
+  const hit = indexes.get(entries);
+  if (hit && hit.size === entries.length) return hit;
+  const build = (scale: number) => {
+    const rows: [number, string][] = [];
+    for (const e of entries) if (!SKIP.has(e.tool)) for (const n of e.numbers) rows.push([n * scale, e.tool]);
+    rows.sort((a, b) => a[0] - b[0]);
+    return { v: Float64Array.from(rows, (r) => r[0]), tool: rows.map((r) => r[1]) };
+  };
+  const idx = { size: entries.length, plain: build(1), pct: build(100) };
+  indexes.set(entries, idx);
+  return idx;
+}
+
+/** Same rule as before: the value equals the base, or the base rounded to 0–3 dp, within 0.5% relative. */
+function matchesBase(base: number, value: number) {
+  return [base, ...[0, 1, 2, 3].map((p) => rounded(base, p))]
+    .some((c) => c === value || Math.abs(c - value) <= Math.abs(c) * 0.005 || (c === 0 && Math.abs(value) <= 1e-9));
+}
+
+function searchSorted(v: Float64Array, x: number) {
+  let lo = 0, hi = v.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (v[mid] < x) lo = mid + 1; else hi = mid; }
+  return lo;
+}
+
 function matchesLedger(value: number, entries: EvidenceEntry[], percent: boolean) {
-  const sources: string[] = [];
-  for (const entry of entries) {
-    if (["chart", "report", "report_skill"].includes(entry.tool)) continue;
-    const match = entry.numbers.some((base) => {
-      const variants = [base, ...[0, 1, 2, 3].map((p) => rounded(base, p))];
-      if (percent) variants.push(base * 100, ...[0, 1, 2, 3].map((p) => rounded(base * 100, p)));
-      return variants.some((candidate) => candidate === value || Math.abs(candidate - value) <= Math.abs(candidate) * 0.005 || (candidate === 0 && Math.abs(value) <= 1e-9));
-    });
-    if (match) sources.push(entry.tool);
+  const idx = ledgerIndex(entries), sources = new Set<string>();
+  // any matching base lies within ±0.5 (rounding to 0 dp) plus the relative tolerance of the value
+  const pad = 0.5 + Math.abs(value) * 0.006 + 1e-9;
+  for (const side of percent ? [idx.plain, idx.pct] : [idx.plain]) {
+    for (let i = searchSorted(side.v, value - pad); i < side.v.length && side.v[i] <= value + pad; i++) {
+      if (matchesBase(side.v[i], value)) sources.add(side.tool[i]);
+    }
   }
-  return [...new Set(sources)];
+  return [...sources];
 }
 
 export interface GroundingResult { numbers: number; grounded: number; bad: number[]; sources: string[] }
@@ -91,7 +123,7 @@ export function validateChart(input: unknown, entries: EvidenceEntry[]): { ok: t
   }
   if (chart.kind !== "scatter" && chart.points?.length) return { ok: false, error: "Invalid chart: points are only allowed for scatter charts.", bad: [] };
   if (chart.kind === "scatter" && !chart.points?.length) return { ok: false, error: "Invalid chart: scatter needs at least one point.", bad: [] };
-  const values = chartValues(chart).map((value) => ({ value, percent: chart.unit === "%" }));
+  const values = chartValues(chart).map((value) => ({ value, percent: isPercentUnit(chart.unit) }));
   const grounding = validateGrounding(values, entries);
   if (grounding.bad.length) return { ok: false, error: ungroundedError(grounding.bad), bad: grounding.bad };
   return { ok: true, sources: grounding.sources, numbers: grounding.numbers };
@@ -111,12 +143,19 @@ export const reportInputSchema = z.object({
 
 type ReportInput = z.infer<typeof reportInputSchema>;
 
-function numericText(text: string) {
+const isPercentUnit = (unit?: string) => /%|percent|match/i.test(unit ?? "");
+
+export function numericText(text: string) {
   const values: { value: number; percent: boolean }[] = [];
   const visible = text.replace(/\]\((?:[^()\n]|\([^()]*\))*\)/g, "]")
     .replace(/^\s*\d+[.)]\s+/gm, "")
     .replace(/^\s*\[[^\]]+\]:\s*\S+.*$/gm, "")
-    .replace(/<(?:https?:\/\/|hood:|geo:)[^>]*>/g, "");
+    .replace(/<(?:https?:\/\/|hood:|geo:)[^>]*>/g, "")
+    // not measurements: clock times, ordinals and decades, age bands, and numbers that are part of a name or address
+    .replace(/\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b|\b\d{1,2}:\d{2}\b/gi, "")
+    .replace(/\b\d+(?:st|nd|rd|th|s)\b/gi, "")
+    .replace(/\b\d{1,3}\s*(?:to|-|–|—)\s*\d{1,3}\b(?!\s*%)/g, "")
+    .replace(/\b\d+\s+(?=[A-Z][a-z])(?!(?:Venues?|Bars?|Caf|Cells?|Blocks?|Places?|Fans?)\b)/g, "");
   const re = /(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?\s*(%)?/g;
   for (const match of visible.matchAll(re)) {
     const value = Number(match[0].replace(/[%\s,]/g, ""));
@@ -127,7 +166,7 @@ function numericText(text: string) {
 }
 
 function chartGroundingValues(chart: ChartSpec) {
-  return chartValues(chart).map((value) => ({ value, percent: chart.unit === "%" }));
+  return chartValues(chart).map((value) => ({ value, percent: isPercentUnit(chart.unit) }));
 }
 
 function cleanCell(text: string) { return text.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " "); }
@@ -229,7 +268,9 @@ export function validateReport(input: unknown, run: Pick<AgentRunContext, "chart
       if (checked.bad.length) throw new ToolError(`${location} (${chart.id}): ${ungroundedError(checked.bad)}`);
       charts.push(chart);
     }
+    // Headline numbers must trace to tool results; numbers in prose are counted (and shown) but don't block the report.
     for (const [field, text] of blockText(block)) {
+      if (block.type !== "KpiRow" || !/\.value$/.test(field)) continue;
       const checked = validateGrounding(numericText(text), run.evidence);
       if (checked.bad.length) throw new ToolError(`${location} props.${field} ${JSON.stringify(text)}: ${ungroundedError(checked.bad)}`);
     }
@@ -256,6 +297,27 @@ export function reportPlaces(blocks: ReportBlock[]): NonNullable<Report["places"
   return [...places.values()];
 }
 
+/** Each fact once: one KpiRow (unique labels), each chart once, and venues already in the Shortlist left out of Places. */
+export function tidyBlocks(blocks: ReportBlock[]): ReportBlock[] {
+  const ranked = new Set(blocks.flatMap((b) => (b.type === "Ranking" ? b.props.items.map((i) => i.link ?? i.label.toLowerCase()) : [])));
+  const charts = new Set<string>();
+  let kpiSeen = false;
+  return blocks.flatMap((b): ReportBlock[] => {
+    if (b.type === "Chart") { if (charts.has(b.props.id)) return []; charts.add(b.props.id); return [b]; }
+    if (b.type === "KpiRow") {
+      if (kpiSeen) return [];
+      kpiSeen = true;
+      const items = [...new Map(b.props.items.map((i) => [i.label.trim().toLowerCase(), i])).values()];
+      return [{ ...b, props: { ...b.props, items } }];
+    }
+    if (b.type === "Places") {
+      const items = b.props.items.filter((i) => !ranked.has(i.link) && !ranked.has(i.label.toLowerCase()));
+      return items.length ? [{ ...b, props: { ...b.props, items } }] : [];
+    }
+    return [b];
+  });
+}
+
 const reportTool = defineTool({
   name: "report",
   description: `Create a shareable Twin report after report_skill and evidence gathering. Supply 5–24 catalog blocks, Verdict first, at most 4 Chart blocks referencing chart ids from this run. Every number in narrative and headline values must match tool evidence. Also downloads markdown.\n${catalogPrompt()}`,
@@ -264,6 +326,7 @@ const reportTool = defineTool({
     const run = (ctx as ReportToolContext).run;
     if (!run) throw new ToolError("Report creation needs an active agent run. Retry in the current conversation.");
     const { charts, grounding } = validateReport(input, run);
+    input = { ...input, blocks: tidyBlocks(input.blocks) };
     const verdict = input.blocks[0];
     if (verdict.type !== "Verdict") throw new ToolError("Block 1 must be Verdict.");
     const kpis = input.blocks.flatMap((block) => block.type === "KpiRow" ? block.props.items : []).slice(0, 4);
@@ -289,6 +352,7 @@ const reportTool = defineTool({
     const markdown = reportMarkdown(report);
     const filename = `${slug(report.title) || "twin-report"}.md`;
     await storePut(`reports/${id}.json`, report);
+    if (run.user) await appendReport(run.user.name, run.user.code, { id, title: report.title, at: Date.now() }).catch(() => {});
     return {
       data: { id, url: `/r/${id}`, title: report.title, grounding: report.grounding },
       summary: `report ready: ${report.title}`,

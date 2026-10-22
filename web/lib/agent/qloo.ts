@@ -2,6 +2,7 @@
 // The API key comes from env QLOO_API_KEY (web/.env.local). It is never logged or returned.
 import { createHash } from "node:crypto";
 import { storeGet, storePut } from "./store";
+import { geocode } from "./net";
 
 export interface QlooStats { live: number; cached: number }
 export const newStats = (): QlooStats => ({ live: 0, cached: 0 });
@@ -13,6 +14,11 @@ const TTL_MS = 7 * 24 * 3600 * 1000;
 
 export class QlooError extends Error {}
 
+// Qloo's key allows ~5 requests/s; a report fires dozens. Pace live calls (cache hits skip this) and retry one 429.
+const GAP_MS = 250;
+let nextSlot = 0;
+const slot = () => { const now = Date.now(), at = Math.max(now, nextSlot); nextSlot = at + GAP_MS; return new Promise((r) => setTimeout(r, at - now)); };
+
 export async function qlooGet<T = unknown>(path: string, params: Record<string, string | number>, stats?: QlooStats, timeoutMs = 25000): Promise<T> {
   const base = process.env.QLOO_BASE_URL, key = process.env.QLOO_API_KEY;
   if (!base || !key) throw new QlooError("Qloo is not configured (set QLOO_API_KEY and QLOO_BASE_URL in web/.env.local)");
@@ -23,12 +29,18 @@ export async function qlooGet<T = unknown>(path: string, params: Record<string, 
   const raw = await storeGet<{ t: number; d: T }>(`qloo/${h}.json`);
   if (raw && Date.now() - raw.t < TTL_MS) { mem.set(h, raw.d); if (stats) stats.cached++; return raw.d; }
   if (stats) stats.live++;
-  let res: Response;
-  try {
-    res = await fetch(url, { headers: { "X-Api-Key": key, Accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
-  } catch (e) {
-    throw new QlooError(`Qloo request failed: ${e instanceof Error ? e.name === "TimeoutError" ? "timeout" : e.message : "network error"}`);
+  let res: Response | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await slot();
+    try {
+      res = await fetch(url, { headers: { "X-Api-Key": key, Accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+    } catch (e) {
+      throw new QlooError(`Qloo request failed: ${e instanceof Error ? e.name === "TimeoutError" ? "timeout" : e.message : "network error"}`);
+    }
+    if (res.status !== 429) break;
+    await new Promise((r) => setTimeout(r, 1200));
   }
+  if (!res) throw new QlooError("Qloo request failed");
   if (!res.ok) throw new QlooError(`Qloo HTTP ${res.status} on ${path}`);
   const data = (await res.json()) as T;
   mem.set(h, data);
@@ -57,20 +69,31 @@ export async function qlooResolveTag(text: string, stats?: QlooStats): Promise<Q
 export interface Scene { tags: QlooTag[]; audiences: string[]; artists: string[]; brands: string[] }
 /** What a place over-indexes on, straight from Qloo (location-signal insights). Each facet is best-effort. */
 export async function qlooScene(place: string, stats?: QlooStats, take = 12): Promise<Scene> {
-  const sig = { "signal.location.query": place };
-  const safe = async <T,>(p: Promise<T>, d: T) => { try { return await p; } catch { return d; } };
-  const [tags, aud, art, brand] = await Promise.all([
-    safe(qlooGet<{ results?: { tags?: { tag_id: string; name: string; query?: { affinity?: number } }[] } }>("/v2/insights", { "filter.type": "urn:tag", "filter.tag.types": "urn:tag:genre:place", take, ...sig }, stats), {}),
-    safe(qlooGet<{ results?: { entities?: { name: string }[] } }>("/v2/insights", { "filter.type": "urn:audience", take: 8, ...sig }, stats), {}),
-    safe(qlooGet<{ results?: { entities?: { name: string }[] } }>("/v2/insights", { "filter.type": "urn:entity:artist", take: 8, ...sig }, stats), {}),
-    safe(qlooGet<{ results?: { entities?: { name: string }[] } }>("/v2/insights", { "filter.type": "urn:entity:brand", take: 8, ...sig }, stats), {}),
-  ]);
-  return {
-    tags: ((tags as { results?: { tags?: { tag_id: string; name: string; query?: { affinity?: number } }[] } }).results?.tags ?? []).map((t) => ({ id: t.tag_id, name: t.name, affinity: t.query?.affinity })),
-    audiences: ((aud as { results?: { entities?: { name: string }[] } }).results?.entities ?? []).map((e) => e.name),
-    artists: ((art as { results?: { entities?: { name: string }[] } }).results?.entities ?? []).map((e) => e.name),
-    brands: ((brand as { results?: { entities?: { name: string }[] } }).results?.entities ?? []).map((e) => e.name),
+  const once = async (sig: Record<string, string | number>) => {
+    const errors: string[] = [];
+    const safe = async <T,>(p: Promise<T>, d: T) => { try { return await p; } catch (err) { errors.push(err instanceof Error ? err.message : String(err)); return d; } };
+    const [tags, aud, art, brand] = await Promise.all([
+      safe(qlooGet<{ results?: { tags?: { tag_id: string; name: string; query?: { affinity?: number } }[] } }>("/v2/insights", { "filter.type": "urn:tag", "filter.tag.types": "urn:tag:genre:place", take, ...sig }, stats), {}),
+      safe(qlooGet<{ results?: { entities?: { name: string }[] } }>("/v2/insights", { "filter.type": "urn:audience", take: 8, ...sig }, stats), {}),
+      safe(qlooGet<{ results?: { entities?: { name: string }[] } }>("/v2/insights", { "filter.type": "urn:entity:artist", take: 8, ...sig }, stats), {}),
+      safe(qlooGet<{ results?: { entities?: { name: string }[] } }>("/v2/insights", { "filter.type": "urn:entity:brand", take: 8, ...sig }, stats), {}),
+    ]);
+    const scene: Scene = {
+      tags: ((tags as { results?: { tags?: { tag_id: string; name: string; query?: { affinity?: number } }[] } }).results?.tags ?? []).map((t) => ({ id: t.tag_id, name: t.name, affinity: t.query?.affinity })),
+      audiences: ((aud as { results?: { entities?: { name: string }[] } }).results?.entities ?? []).map((x) => x.name),
+      artists: ((art as { results?: { entities?: { name: string }[] } }).results?.entities ?? []).map((x) => x.name),
+      brands: ((brand as { results?: { entities?: { name: string }[] } }).results?.entities ?? []).map((x) => x.name),
+    };
+    return { scene, errors, empty: !scene.tags.length && !scene.artists.length && !scene.brands.length };
   };
+  let r = await once({ "signal.location.query": place });
+  // Qloo can't resolve every neighbourhood name; the same question by coordinates usually works.
+  if (r.empty) {
+    const g = (await geocode(place).catch(() => []))[0];
+    if (g) r = await once({ "signal.location": `POINT(${g.lon} ${g.lat})`, "signal.location.radius": 1500 });
+  }
+  if (r.empty && r.errors.length) throw new QlooError(r.errors[0]);
+  return r.scene;
 }
 
 /** Qloo's own shared-characteristics list for two sets of entities (/v2/insights/compare). */

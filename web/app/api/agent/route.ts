@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
-import { type ModelMessage, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type ToolSet } from "ai";
+import { NextResponse, after } from "next/server";
+import { type ModelMessage, consumeStream, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type ToolSet } from "ai";
 import { loadServerDataSet } from "@/lib/agent/server-data";
 import { OPENROUTER_MODELS, aiTools, fallbackOptions, openrouter, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
+import { repairToolCall } from "@/lib/agent/repair";
 import type { AgentRunContext } from "@/lib/agent/report";
 import type { AgentContext } from "@/lib/agent/types";
 
@@ -50,7 +51,8 @@ export async function POST(req: Request) {
   const meta: RunMeta = { qlooLive: 0, qlooCached: 0 };
   const question = [...messages].reverse().find((m) => m.role === "user")?.parts.flatMap((p) => p.type === "text" ? [p.text] : []).join("\n").trim();
   const reportRun = /\b(report|plan|analysis|comparison|compare|deep dive)\b/i.test(question ?? "");
-  const run: AgentRunContext = { evidence: [], charts: new Map(), nextChartId: 1, question, model: () => meta.model, reportMode: reportRun };
+  const userName = req.headers.get("x-twin-user")?.trim().toLowerCase(), userCode = req.headers.get("x-twin-code")?.trim();
+  const run: AgentRunContext = { user: userName && userCode ? { name: userName, code: userCode } : undefined, evidence: [], charts: new Map(), nextChartId: 1, question, model: () => meta.model, reportMode: reportRun };
   const t0 = Date.now();
 
   const stream = createUIMessageStream<TwinUIMessage>({
@@ -78,6 +80,7 @@ export async function POST(req: Request) {
           prepareStep: ({ stepNumber }) => (stepNumber >= (run.reportMode ? 15 : 7) ? { toolChoice: "none" as const } : undefined),
           timeout: { firstChunkMs: 30_000, chunkMs: 45_000, stepMs: 100_000 },
           temperature: 0.4,
+          repairToolCall,
           providerOptions: fallbackOptions(order[i]),
           onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
         });
@@ -86,7 +89,7 @@ export async function POST(req: Request) {
           stream: result.stream,
           sendStart: i === 0,
           messageMetadata: ({ part }) => (part.type === "finish" ? { ...meta, ms: Date.now() - t0 } : undefined),
-          onError: (e) => (e instanceof Error ? e.message.replace(/sk-[A-Za-z0-9_-]+/g, "[key]").slice(0, 300) : "agent failed"),
+          onError: (e) => (e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e) ?? "agent failed").replace(/sk-[A-Za-z0-9_-]+/g, "[key]").slice(0, 300),
         });
         const reader = parts.getReader();
         for (let r = await reader.read(); !r.done; r = await reader.read()) {
@@ -101,5 +104,7 @@ export async function POST(req: Request) {
     },
   });
 
-  return createUIMessageStreamResponse({ stream });
+  // The run is consumed server-side to the end even if the browser leaves (reports keep going in the background and
+  // land in the user's history); a heartbeat keeps proxies from dropping long, quiet thinking steps.
+  return createUIMessageStreamResponse({ stream, keepAliveMs: 15_000, consumeSseStream: ({ stream: copy }) => after(consumeStream({ stream: copy })) });
 }
