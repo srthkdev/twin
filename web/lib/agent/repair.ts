@@ -78,9 +78,30 @@ function fixTool(name: string, args: unknown): unknown {
   return a;
 }
 
-export const repairToolCall: ToolCallRepairFunction<ToolSet> = async ({ toolCall }) => {
+type Prop = { type?: string | string[]; minimum?: number; maximum?: number; maxItems?: number };
+/** Numbers past a schema's bounds ("take": 10 when the max is 8) are clamped, long arrays trimmed: the intent is clear. */
+function clamp(args: unknown, schema: { properties?: Record<string, Prop> }): unknown {
+  if (!args || typeof args !== "object" || Array.isArray(args) || !schema.properties) return args;
+  const out = { ...(args as Obj) };
+  for (const [k, p] of Object.entries(schema.properties)) {
+    const v = out[k], types = ([] as string[]).concat(p.type ?? []);
+    if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v)) && (types.includes("number") || types.includes("integer"))) out[k] = Number(v);
+    if (typeof out[k] === "number") {
+      let n = out[k] as number;
+      if (types.includes("integer")) n = Math.round(n);
+      if (p.maximum != null) n = Math.min(n, p.maximum);
+      if (p.minimum != null) n = Math.max(n, p.minimum);
+      out[k] = n;
+    }
+    if (Array.isArray(out[k]) && p.maxItems != null) out[k] = (out[k] as unknown[]).slice(0, p.maxItems);
+  }
+  return out;
+}
+
+export const repairToolCall: ToolCallRepairFunction<ToolSet> = async ({ toolCall, inputSchema }) => {
   try {
-    const fixed = JSON.stringify(fixTool(toolCall.toolName, unwrap(JSON.parse(toolCall.input))));
+    const schema = await Promise.resolve(inputSchema({ toolName: toolCall.toolName })).catch(() => ({}));
+    const fixed = JSON.stringify(clamp(fixTool(toolCall.toolName, unwrap(JSON.parse(toolCall.input))), schema as { properties?: Record<string, Prop> }));
     return fixed === toolCall.input ? null : { ...toolCall, input: fixed };
   } catch { return null; }
 };
