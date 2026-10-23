@@ -19,16 +19,17 @@ const GAP_MS = 160; // Qloo allows 10 requests/s; leave headroom for parallel in
 let nextSlot = 0;
 const slot = () => { const now = Date.now(), at = Math.max(now, nextSlot); nextSlot = at + GAP_MS; return new Promise((r) => setTimeout(r, at - now)); };
 
-export async function qlooGet<T = unknown>(path: string, params: Record<string, string | number>, stats?: QlooStats, timeoutMs = 25000): Promise<T> {
+/** `keep: false` skips the shared cache for bulky answers the caller condenses and caches itself (heatmaps). */
+export async function qlooGet<T = unknown>(path: string, params: Record<string, string | number>, stats?: QlooStats, timeoutMs = 25000, keep = true): Promise<T> {
   const base = process.env.QLOO_BASE_URL, key = process.env.QLOO_API_KEY;
   if (!base || !key) throw new QlooError("Qloo is not configured (set QLOO_API_KEY and QLOO_BASE_URL in web/.env.local)");
   const qs = new URLSearchParams(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, String(v)])).toString();
   const url = `${base.replace(/\/$/, "")}${path}?${qs}`;
   const h = createHash("sha1").update(url).digest("hex");
   if (mem.has(h)) { if (stats) stats.cached++; return mem.get(h) as T; }
-  const raw = await storeGet<{ t: number; d: T }>(`qloo/${h}.json`);
+  const raw = keep ? await storeGet<{ t: number; d: T }>(`qloo/${h}.json`) : null;
   if (raw && Date.now() - raw.t < TTL_MS) { mem.set(h, raw.d); if (stats) stats.cached++; return raw.d; }
-  try { return await live<T>(url, key, h, stats, timeoutMs); }
+  try { return await live<T>(url, key, h, stats, timeoutMs, keep); }
   catch (e) {
     // An older answer beats no answer when Qloo is down or rate-limited.
     if (raw) { if (stats) stats.cached++; return raw.d; }
@@ -36,7 +37,7 @@ export async function qlooGet<T = unknown>(path: string, params: Record<string, 
   }
 }
 
-async function live<T>(url: string, key: string, h: string, stats: QlooStats | undefined, timeoutMs: number): Promise<T> {
+async function live<T>(url: string, key: string, h: string, stats: QlooStats | undefined, timeoutMs: number, keep: boolean): Promise<T> {
   const path = new URL(url).pathname;
   if (stats) stats.live++;
   let res: Response | undefined;
@@ -53,8 +54,7 @@ async function live<T>(url: string, key: string, h: string, stats: QlooStats | u
   if (!res) throw new QlooError("Qloo request failed");
   if (!res.ok) throw new QlooError(`Qloo HTTP ${res.status} on ${path}`);
   const data = (await res.json()) as T;
-  mem.set(h, data);
-  await storePut(`qloo/${h}.json`, { t: Date.now(), d: data });
+  if (keep) { mem.set(h, data); await storePut(`qloo/${h}.json`, { t: Date.now(), d: data }); }
   return data;
 }
 

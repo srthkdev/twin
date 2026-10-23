@@ -70,7 +70,7 @@ import { BASKET_KEYS, loadCellsFile, loadDataSet } from "./node-data";
 import { QlooError, fmtHours, newStats, qlooGet, qlooResolveTag, type QlooStats } from "./qloo";
 
 import { TOOLS_V2, liveWhere } from "./tools-v2";
-import { CORE_BASKET, allCities, findCityAny, loadCore } from "./city-live";
+import { CORE_BASKET, allCities, findCityAny, loadCore, type CityMeta } from "./city-live";
 import { geocode } from "./net";
 import { ToolError, defineTool, type ToolContext, type ToolDef, type ToolOutput } from "./tool-kit";
 import type { AgentRunContext } from "./report";
@@ -153,13 +153,20 @@ function twinRows(ds: DataSet, vec: ArrayLike<number>, matches: TwinMatch[], cit
 // ───────────────────────────── Data tools ─────────────────────────────
 const list_cities = defineTool({
   name: "list_cities",
-  description: "List every fingerprinted city (6 built-in + any added live) with neighbourhood ids/names. Call this first if you are unsure what exists.",
-  schema: z.object({}),
-  async run(_a, { ds }) {
-    const data = await Promise.all((await allCities()).map(async (c) => ({
-      id: c.id, name: c.name, country: c.country, source: c.source,
-      hoods: c.source === "static" ? ds.hoods.filter((h) => h.city === c.id).map((h) => ({ id: h.id, name: h.name })) : ((await loadCore(c.id))?.hoods ?? []).map((h) => ({ id: h.id, name: h.name })),
-    })));
+  description: "List every fingerprinted city (6 built-in + any added live). Without `city`: built-in cities with their neighbourhood ids, live ones with a count. With `city`: that city's neighbourhoods (id + name).",
+  schema: z.object({ city: z.string().optional().describe("a city id or name, for its full neighbourhood list") }),
+  async run({ city }, { ds }) {
+    const hoodsOf = async (c: CityMeta) => (c.source === "static" ? ds.hoods.filter((h) => h.city === c.id).map((h) => ({ id: h.id, name: h.name })) : ((await loadCore(c.id))?.hoods ?? []).map((h) => ({ id: h.id, name: h.name })));
+    if (city) {
+      const c = await findCityAny(city);
+      if (!c) throw new ToolError(`"${city}" is not fingerprinted yet; add_city can build it.`);
+      const hoods = await hoodsOf(c);
+      return { data: { id: c.id, name: c.name, country: c.country, source: c.source, hoods }, summary: `${c.name}: ${hoods.length} neighbourhoods` };
+    }
+    // Compact so 25+ cities fit in one tool result: ids only for built-in cities, counts for live ones.
+    const data = await Promise.all((await allCities()).map(async (c) => (c.source === "static"
+      ? { id: c.id, name: c.name, source: c.source, hood_ids: (await hoodsOf(c)).map((h) => h.id) }
+      : { id: c.id, name: c.name, country: c.country, source: c.source, neighbourhoods: c.hoodCount })));
     return { data, summary: `${data.length} cities (${data.filter((c) => c.source === "live").length} added live)` };
   },
 });

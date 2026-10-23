@@ -1,11 +1,12 @@
 // Live city pipeline (TypeScript port of pipeline/lift.py + hoods.py on the 40-item core basket) and the city registry
 // (static + live). Nominatim geocode -> Qloo heatmaps -> density correction -> Overpass neighbourhoods -> hood vectors.
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import coreBasketJson from "./data/core-basket.json";
 import { cosine, geohash, hav, slug } from "./geo";
 import { cachePath, geocode, overpass, readJson, webRoot, writeJson, type GeoHit } from "./net";
 import { QlooError, qlooGet, type QlooStats } from "./qloo";
-import { storeList } from "./store";
+import { storeGet, storeList, storePut } from "./store";
 import { ToolError, r3 } from "./tool-kit";
 import type { AgentCity } from "./types";
 
@@ -91,10 +92,14 @@ interface RawHeat { results?: { heatmap?: { location: { geohash: string; latitud
 
 /** One Qloo heatmap normalised to geohash-6 (finer cells averaged up). Retries transient failures. */
 export async function fetchHeat(locationQuery: string, key: string, val: string, stats?: QlooStats): Promise<Map<string, HeatCell>> {
+  // The full answer is ~10x the geohash-6 cells we use, so only the condensed cells are cached.
+  const ck = `heat/${createHash("sha1").update(`${locationQuery}|${key}|${val}`).digest("hex")}.json`;
+  const hit = await storeGet<{ t: number; d: [string, number, number, number, number][] }>(ck);
+  if (hit && Date.now() - hit.t < HEAT_TTL_MS) { if (stats) stats.cached++; return new Map(hit.d.map(([g, lat, lon, aff, pop]) => [g, { lat, lon, aff, pop }])); }
   let last: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const r = await qlooGet<RawHeat>("/v2/insights", { "filter.type": "urn:heatmap", "filter.location.query": locationQuery, [key]: val }, stats, 60000);
+      const r = await qlooGet<RawHeat>("/v2/insights", { "filter.type": "urn:heatmap", "filter.location.query": locationQuery, [key]: val }, stats, 60000, false);
       const acc = new Map<string, [number, number, number, number, number]>();
       for (const x of r.results?.heatmap ?? []) {
         const g = x.location.geohash.slice(0, 6);
@@ -102,7 +107,9 @@ export async function fetchHeat(locationQuery: string, key: string, val: string,
         a[0] += x.location.latitude; a[1] += x.location.longitude; a[2] += x.query.affinity; a[3] += x.query.popularity ?? 0; a[4]++;
         acc.set(g, a);
       }
-      return new Map([...acc].map(([g, a]) => [g, { lat: a[0] / a[4], lon: a[1] / a[4], aff: a[2] / a[4], pop: a[3] / a[4] }]));
+      const d = [...acc].map(([g, a]) => [g, r5(a[0] / a[4]), r5(a[1] / a[4]), r5(a[2] / a[4]), r5(a[3] / a[4])] as [string, number, number, number, number]);
+      await storePut(ck, { t: Date.now(), d });
+      return new Map(d.map(([g, lat, lon, aff, pop]) => [g, { lat, lon, aff, pop }]));
     } catch (e) {
       last = e;
       const m = e instanceof Error ? e.message : "";
@@ -110,8 +117,11 @@ export async function fetchHeat(locationQuery: string, key: string, val: string,
       await new Promise((r) => setTimeout(r, 1500 * (attempt + 1) ** 2));
     }
   }
+  if (hit) { if (stats) stats.cached++; return new Map(hit.d.map(([g, lat, lon, aff, pop]) => [g, { lat, lon, aff, pop }])); }
   throw last instanceof Error ? last : new QlooError("heatmap failed");
 }
+const HEAT_TTL_MS = 30 * 24 * 3600 * 1000;
+const r5 = (x: number) => Math.round(x * 1e5) / 1e5;
 
 export function midranks(vals: ArrayLike<number>): Float64Array {
   const n = vals.length, order = Array.from({ length: n }, (_, i) => i).sort((a, b) => vals[a] - vals[b]), r = new Float64Array(n);
@@ -209,21 +219,14 @@ async function buildCity(name: string, stats: QlooStats | undefined, emit: Progr
     for (;;) {
       const it = queue.shift();
       if (!it) return;
-      const cached = await readJson<[string, number, number, number, number][]>(join(liveDir(id), "raw", `${it.id}.json`));
+      // fetchHeat goes through the Qloo cache, so a retried build re-reads finished heatmaps instead of calling again
       let h: Map<string, HeatCell>;
-      if (cached) h = new Map(cached.map(([k, lat, lon, aff, pop]) => [k, { lat, lon, aff, pop }]));
-      else {
-        try {
-          h = await fetchHeat(qlooQuery, it.key, it.val, stats);
-          await writeJson(join(liveDir(id), "raw", `${it.id}.json`), [...h].map(([k, c]) => [k, c.lat, c.lon, c.aff, c.pop]));
-        } catch { failed++; h = new Map(); }
-      }
+      try { h = await fetchHeat(qlooQuery, it.key, it.val, stats); } catch { failed++; h = new Map(); }
       heats.set(it.id, h);
       done++;
       emit({ stage: "heatmaps", done, total: items.length, note: `${it.label}: ${h.size} cells` });
     }
   }));
-  await writeJson(join(liveDir(id), "raw", `${probe.id}.json`), [...ph].map(([k, c]) => [k, c.lat, c.lon, c.aff, c.pop]));
   if (failed > 10) throw new ToolError(`Qloo heatmap requests kept failing for ${g.name} (${failed} of ${items.length}). Try again later.`);
 
   // 2. correction (same as pipeline/lift.py)
@@ -310,7 +313,7 @@ async function findHoods(cityId: string, cityNames: string[], osm: Promise<Cand[
     if (!key || seen.has(key)) continue;
     if (hoods.some((h) => hav(h.lat, h.lon, c.lat, c.lon) < 600)) continue;
     const hv = hoodVec(cells, c.lat, c.lon);
-    if (!hv || hv.n < 2) continue;
+    if (!hv || hv.n < (cells.length < 300 ? 1 : 2)) continue; // sparse cities (Tokyo) have one cell per neighbourhood
     seen.add(key);
     hoods.push({ id: `${cityId}-${slug(c.name)}`, name: c.name, lon: Math.round(c.lon * 1e4) / 1e4, lat: Math.round(c.lat * 1e4) / 1e4, v: hv.v, cells: hv.n });
   }

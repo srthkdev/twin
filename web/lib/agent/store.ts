@@ -4,6 +4,7 @@
 // A small in-memory layer sits in front of all of them.
 import { get, list, put } from "@vercel/blob";
 import { Redis } from "@upstash/redis";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
@@ -13,6 +14,10 @@ const redisToken = () => process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_RE
 let client: Redis | null = null;
 const redis = () => (client ??= redisUrl() && redisToken() ? new Redis({ url: redisUrl()!, token: redisToken()!, retry: { retries: 1 } }) : null);
 const blobOn = () => !redis() && !!process.env.BLOB_READ_WRITE_TOKEN;
+// Redis is billed by bytes held; Qloo heatmaps are bulky JSON that shrinks ~10x, so larger values are stored gzipped.
+const GZ = "gz:";
+const pack = (body: string) => (body.length > 4096 ? GZ + gzipSync(body).toString("base64") : body);
+const unpack = <T,>(v: unknown): T | null => (typeof v === "string" && v.startsWith(GZ) ? JSON.parse(gunzipSync(Buffer.from(v.slice(GZ.length), "base64")).toString("utf8")) as T : (v as T | null));
 const diskRoot = () => join(process.env.TWIN_WEB_ROOT ?? process.cwd(), ".cache", "twin");
 
 /** Blob calls must never hold up an answer: a slow read counts as a miss, a slow write is dropped. */
@@ -31,7 +36,7 @@ export async function storeGet<T>(key: string, o: { fresh?: boolean } = {}): Pro
   let v: T | null = null;
   try {
     const r = redis();
-    if (r) v = await within(r.get<T>(PREFIX + key), 8000);
+    if (r) v = unpack<T>(await within(r.get(PREFIX + key), 8000));
     else if (blobOn()) {
       v = await within((async () => {
         const r = await get(PREFIX + key, { access: "public", useCache: !o.fresh });
@@ -50,7 +55,7 @@ export async function storePut(key: string, data: unknown): Promise<void> {
   const body = JSON.stringify(data);
   try {
     const r = redis();
-    if (r) await within(r.set(PREFIX + key, body), 10000);
+    if (r) await within(r.set(PREFIX + key, pack(body)), 15000);
     else if (blobOn()) {
       await within(put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", cacheControlMaxAge: 60 }), 10000);
     } else {
@@ -66,7 +71,7 @@ export async function storeCreate(key: string, data: unknown): Promise<boolean> 
   const body = JSON.stringify(data);
   try {
     const r = redis();
-    if (r) { if ((await within(r.set(PREFIX + key, body, { nx: true }), 10000)) !== "OK") return false; }
+    if (r) { if ((await within(r.set(PREFIX + key, pack(body), { nx: true }), 10000)) !== "OK") return false; }
     else if (blobOn()) await within(put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: false, contentType: "application/json" }), 10000);
     else { const f = join(diskRoot(), key); await mkdir(dirname(f), { recursive: true }); await writeFile(f, body, { flag: "wx" }); }
   } catch { return false; }
