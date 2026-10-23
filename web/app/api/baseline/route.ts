@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { OPENROUTER_MODELS } from "@/lib/agent/ai";
+import { OPENROUTER_MODELS, cappedOn, isDailyCap, usableKeys, utcDay } from "@/lib/agent/ai";
 import { missedReportPlaces, runBaseline } from "@/lib/agent/baseline";
 import type { BaselineComparison } from "@/lib/agent/baseline";
 import type { Report } from "@/lib/agent/report-types";
@@ -41,14 +41,20 @@ export async function POST(req: Request) {
     const report = reportId ? await storeGet<Report>(`reports/${reportId}.json`) : null;
     if (reportId && !report) return NextResponse.json({ error: "report not found" }, { status: 404, headers });
     const userKey = req.headers.get("x-agent-key")?.trim();
-    const apiKey = userKey || process.env.OPENROUTER_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: "No OpenRouter key on the server — add your own in agent settings." }, { status: 400, headers });
+    const keys = userKey ? [userKey] : usableKeys();
+    if (!keys.length) return NextResponse.json({ error: "No OpenRouter key on the server — add your own in agent settings." }, { status: 400, headers });
     if (!userKey) {
       const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "local";
       if (!allow(ip)) return NextResponse.json({ error: "Demo limit reached (20 comparisons per 10 minutes). Add your own OpenRouter key in settings to keep going." }, { status: 429, headers: { ...headers, "Retry-After": "600" } });
     }
     const ds = await loadServerDataSet();
-    const baseline = await runBaseline(question, primary, apiKey!, ds, req.signal);
+    // next server key when one has used its free daily requests
+    let baseline: Awaited<ReturnType<typeof runBaseline>> | undefined, lastError: unknown;
+    for (const key of keys) {
+      try { baseline = await runBaseline(question, primary, key, ds, req.signal); break; }
+      catch (e) { lastError = e; if (!userKey && isDailyCap(String((e as Error)?.message ?? e))) cappedOn.set(key, utcDay()); else break; }
+    }
+    if (!baseline) throw lastError;
     const reportPlaces = report ? report.places ?? collectReportPlaces(reportBlocks(report)) : [];
     const result: BaselineComparison = { ...baseline, ...(reportId ? { reportId } : {}), reportPlaces, missedPlaces: missedReportPlaces(baseline.places, reportPlaces, ds) };
     return NextResponse.json(result, { headers });

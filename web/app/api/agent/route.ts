@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { type ModelMessage, consumeStream, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type ToolSet } from "ai";
 import { loadServerDataSet } from "@/lib/agent/server-data";
-import { OPENROUTER_MODELS, aiTools, fallbackOptions, openrouter, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
+import { OPENROUTER_MODELS, aiTools, cappedOn, fallbackOptions, isDailyCap, openrouter, usableKeys, utcDay, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
 import { repairToolCall } from "@/lib/agent/repair";
 import type { AgentRunContext } from "@/lib/agent/report";
@@ -34,8 +34,8 @@ export async function POST(req: Request) {
   if (!Array.isArray(body.messages) || !body.messages.length) return NextResponse.json({ error: "messages required" }, { status: 400 });
 
   const userKey = req.headers.get("x-agent-key")?.trim();
-  const apiKey = userKey || process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "No OpenRouter key on the server — add your own in agent settings." }, { status: 400 });
+  const keys = userKey ? [userKey] : usableKeys();
+  if (!keys.length) return NextResponse.json({ error: "No OpenRouter key on the server — add your own in agent settings." }, { status: 400 });
   if (!userKey) {
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "local";
     if (!allow(ip)) return NextResponse.json({ error: "Demo limit reached (20 questions per 10 minutes). Add your own OpenRouter key in settings to keep going." }, { status: 429 });
@@ -67,11 +67,15 @@ export async function POST(req: Request) {
       // its time limit hands the turn to the next model, which continues from every finished step and tool result;
       // the user sees one continuous answer.
       const order = [primary, ...OPENROUTER_MODELS.filter((m) => m !== primary)];
+      const attempts = keys.flatMap((key) => order.map((model) => ({ key, model })));
       const done: ModelMessage[] = [];
-      for (let i = 0; i < order.length; i++) {
-        const last = i === order.length - 1;
+      const open = (a: { key: string }) => cappedOn.get(a.key) !== utcDay();
+      for (let i = 0; i < attempts.length; i++) {
+        const { key, model } = attempts[i];
+        const later = () => attempts.slice(i + 1).some(open);
+        if (!open(attempts[i]) && later()) continue;
         const result = streamText({
-          model: openrouter(apiKey)(order[i]),
+          model: openrouter(key)(model),
           instructions: SYSTEM_PROMPT,
           messages: [...modelMessages, ...done],
           tools: aiTools(ds, writer, meta, run),
@@ -83,7 +87,7 @@ export async function POST(req: Request) {
           // a 429 means a daily or per-minute cap: retrying the same model only waits; the next model answers now
           maxRetries: 0,
           repairToolCall,
-          providerOptions: fallbackOptions(order[i]),
+          providerOptions: fallbackOptions(model),
           onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
         });
         let shown = false, retry = false;
@@ -96,12 +100,15 @@ export async function POST(req: Request) {
         const reader = parts.getReader();
         for (let r = await reader.read(); !r.done; r = await reader.read()) {
           const chunk = r.value;
-          if (chunk.type === "error" && !last) { retry = true; void reader.cancel(); break; }
+          if (chunk.type === "error") {
+            if (!userKey && isDailyCap(chunk.errorText)) cappedOn.set(key, utcDay());
+            if (later()) { retry = true; void reader.cancel(); break; }
+          }
           if (chunk.type !== "start" && chunk.type !== "start-step" && chunk.type !== "finish-step") shown = true;
           writer.write(chunk);
         }
         if (!retry) break;
-        console.warn(`[agent] ${order[i]} failed or stalled${shown ? " mid-answer" : ""}; continuing with ${order[i + 1]} from ${done.length} finished messages`);
+        console.warn(`[agent] ${model} (key ${keys.indexOf(key) + 1}) failed or stalled${shown ? " mid-answer" : ""}; continuing from ${done.length} finished messages`);
       }
     },
   });

@@ -10,6 +10,15 @@ import type { AgentRunContext } from "./report";
 // Inkling is free only inside agentic harnesses (403 over the API), so it is not a fallback. The daily free cap is per account.
 export const OPENROUTER_MODELS = ["minimax/minimax-m3.1-flash:free", "nvidia/nemotron-3-ultra-550b-a55b:free", "google/gemma-4-31b-it:free"];
 
+// Server keys (OPENROUTER_API_KEY, OPENROUTER_API_KEY_2, …). Free models are capped per account per UTC day, so a key
+// that hits its cap is skipped until midnight UTC and the next key answers.
+const serverKeys = () => Object.keys(process.env).filter((k) => /^OPENROUTER_API_KEY(_\d+)?$/.test(k)).sort().map((k) => process.env[k]!.trim()).filter(Boolean);
+export const cappedOn = new Map<string, number>();
+export const utcDay = () => Math.floor(Date.now() / 86_400_000);
+/** Server keys, the ones still under today's cap first (all of them if every one is capped). */
+export const usableKeys = () => { const keys = serverKeys(), open = keys.filter((k) => cappedOn.get(k) !== utcDay()); return open.length ? open : keys; };
+export const isDailyCap = (text: string) => /free-models-per-day|per-day|daily/i.test(text);
+
 export function openrouter(apiKey: string) {
   return createOpenAICompatible({
     name: "openrouter",
