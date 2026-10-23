@@ -20,10 +20,24 @@ function exploreHref(reportId: string, link?: MapLink) {
   return `/explore?${params.toString()}`;
 }
 
+/** Numbered map pins for a report: its ranked shortlist, or its linked places when it has none. Six at most. */
+export function reportPins(report: Report): { label: string; link: MapLink }[] {
+  const ranked: { label: string; link: MapLink }[] = [];
+  for (const b of reportBlocks(report)) if (b.type === "Ranking") for (const p of b.props.items) if (p.link) ranked.push({ label: p.label, link: p.link });
+  const list = ranked.length >= 2 ? ranked : [...ranked, ...reportPlaces(report)];
+  return [...new Map(list.map((p) => [p.link, { label: p.label, link: p.link }])).values()].slice(0, 6);
+}
+
 export function ReportView({ id, onLink }: { id: string; onLink?: (link: MapLink) => void }) {
   const { data: report, error, mutate, isValidating } = useJson<Report>(`/api/reports/${encodeURIComponent(id)}`);
   const reportRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (report) reportRef.current?.scrollIntoView({ block: "start" }); }, [report]);
+  useEffect(() => {
+    if (!report) return;
+    reportRef.current?.scrollIntoView({ block: "start" });
+    // the map shows what the report is about while it is open
+    window.dispatchEvent(new CustomEvent("twin:report-pins", { detail: reportPins(report) }));
+    return () => { window.dispatchEvent(new CustomEvent("twin:report-pins", { detail: [] })); };
+  }, [report]);
   if (error && !isValidating) return <div className="flex items-center justify-between gap-3 border-t border-line pt-4 text-[12px] text-destructive"><span>Couldn’t load this report.</span><button type="button" onClick={() => void mutate()} className="border border-line-strong px-2 py-1 text-muted-foreground hover:text-foreground">Retry</button></div>;
   if (!report) return <p role="status" className="border-t border-line pt-4 text-[11px] text-dim"><span className="cursor-block">loading report</span></p>;
   return <div ref={reportRef}><ReportDocument report={report} onLink={onLink} /></div>;

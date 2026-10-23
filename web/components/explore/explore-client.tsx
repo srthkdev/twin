@@ -1,6 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useSWR from "swr";
 import useSWRImmutable from "swr/immutable";
 import { useEventCallback, useEventListener } from "usehooks-ts";
 import { useSearchParams } from "next/navigation";
@@ -14,7 +15,7 @@ import { gradientCss } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import type { City, DataSet, Hood, OpportunityResult, TwinMatch } from "@/lib/types";
 import type { AgentAction } from "@/lib/agent/types";
-import type { BlockInfo, Mode, MapTwin } from "@/components/map/explore-map";
+import type { BlockInfo, Mode, MapTwin, MapPin } from "@/components/map/explore-map";
 import { MIX } from "@/components/map/mix";
 import { ModeToggle } from "./mode-toggle";
 import { SourcePanel, type SourcePin } from "./source-panel";
@@ -87,12 +88,33 @@ export function ExploreClient() {
   const [mobileTab, setMobileTab] = useState<MobileTab>(sp.get("q") || sp.get("tab") === "agent" || sp.get("view") === "report" ? "agent" : "from");
   const [opp, setOpp] = useState<OpportunityResult | null>(null);
 
+
+
   useEffect(() => { void runTour("explore", { delay: 1200 }); }, []);
   useEffect(() => { if (baseDs) syncLocation(locationRef.current); }, [baseDs]);
 
   // Live cities only have the 40 core dims, so any pair that includes one is compared on core vectors on both sides.
   const rawHood = baseDs?.hoods.find((h) => h.id === fromId) ?? baseDs?.hoods[0] ?? null;
   const sourceCityId = pin?.city ?? rawHood?.city ?? "";
+  const [pinLinks, setPinLinks] = useState<{ label: string; link: string }[]>([]);
+  // An open report numbers its places on the map (1 = its top pick).
+  useEventListener("twin:report-pins" as keyof WindowEventMap, (e) => setPinLinks((e as CustomEvent<{ label: string; link: string }[]>).detail ?? []));
+  const { data: pins = [] } = useSWR(baseDs && pinLinks.length ? ["pins", pinLinks.map((p) => p.link).join("|")] : null, async () => {
+    const cityOf = (id: string) => baseDs!.cities.find((c) => id.startsWith(c.id + "-"));
+    const out = await Promise.all(pinLinks.map(async ({ label, link }, i): Promise<MapPin | null> => {
+      if (link.startsWith("geo:")) { const [lat, lon] = link.slice(4).split(",").map(Number); return { n: i + 1, label, lat, lon }; }
+      const id = link.slice(5), h = baseDs!.hoods.find((x) => x.id === id);
+      if (h) return { n: i + 1, label, lat: h.lat, lon: h.lon, city: h.city };
+      const city = cityOf(id);
+      const lh = city ? (await loadCore(city.id).catch(() => null))?.hoods.find((x) => x.id === id) : undefined;
+      return lh ? { n: i + 1, label, lat: lh.lat, lon: lh.lon, city: city!.id } : null;
+    }));
+    return out.filter((x): x is MapPin => !!x);
+  }, {
+    revalidateOnFocus: false,
+    // show the city the report is about
+    onSuccess: (r) => { const c = r[0]?.city; if (c && c !== sourceCityId && c !== locationRef.current.toCity) changeLocation({ toCity: c }); },
+  });
   const srcLive = isLive(baseDs?.cities.find((c) => c.id === sourceCityId));
   const tgtLive = isLive(toCity ? baseDs?.cities.find((c) => c.id === toCity) : null);
   const coreMode = srcLive || tgtLive;
@@ -285,8 +307,8 @@ export function ExploreClient() {
     <div className="relative h-full min-h-0 overflow-hidden">
       <ExploreMap
         source={sourcePoint} sourceCity={sourceCity} targetCity={targetCity} srcCells={srcCells} tgtCells={tgtCells}
-        srcSim={srcSim} tgtSim={tgtSim} mode={mode} twins={mapTwins} selectedTwin={selected} basketLabels={ds.basket.map((b) => b.label)} opportunity={opp} opportunityCity={oppCity}
-        onPickSourceCell={onPickSourceCell} onSelectTwin={setSelected} onFlightState={setFlying} focus={focus}
+        srcSim={srcSim} tgtSim={tgtSim} mode={mode} twins={pins.length ? [] : mapTwins} selectedTwin={pins.length ? null : selected} basketLabels={ds.basket.map((b) => b.label)} opportunity={opp} opportunityCity={oppCity}
+        onPickSourceCell={onPickSourceCell} onSelectTwin={setSelected} onFlightState={setFlying} focus={focus} pins={pins}
         basketGroups={ds.basket.map((b) => b.group)} hoods={ds.hoods} sourceName={sourceName} onBlockClick={setAsk} quiet={!!ask}
       />
       <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3">

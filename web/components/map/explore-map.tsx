@@ -8,6 +8,7 @@ import { colorAt, type PaletteName } from "@/lib/colors";
 import { normalizeRobust } from "@/lib/similarity";
 import type { City, Hood, OpportunityResult, PackedCells } from "@/lib/types";
 
+export interface MapPin { n: number; label: string; lat: number; lon: number; city?: string }
 export interface MapTwin { hood: Hood; score: number }
 export interface SourcePoint { lon: number; lat: number; name: string; cityId: string }
 export type Mode = "twin" | "raw" | "opportunity";
@@ -40,6 +41,8 @@ export interface ExploreMapProps {
   quiet?: boolean;
   /** One-off camera target from the agent (a clicked place in an answer). `t` changes on every request. */
   focus?: { lat: number; lon: number; label?: string; t: number } | null;
+  /** an open report's places, numbered in its order */
+  pins?: MapPin[];
 }
 
 export interface BlockInfo { x: number; y: number; lat: number; lon: number; g: string; city: string; near: string; isSource: boolean; index: number; match: number | null }
@@ -285,6 +288,27 @@ export default function ExploreMap(props: ExploreMapProps) {
     el.innerHTML = `<div style="padding:2px 6px;background:#f0a03c;color:#0b0b0a;font:600 11px var(--font-geist-mono),monospace;white-space:nowrap">${escapeHtml((f.label ?? "here").toLowerCase())}</div><div style="width:1px;height:14px;background:#f0a03c"></div><div style="width:7px;height:7px;background:#f0a03c"></div>`;
     focusMarker.current = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([f.lon, f.lat]).addTo(map);
   }, [ready, props.focus, mapRef]);
+
+  // numbered pins for the open report; the view frames them when they sit in one city
+  const pinMarkers = useRef<maplibregl.Marker[]>([]);
+  const pinKey = (props.pins ?? []).map((p) => `${p.n}:${p.lat},${p.lon}`).join("|");
+  useEffect(() => {
+    const map = mapRef.current, pins = props.pins ?? [];
+    if (!ready || !map) return;
+    pinMarkers.current.forEach((m) => m.remove());
+    pinMarkers.current = pins.map((p) => {
+      const el = document.createElement("div");
+      el.className = "pointer-events-none flex items-center gap-1";
+      el.innerHTML = `<div style="width:18px;height:18px;display:grid;place-items:center;background:${p.n === 1 ? "#f0a03c" : "#0b0b0a"};color:${p.n === 1 ? "#0b0b0a" : "#f0a03c"};border:1px solid #f0a03c;font:600 10px var(--font-geist-mono),monospace">${p.n}</div>${p.n <= 3 ? `<div style="padding:1px 4px;background:rgba(11,11,10,.82);color:#e8e6df;font:500 10px var(--font-geist-mono),monospace;white-space:nowrap">${escapeHtml(p.label.toLowerCase())}</div>` : ""}`;
+      return new maplibregl.Marker({ element: el, anchor: "left" }).setLngLat([p.lon, p.lat]).addTo(map);
+    });
+    if (pins.length > 1) {
+      const lats = pins.map((p) => p.lat), lons = pins.map((p) => p.lon);
+      const [s, n, w, e] = [Math.min(...lats), Math.max(...lats), Math.min(...lons), Math.max(...lons)];
+      if (n - s < 1 && e - w < 1.5) map.fitBounds([[w, s], [e, n]], { padding: 90, maxZoom: 13, pitch: 45, duration: reducedMotion() ? 0 : 1600 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pinKey stands for pins
+  }, [ready, pinKey, mapRef]);
 
   // markers (HTML, crisp labels; auto-hidden behind the globe)
   const twinKey = props.twins.map((t) => t.hood.id).join(",");
