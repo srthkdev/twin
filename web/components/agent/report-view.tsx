@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useJson } from "@/hooks/use-json";
 import type { MapLink, Report } from "@/lib/agent/report-types";
 import { reportBlocks } from "@/lib/report/normalize";
@@ -29,12 +29,14 @@ export function reportPins(report: Report): { label: string; link: MapLink }[] {
   return [...new Map(list.map((p) => [p.link, { label: p.label, link: p.link }])).values()].slice(0, 6);
 }
 
-export function ReportView({ id, onLink }: { id: string; onLink?: (link: MapLink) => void }) {
+export function ReportView({ id, onLink, onShown }: { id: string; onLink?: (link: MapLink) => void; onShown?: () => void }) {
   const { data: report, error, mutate, isValidating } = useJson<Report>(`/api/reports/${encodeURIComponent(id)}`);
+  // Bring the report into view once per report. A stable ref: an inline one would run on every render and pin the scroll.
+  // onShown lets a stick-to-bottom chat release its lock, so the report opens at its top.
+  const scrollOnce = useCallback((el: HTMLDivElement | null) => { if (el) { onShown?.(); el.scrollIntoView({ block: "start" }); } }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (error && !isValidating) return <div className="flex items-center justify-between gap-3 border-t border-line pt-4 text-[12px] text-destructive"><span>Couldn’t load this report.</span><button type="button" onClick={() => void mutate()} className="border border-line-strong px-2 py-1 text-muted-foreground hover:text-foreground">Retry</button></div>;
   if (!report) return <p role="status" className="border-t border-line pt-4 text-[11px] text-dim"><span className="cursor-block">loading report</span></p>;
-  // scrolls the chat to the report once, when it first renders
-  return <div ref={(el) => el?.scrollIntoView({ block: "start" })}><ReportDocument report={report} onLink={onLink} /></div>;
+  return <div ref={scrollOnce}><ReportDocument report={report} onLink={onLink} /></div>;
 }
 
 export function ReportDocument({ report, onLink }: { report: Report; onLink?: (link: MapLink) => void }) {

@@ -258,7 +258,7 @@ export function AgentPanel({ context, onAction, className, initialInput, view = 
   const [files, setFiles] = useState<Record<string, { filename: string; markdown: string }[]>>(() => boot.saved?.files ?? {});
   const times = useRef(new Map<string, { start: number; end?: number }>(boot.saved?.times));
   const recRef = useRef<Recognition | null>(null);
-  const { scrollRef, contentRef } = useStickToBottom({ initial: "instant", resize: "smooth" });
+  const { scrollRef, contentRef, stopScroll } = useStickToBottom({ initial: "instant", resize: "smooth" });
   const live = useRef({ settings, context, onAction, user: null as TwinUser | null });
   live.current = { settings, context, onAction, user };
 
@@ -483,7 +483,7 @@ export function AgentPanel({ context, onAction, className, initialInput, view = 
             )}
           </div>
         ))}
-        {view === "report" && reportId && <ReportView id={reportId} onLink={onLink} />}
+        {view === "report" && reportId && <ReportView id={reportId} onLink={onLink} onShown={stopScroll} />}
         {status === "submitted" && messages[lastIdx]?.role === "user" && <p><Pulse label="planning" /></p>}
         {busy && reportAsked && <p className="border-l border-line-strong pl-3 text-[11.5px] leading-relaxed text-dim">
           Reports take one to three minutes: the agent pulls live data, charts it and checks every number.{" "}
