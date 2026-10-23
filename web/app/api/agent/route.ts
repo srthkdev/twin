@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { type ModelMessage, consumeStream, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText, toUIMessageStream, type ToolSet } from "ai";
 import { loadServerDataSet } from "@/lib/agent/server-data";
-import { OPENROUTER_MODELS, aiTools, cappedOn, fallbackOptions, isDailyCap, openrouter, usableKeys, utcDay, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
+import { agentAttempts, aiTools, cappedOn, isDailyCap, utcDay, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
 import { repairToolCall } from "@/lib/agent/repair";
 import type { AgentRunContext } from "@/lib/agent/report";
@@ -34,8 +34,8 @@ export async function POST(req: Request) {
   if (!Array.isArray(body.messages) || !body.messages.length) return NextResponse.json({ error: "messages required" }, { status: 400 });
 
   const userKey = req.headers.get("x-agent-key")?.trim();
-  const keys = userKey ? [userKey] : usableKeys();
-  if (!keys.length) return NextResponse.json({ error: "No OpenRouter key on the server — add your own in agent settings." }, { status: 400 });
+  const attempts = agentAttempts(body.model, userKey);
+  if (!attempts.length) return NextResponse.json({ error: "No model key on the server — add your own OpenRouter key in agent settings." }, { status: 400 });
   if (!userKey) {
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "local";
     if (!allow(ip)) return NextResponse.json({ error: "Demo limit reached (20 questions per 10 minutes). Add your own OpenRouter key in settings to keep going." }, { status: 429 });
@@ -47,7 +47,6 @@ export async function POST(req: Request) {
     ...m, parts: m.parts.filter((p) => p.type !== "reasoning" && !p.type.startsWith("data-")),
   }).filter((m) => m.parts.length);
   const ctx = contextLine(body.context);
-  const primary = body.model && OPENROUTER_MODELS.includes(body.model) ? body.model : OPENROUTER_MODELS[0];
   const meta: RunMeta = { qlooLive: 0, qlooCached: 0 };
   const question = [...messages].reverse().find((m) => m.role === "user")?.parts.flatMap((p) => p.type === "text" ? [p.text] : []).join("\n").trim();
   const reportRun = /\b(report|plan|analysis|comparison|compare|deep dive)\b/i.test(question ?? "");
@@ -66,17 +65,17 @@ export async function POST(req: Request) {
       // Free models sometimes fail or stall (one kept "thinking" for 3+ minutes). Any step that errors or runs past
       // its time limit hands the turn to the next model, which continues from every finished step and tool result;
       // the user sees one continuous answer.
-      const order = [primary, ...OPENROUTER_MODELS.filter((m) => m !== primary)];
-      const attempts = keys.flatMap((key) => order.map((model) => ({ key, model })));
       const done: ModelMessage[] = [];
-      let stepsDone = 0;
-      const open = (a: { key: string }) => cappedOn.get(a.key) !== utcDay();
+      let stepsDone = 0, nudged = false, started = false;
+      // one start and one finish for the whole answer, however many rounds it takes
+      let finish: Parameters<typeof writer.write>[0] | undefined;
+      const open = (a: { capKey: string }) => cappedOn.get(a.capKey) !== utcDay();
       for (let i = 0; i < attempts.length; i++) {
-        const { key, model } = attempts[i];
+        const { capKey, label, model, providerOptions } = attempts[i];
         const later = () => attempts.slice(i + 1).some(open);
         if (!open(attempts[i]) && later()) continue;
         const result = streamText({
-          model: openrouter(key)(model),
+          model,
           instructions: SYSTEM_PROMPT,
           messages: [...modelMessages, ...done],
           tools: aiTools(ds, writer, meta, run),
@@ -89,7 +88,7 @@ export async function POST(req: Request) {
             // A report must land inside the function's 300 s: past the research budget the model may only chart
             // and write, then must write, with what it has.
             if (run.reportMode && !run.reportId) {
-              if (step >= 12 || elapsed > 190_000) return { toolChoice: { type: "tool" as const, toolName: "report" } };
+              if (nudged || step >= 12 || elapsed > 190_000) return { toolChoice: { type: "tool" as const, toolName: "report" } };
               if (step >= 10 || elapsed > 150_000) return { activeTools: ["chart", "report"], toolChoice: "required" as const };
             }
             return undefined;
@@ -99,13 +98,13 @@ export async function POST(req: Request) {
           // a 429 means a daily or per-minute cap: retrying the same model only waits; the next model answers now
           maxRetries: 0,
           repairToolCall,
-          providerOptions: fallbackOptions(model),
+          providerOptions,
           onStepFinish: (step) => { stepsDone++; meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
         });
         let shown = false, retry = false;
         const parts = toUIMessageStream<ToolSet, TwinUIMessage>({
           stream: result.stream,
-          sendStart: i === 0,
+          sendStart: !started,
           messageMetadata: ({ part }) => (part.type === "finish" ? { ...meta, ms: Date.now() - t0 } : undefined),
           onError: (e) => (e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e) ?? "agent failed").replace(/sk-[A-Za-z0-9_-]+/g, "[key]").slice(0, 300),
         });
@@ -113,15 +112,25 @@ export async function POST(req: Request) {
         for (let r = await reader.read(); !r.done; r = await reader.read()) {
           const chunk = r.value;
           if (chunk.type === "error") {
-            if (!userKey && isDailyCap(chunk.errorText)) cappedOn.set(key, utcDay());
+            if (!userKey && isDailyCap(chunk.errorText)) cappedOn.set(capKey, utcDay());
             if (later()) { retry = true; void reader.cancel(); break; }
           }
+          if (chunk.type === "start") started = true;
+          if (chunk.type === "finish") { finish = chunk; continue; }
           if (chunk.type !== "start" && chunk.type !== "start-step" && chunk.type !== "finish-step") shown = true;
           writer.write(chunk);
         }
+        // Some models end a report run after the research, without writing it: ask once more and require the report tool.
+        if (!retry && run.reportMode && !run.reportId && !nudged && stepsDone < 15 && Date.now() - t0 < 240_000) {
+          nudged = true;
+          done.push({ role: "user", content: "Now write the report with the report tool, using only the evidence above." });
+          console.warn(`[agent] ${label} stopped without a report; asking it to write one`);
+          i--; continue;
+        }
         if (!retry) break;
-        console.warn(`[agent] ${model} (key ${keys.indexOf(key) + 1}) failed or stalled${shown ? " mid-answer" : ""}; continuing from ${done.length} finished messages`);
+        console.warn(`[agent] ${label} (attempt ${i + 1}) failed or stalled${shown ? " mid-answer" : ""}; continuing from ${done.length} finished messages`);
       }
+      if (finish) writer.write(finish);
     },
   });
 

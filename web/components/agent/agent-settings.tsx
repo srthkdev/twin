@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { AgentSettings, Health } from "./settings";
 
 const LABEL: Record<string, string> = {
+  "google/gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
   "minimax/minimax-m3.1-flash:free": "MiniMax M3.1 Flash",
   "nvidia/nemotron-3-ultra-550b-a55b:free": "Nemotron 3 Ultra",
   "google/gemma-4-31b-it:free": "Gemma 4 31B",
@@ -15,7 +16,7 @@ export function AgentSettingsPanel({ value, onChange, health }: { value: AgentSe
   return (
     <div className="space-y-3 border-b border-line px-3 py-3 text-[11.5px]">
       <div>
-        <div className="label mb-1.5">model · free via openrouter</div>
+        <div className="label mb-1.5">model · free tiers</div>
         <div role="radiogroup" className="flex flex-wrap gap-1">
           {models.map((m) => (
             <button key={m} type="button" role="radio" aria-checked={current === m} onClick={() => onChange({ ...value, model: m })}
@@ -24,7 +25,7 @@ export function AgentSettingsPanel({ value, onChange, health }: { value: AgentSe
             </button>
           ))}
         </div>
-        <p className="mt-1.5 text-dim">If the chosen model is busy, OpenRouter falls back to the next one automatically.</p>
+        <p className="mt-1.5 text-dim">If the chosen model is busy or out of free requests, the next one takes over mid-answer.</p>
       </div>
       <label className="block space-y-1">
         <span className="label">own openrouter key · optional</span>

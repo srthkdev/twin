@@ -45,7 +45,9 @@ function fixBlock(raw: unknown): unknown[] {
   const b = raw as Obj;
   const props = (b.props && typeof b.props === "object" ? b.props : Object.fromEntries(Object.entries(b).filter(([k]) => k !== "type"))) as Obj;
   const known = ["Verdict", "KpiRow", "Heading", "Paragraph", "Chart", "Ranking", "Compare", "Table", "Callout", "Places", "NextSteps"];
-  let type = String(b.type ?? "");
+  // a block type inside props ({props: {type: "Compare", …}}) wins: the outer one is then usually a slip
+  let type = typeof props.type === "string" && known.includes(props.type) ? props.type : String(b.type ?? "");
+  if (typeof props.type === "string" && known.includes(props.type)) delete props.type;
   if (!known.includes(type)) type = TYPE_ALIASES[type.toLowerCase().replace(/[\s-]/g, "_")] ?? (props.markdown || props.text || props.body ? "Paragraph" : "");
   if (!type) return [];
   const p: Obj = { ...props };
@@ -61,9 +63,25 @@ function fixBlock(raw: unknown): unknown[] {
   return [{ type, props: p }];
 }
 
-function fixTool(name: string, args: unknown): unknown {
-  if (!args || typeof args !== "object") return args;
-  const a = { ...(args as Obj) };
+/** Map links in any shape models write ("geo:52.5,lon:13.3", "geo:lat=52.5,lon=13.3", "52.5,13.3") → geo:<lat>,<lon>. */
+function fixLinks(v: unknown, key = ""): unknown {
+  if (Array.isArray(v)) return v.map((x) => fixLinks(x, key));
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Obj).map(([k, x]) => [k, fixLinks(x, k)]));
+  if (typeof v === "string" && (key === "link" || key === "links") && !/^hood:/.test(v)) {
+    const n = v.match(/-?\d+(?:\.\d+)?/g);
+    if (n && n.length === 2) return `geo:${n[0]},${n[1]}`;
+  }
+  return v;
+}
+
+function fixTool(name: string, raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const a = { ...(fixLinks(raw) as Obj) };
+  // axes as objects ({x: {type: "x"}}) → their title, if any
+  if (name === "chart" && a.axes && typeof a.axes === "object") {
+    const ax = a.axes as Obj;
+    for (const k of ["x", "y"]) if (ax[k] && typeof ax[k] === "object") { const o = ax[k] as Obj; const t = o.title ?? o.label ?? o.name; if (typeof t === "string" && t) ax[k] = t; else delete ax[k]; }
+  }
   if (name === "report" && Array.isArray(a.blocks)) a.blocks = a.blocks.flatMap(fixBlock);
   if (name === "chart" && typeof a.kind === "string" && !["bar", "hbar", "line", "scatter", "table"].includes(a.kind)) a.kind = CHART_KINDS[a.kind.toLowerCase()] ?? "bar";
   // a chart sent in Table-block shape ({columns, rows}) → labels from the first column, one series per numeric column
