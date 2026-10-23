@@ -3,8 +3,9 @@
 </p>
 
 <p align="center">
-  Find the Silver Lake of Berlin. Twin matches neighbourhoods across cities by what their residents and visitors actually like —<br>
-  measured with <a href="https://qloo.com">Qloo</a> taste data, corrected for the popularity bias we found in it, and wrapped in an agent that helps you act on the answer.
+  Find what works in one neighbourhood, and where it works next. Twin matches neighbourhoods across cities by what people there actually like —<br>
+  measured with <a href="https://qloo.com">Qloo</a> taste data, corrected for the popularity bias we found in it — and an agent turns the match into a report:<br>
+  where to open a place, where to expand, where to move, where to tour.
 </p>
 
 <p align="center">
@@ -22,12 +23,15 @@
 | | |
 |---|---|
 | **Explore** | Pick a neighbourhood and every ~1 km block of its city lights up. Pick another city and the camera flies there; blocks rise by similarity and the five closest neighbourhoods are ranked, with the traits they share and where they differ. |
-| **Drop a pin** | Click any block to use that exact cell as the source — not just a named neighbourhood. |
+| **Reports** | Ask for a report and the agent follows one of seven playbooks and writes an analyst-style brief: GO / WATCH / SKIP verdict, key numbers, market, customers, candidates compared, competitors, a benchmark abroad, scorecard, risks, validation plan. Every chart and headline number is checked against the tool output. Share link, server-rendered PDF, Markdown. |
+| **Report on the map** | An open report numbers its shortlist on the map and flies to its city; every place in the text moves the map. |
+| **Twin vs a plain AI** | One click asks a model without Twin's tools; every place it names is checked on OpenStreetMap. |
+| **Gap scan** | What recurs in a neighbourhood's twins abroad and is missing at home. |
 | **Read a block** | Height = likeness, colour = what it's mostly about (sound · table · scene). Hover for its traits and how many venues stand there; *ask* sends that block to the agent. |
-| **Raw vs corrected** | One toggle shows the same map on raw Qloo scores, where everything busy looks alike. |
-| **Any city** | Ask about a city we didn't precompute and the agent fingerprints it live from Qloo (≈40 heatmaps), then caches it. |
-| **Agent** | 23 tools on free open models (MiniMax M3.1 Flash via OpenRouter), streamed as a timeline that folds away when the answer lands. Plain-language answers; every place is a link that flies the map; cited sources; one-click follow-ups; multi-turn memory that survives reloads. |
-| **Opportunity map** | Qloo demand for a taste vs how many such venues physically exist (Overture Maps), cell by cell. |
+| **Taste vs popularity** | One toggle shows the same map on raw Qloo scores, where everything busy looks alike. |
+| **24 cities, and any other** | Six with the full 116-trait fingerprint, eighteen more built from live Qloo heatmaps (Lisbon, Tokyo, Barcelona, Amsterdam, Madrid, Rome, Milan, Melbourne, Sydney, Toronto, Chicago, San Francisco, Austin, Seoul, São Paulo, Buenos Aires, Istanbul, Vienna). Any other city is built in under a minute the first time someone asks. |
+| **Agent** | 26 tools on free open models (MiniMax M3.1 Flash → Nemotron 3 Ultra → Gemma 4 31B via OpenRouter, failing over mid-run), streamed as a timeline. Reports keep running if you close the tab; a username (no password, a sync code) keeps your history across devices. |
+| **Opportunity map** | Busy blocks first, then Qloo demand for a taste vs how many such venues physically exist (Overture Maps). |
 | **MCP server** | The same tools, usable from Claude Code, Codex or any MCP client. |
 
 ## How it works
@@ -54,6 +58,7 @@ All labels were committed before any result was computed (ground truth `edf9056`
 | Does the correction separate places? | Mean cross-city cosine **0.95 → 0.16**; best–worst spread per city **0.11 → 0.73** |
 | Does the corrected map match the US census? (36 pre-registered tests, LA + NYC) | Corrected beats raw in **21 / 36**. Latin artists ↔ % Hispanic ρ **0.29 → 0.64**; soul food ↔ % Black **0.29 → 0.67**. Worse on affluence (luxury ↔ income turns negative). |
 | Does it find twins people already name? (21 held-out published pairs) | **An LLM with no data wins** — MRR 0.67 vs Twin 0.34 (raw 0.38, random 0.16). It has read the same articles. Twin reaches hit@3 0.45 from taste data alone vs 0.12 random. |
+| Does taste predict where real chains open? (457 chains, 2,246 city-to-city pairs, Overture) | Twin AUC **0.714**, but raw popularity does better (0.786): chains follow footfall. **Among equally busy blocks** taste still ranks real sites above others — **0.691** for taste-led chains (Pret, Uniqlo, Pandora) vs 0.547 for convenience (Lidl, 7-Eleven). So the agent ranks by busyness first, then taste. |
 
 <img src="web/public/media/evals-census.jpg" alt="census check: scatter of % Hispanic against corrected and raw taste scores, and the full table of 36 tests" width="100%">
 
@@ -75,7 +80,7 @@ Qloo makes every taste decision; the other sources only do jobs Qloo can't:
 
 Full tool reference and the agent's playbook prompt: [`docs/AGENT.md`](docs/AGENT.md) (generated from the code).
 
-**Try:** *find the Silver Lake of Berlin* · *I love Silver Lake, I'm moving to Neukölln — where do I go?* · *where in Berlin should I open a natural wine bar?* · *plan a 3-city European tour for Peso Pluma* · *what's the vibe of Shimokitazawa, Tokyo?* · *find the Shoreditch of Lisbon*
+**Try:** *make me a report: where in Berlin should I open a natural wine bar?* · *make me a report: my café works in Shoreditch — where in Lisbon next?* · *find the Silver Lake of Berlin* · *plan a 3-city European tour for Peso Pluma* · *what's the vibe of Shimokitazawa, Tokyo?* · *find the Shoreditch of Lisbon*
 
 ## Run it
 
@@ -92,7 +97,8 @@ QLOO_API_KEY=...                      # Qloo hackathon key
 QLOO_BASE_URL=https://hackathon.api.qloo.com
 OPENROUTER_API_KEY=...                # free models; visitors can also bring their own
 TAVILY_API_KEY=...                    # optional: web search
-BLOB_READ_WRITE_TOKEN=...             # optional: shared cache (Vercel Blob); disk cache otherwise
+KV_REST_API_URL=...                   # optional: shared store (Upstash Redis) for cache, reports, usernames;
+KV_REST_API_TOKEN=...                 #   files under web/.cache otherwise
 ```
 
 Rebuild the data (cached, so re-runs are free): put the same two variables in `.env` at the repo root, then `cd pipeline && python3 run_all.py`.
@@ -100,7 +106,7 @@ Rebuild the data (cached, so re-runs are free): put the same two variables in `.
 ## Layout
 
 ```
-pipeline/        Python — basket, fetch, correction, twins, evals, census check, Overture venue supply (DuckDB)
+pipeline/        Python — basket, fetch, correction, twins, evals, census check, Overture venue supply, chain backtest (DuckDB)
 web/             Next.js — globe, explore, evals, method, blog; AI SDK agent; MCP server
 web/content/     the write-up (rendered at /blog)
 probe/           the first experiments that found the popularity bias

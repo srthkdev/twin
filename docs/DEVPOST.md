@@ -1,6 +1,11 @@
-# Twin: every neighbourhood has a twin
+# Twin: find what works in one neighbourhood, and where it works next
 
-Twin finds the cultural twin of a neighbourhood in another city, such as the Silver Lake of Berlin or the Williamsburg of London. It works from Qloo taste data. An agent then helps you act on the answer: where to go, who you'd find there, and what they're into.
+Twin matches neighbourhoods across cities by taste, using Qloo data: the Silver Lake of Berlin, the Shoreditch of Lisbon. On top of that sits an agent that turns a match into a decision, with a written report you can hand to someone. It covers four jobs:
+
+- **Open a place.** Which streets in a city want a natural wine bar, and how many are already there?
+- **Expand.** My café works in Shoreditch. Where in New York or Lisbon is the same crowd?
+- **Move.** I love Silver Lake. Which part of Berlin will feel like home?
+- **Tour.** Where are an artist's fans in London, Paris and Berlin, and which venues fit?
 
 This is the full story of how we got there, including the ideas we dropped and the tests we lost.
 
@@ -44,14 +49,17 @@ The corrected maps also grouped items the way you'd expect. Bad Bunny went with 
 
 ![raw vs corrected](https://twin-jade-rho.vercel.app/media/raw-vs-corrected.gif)
 
-- **Explore.** Pick a neighbourhood and every block of its city lights up by how similar it is. Pick another city and the camera flies there. Its blocks rise by similarity to your source, and the five closest neighbourhoods are ranked. A *shared / different* table shows the traits behind each match. A raw/corrected toggle shows the same map before and after our fix.
-- **Drop a pin.** Click any block to use that exact cell as the source, not just a named neighbourhood.
-- **Read a block.** Each ~1 km block is one column. Its height is how much it's like your source, and its colour is what it's mostly about: sound (amber), table (bone) or scene (rust). Hover it for the likeness, the taste mix, its strongest traits and how many venues of each kind actually stand there (Overture). Hit *ask* and the agent answers about that exact block.
-- **Any city on Earth.** Twin isn't limited to the six cities we precomputed. Ask about Lisbon or Madrid and the agent fingerprints the city live: about 40 Qloo heatmaps, the same correction, neighbourhoods from OpenStreetMap. The result is cached, so the second visitor gets it instantly.
-- **An agent with 23 tools,** in a tab beside the map. It streams its work as a timeline: each step shows its source (QLOO, TWIN, OVERTURE, OSM, WIKI, WEB), live progress and how long it took. Once the answer lands, the steps fold into one line. Answers are written for people, not analysts: a bold one-line verdict, a few reasons in plain words, "% match" instead of cosines. Every neighbourhood and venue in the answer is a link that flies the map there. Web facts are cited inline, and two follow-up questions are one click away. It's a real conversation: follow-ups like "and its twin in Paris?" keep the context, and the chat survives reloads.
-- **Opportunity map.** "Where should I open a wine bar in Berlin?" compares Qloo *demand* for the taste in every cell with *supply*, meaning how many such venues physically exist (Overture Maps Places). The gaps are painted on the map.
-- **Tour planner.** Where an artist's fans actually are in each city, the strongest neighbourhoods, and Qloo live-music venues nearby.
-- **Briefs.** On request, the agent packages findings as a downloadable markdown brief.
+- **Explore.** Pick a neighbourhood and every block of its city lights up by how similar it is. Pick another city and the camera flies there. Its blocks rise by similarity to your source, and the five closest neighbourhoods are ranked. A *shared / different* table shows the traits behind each match. A taste/popularity toggle shows the same map before and after our fix.
+- **Read a block.** Each ~1 km block is one column. Its height is how much it's like your source, and its colour is what it's mostly about: sound (amber), table (bone) or scene (rust). Hover it for the likeness, the taste mix, its strongest traits and how many venues of each kind actually stand there (Overture). Click *ask* and the agent answers about that exact block.
+- **Reports.** Ask for a report and the agent works like an analyst. It picks a playbook (site selection, expansion, gap scan, relocation, tour routing, neighbourhood profile, city comparison), pulls live Qloo, Overture, OpenStreetMap and web data, and writes one standard structure: a GO / WATCH / SKIP verdict, key numbers, the market, who the customers are, candidates compared, demand, named competitors, the same concept benchmarked abroad, a scorecard, risks and a validation plan. Charts and tables are generated UI (json-render), not screenshots. Every number in a chart or headline is checked against the data the tools returned before the report is saved; a number the agent can't trace is rejected and it has to fix it.
+- **The report on the map.** An open report numbers its shortlist on the map (1 = top pick) and flies to its city. Every place in the text is a link that moves the map.
+- **Take it with you.** A share link anyone can open, a PDF rendered on the server, and Markdown.
+- **Twin vs a plain AI.** One click asks a model without Twin's tools the same question, and every place it names is checked against OpenStreetMap. Many can't be found or sit in the wrong city.
+- **Gap scan.** "What thrives in Reuterkiez's twins abroad that Reuterkiez itself lacks?" compares venue mixes across the twins and lists what recurs there and is missing at home.
+- **Opportunity map.** Busy blocks first, then Qloo taste *demand* against *supply*: how many such venues physically exist (Overture Maps Places). The gaps are painted on the map.
+- **Any city on Earth.** Six cities have the full 116-trait fingerprint. Eighteen more (Lisbon, Tokyo, Barcelona, Amsterdam, Madrid, Rome, Milan, Melbourne, Sydney, Toronto, Chicago, San Francisco, Austin, Seoul, São Paulo, Buenos Aires, Istanbul, Vienna) are built from 40 live Qloo heatmaps. Any other city is built the first time someone asks, in under a minute, and cached.
+- **Runs in the background.** A report keeps running if you close the tab. Pick a username (no password; a sync code moves it to another device) and it lands in your history.
+- **An agent with 26 tools,** streaming its work as a timeline with each step's source (QLOO, TWIN, OVERTURE, OSM, WIKI, WEB) and timing. Answers are written for people: a one-line verdict, reasons in plain words, "% match" instead of cosines.
 - **MCP server.** The same tools run over stdio, so Twin works inside Claude Code, Codex or any MCP client.
 
 ### Who answers what
@@ -68,9 +76,10 @@ We kept one rule: **Qloo makes every taste decision, and the other sources only 
 
 ### Things to try
 
+- *Make me a report: Where in Berlin should I open a natural wine bar?*
+- *Make me a report: My café works in Shoreditch, London. Where in Lisbon should I open the next one?*
+- *Make me a report: What thrives in the twins of Reuterkiez abroad that is missing in Reuterkiez itself?*
 - *Find the Silver Lake of Berlin.*
-- *I love Silver Lake. I'm moving to Neukölln — where do I actually go?*
-- *Where in Berlin should I open a natural wine bar?*
 - *Plan a 3-city European tour for Peso Pluma.*
 - *What's the vibe of Shimokitazawa, Tokyo?*
 - *Find the Shoreditch of Lisbon.*
@@ -90,8 +99,9 @@ We kept one rule: **Qloo makes every taste decision, and the other sources only 
 - **Pipeline:** Python, standard library only.
 - **App:** Next.js with MapLibre's globe projection and deck.gl columns for the city blocks.
 - **Agent:** Vercel AI SDK. Server: `streamText` with tools, and `createUIMessageStream` so tool progress and map actions stream as data parts. Client: `useChat`.
-- **Models:** free open-weight models through OpenRouter, with OpenRouter's native fallback: MiniMax M3.1 Flash, then NVIDIA Nemotron 3 Ultra, then Thinking Machines Inkling.
-- **Caching:** every Qloo, OpenStreetMap, Wikipedia and search response, and every live city, goes to Vercel Blob. Repeat questions cost nothing, which matters on free tiers.
+- **Models:** free open-weight models through OpenRouter: MiniMax M3.1 Flash, then NVIDIA Nemotron 3 Ultra, then Gemma 4 31B. If one fails mid-run, the next continues from the steps already finished. Visitors can bring their own key.
+- **Reports:** json-render for the report blocks (web and PDF from one schema), `@react-pdf/renderer` on the server, seven playbooks as Markdown skills the agent loads on demand.
+- **Caching:** every Qloo, OpenStreetMap, Wikipedia and search response, every live city, every report and every username goes to Upstash Redis, gzipped. Qloo answers are kept for 30 days, and an older copy is served if Qloo is down. Repeat questions cost nothing, which matters on free tiers.
 - **Supply data:** Overture Maps Places, queried with DuckDB straight from its cloud bucket and binned into the same 1 km cells. It's precomputed per city, so opportunity answers are instant.
 
 **City queries had quirks we had to work around:**
@@ -151,6 +161,20 @@ We collected 31 published comparisons ("Shoreditch is London's Williamsburg"), e
 - **Qloo's per-location scores.** They saturate, as noted above.
 - **A held-out-trait check.** We matched neighbourhoods on half the basket and scored them on the other half. Twin's picks agreed 0.51, the LLM's picks 0.47, the published twins 0.47, random 0.27. That check lives in Qloo's own space, so it's partly circular, and we report it as weak evidence only.
 
+### 4. Does taste predict where real businesses open?
+
+The twin test above is about people's opinions. This one is about money. We took 177,000 branded places from Overture Maps in the six cities: 457 chains and 2,246 (brand, city A → city B) pairs. For each pair we asked: given where the brand already is in city A, does Twin rank the blocks where it actually opened in city B above the blocks where it didn't? The hypotheses were committed before the run (`pipeline/backtest/HYPOTHESES.md`).
+
+| Hypothesis | Result | Verdict |
+|---|---|---|
+| Twin beats chance | AUC 0.714 (taste-led chains 0.839) | holds |
+| Twin beats raw Qloo popularity | 0.714 vs 0.786 | **fails** |
+| Taste adds signal among equally busy blocks | AUC 0.603 [0.594, 0.611] | holds |
+| Taste-led chains beat convenience chains | 0.691 [0.677, 0.704] vs 0.547 [0.540, 0.554] | holds |
+| A learned per-trait model adds more | ΔAUC +0.0012 | real but tiny |
+
+**The reading:** chains mostly open where it's busy, and our correction removes busyness on purpose, so raw popularity wins overall. But among blocks that are equally busy, taste picks the right ones for taste-led brands about 69% of the time (Pret 0.75, Pandora 0.70, Uniqlo 0.69) and does little for convenience brands (Lidl 0.50, 7-Eleven 0.41). So the agent now ranks by busyness first, then by taste. It never sells taste as a replacement for footfall.
+
 ### Sanity checks
 
 The correction does what it should on negatives. Silver Lake for Peso Pluma drops from the 45th to the 5th percentile, and East LA for Morgan Wallen from 54th to 25th. Compton for Kendrick Lamar rises from 83rd to 99th.
@@ -162,14 +186,14 @@ But it also **compresses some true positives** that raw data had already maxed o
 
 That's the same trade-off the census check found.
 
-### 4. Building the agent
+### 5. Building the agent
 
 We started with a hand-written tool loop running on the local Codex CLI. We moved to the AI SDK because it streams properly: text, reasoning and tool parts each get their own state, so the timeline UI could show real progress instead of a spinner.
 
 **Picking the model.** We compared the free models on our own agent questions and on Artificial Analysis's Intelligence Index (v4.3.2):
 - **MiniMax M3.1 Flash** (index 43) chose the right tools every time and made real live Qloo calls.
 - **Nemotron 3 Ultra** (index 23) answered with fewer tools and no live calls.
-- **Inkling's free endpoint** failed every request during our test.
+- **Inkling's free endpoint** answers only inside agent harnesses, not over the API, so it was replaced by Gemma 4 31B.
 
 So MiniMax leads, with the others as automatic fallbacks.
 
@@ -191,26 +215,31 @@ So MiniMax leads, with the others as automatic fallbacks.
 - **Early answers read like a lab report** — z-scores, cosines, raw coordinates. The prompt now bans them from the visible text. Coordinates go into `geo:` links that the UI turns into map buttons, and the result cards carry the numbers.
 - **Stopping a run mid-tool broke the next question,** because history held a tool call with no result. The route now drops unfinished tool calls and old reasoning from history, and the last step is forced to be an answer, never another tool call.
 - **Models send sloppy arguments.** We fired every tool with the inputs models actually produce: names instead of ids, "Berlin" instead of "berlin", cities added live, missing optional fields, "natural wine" instead of a venue type. Nine failed. Now every tool accepts live cities, a city the user names is fingerprinted on first use, and free text is matched to a venue kind through Overture's own category names and the Qloo tag it resolves to, not a hand-written list. The one remaining failure is honest: Qloo has too little data for Tokyo, and the agent says so.
-- **Free models sometimes stall.** One run sat silent for three minutes. The route now times out a silent model and moves the same turn to the next free model before anything reaches the screen.
+- **Free models sometimes stall.** One run sat silent for three minutes. The route now times out a silent model and hands the run, with the steps already finished, to the next free model.
+- **Free models send arguments in shapes no schema expects:** text wrapped as `{"$text": …}`, lists as JSON strings, made-up block types, `take: 10` when the maximum is 8. A repair step fixes these before validation instead of letting the model retry the same mistake.
+- **The grounding check was too strict and too slow.** It rejected "ages 30 to 34" and "333 Lounge" as untraced numbers, and took 110 s on a large report. It now checks only numbers that matter (charts and headline values) against a sorted index: 0.4 s for 240,000 numbers.
+- **The storage store was suspended two days before the deadline.** All the caching blew through Vercel Blob's free operation limit. We moved to Upstash Redis, gzipped large values and cached only the condensed heatmap cells instead of Qloo's full answers: 82 MB became 31 MB.
+- **New cities came back with no neighbourhoods** when OpenStreetMap's servers timed out. Qloo's own locality list now runs in parallel, and city builds dropped from ~150 s to ~45 s.
 
 ## Challenges
 
-- **Proving Qloo was necessary.** Our first headline claim, "Twin beats an LLM at finding twins", turned out to be false. Instead of hiding it we changed the product's story. The LLM reasons and talks; Qloo supplies measured, fine-grained taste that the LLM doesn't have. The agent uses both, and the evals page shows the loss.
-- **Measuring without circularity.** Checking Qloo-built fingerprints against Qloo heatmaps proves very little. The census check and the published pairs are both outside Qloo.
-- **Getting enough data.** Getting comparable data for six cities took 1,041 calls, plus caching and the query workarounds described above.
+- **Proving Qloo was necessary.** Our first headline claim, "Twin beats an LLM at finding twins", turned out to be false. So we tested what an LLM can't fake: where real businesses open, and whether the places a plain AI names exist. Taste helps among equally busy blocks; it doesn't replace footfall, and the product says so.
+- **Measuring without circularity.** Checking Qloo-built fingerprints against Qloo heatmaps proves very little. The census, the published pairs and the chain locations are all outside Qloo.
+- **Free tiers.** OpenRouter's free models allow 50 requests a day per account, and a report uses 10–16. Every data call is cached so the AI budget goes on reasoning, not refetching.
 
 ## What we learned
 
 - Raw taste data is a popularity map with signal underneath. You have to subtract the crowd before comparing places.
 - On famous questions, an LLM's memory beats data. Data matters for the long tail: the block nobody has written about, or the pin you drop yourself.
 - Pre-registering labels made the bad results easy to accept. We couldn't argue our way around them.
+- A report is only as good as its numbers. Checking every chart value against the tool output caught more bad answers than any prompt change.
 
 ## What's next
 
 - Fix the affluence blind spot by adding a separate wealth axis instead of subtracting it away.
-- Add more cities, and test against foot-traffic data instead of residence data.
-- Let the agent plan more than a first afternoon: a move, a tour stop, a store opening.
+- Add foot-traffic data, so busyness comes from visits and not from venue counts.
+- Track a report's recommendation over time: did the place open, and did it last?
 
 ## Built with
 
-Qloo Insights API (heatmaps, location insights, audiences, demographics, compare, trending, search, tags) · Vercel AI SDK · OpenRouter (MiniMax M3.1 Flash, Nemotron 3 Ultra, Inkling) · Vercel Blob · Overture Maps Places · DuckDB · OpenStreetMap (Nominatim, Overpass) · Wikipedia / Wikidata · Tavily · Python · Next.js · MapLibre GL · deck.gl · Tailwind · shadcn/ui · Recharts · Model Context Protocol · US Census ACS 2023
+Qloo Insights API (heatmaps, location insights, audiences, demographics, compare, trending, search, tags) · Vercel AI SDK · OpenRouter (MiniMax M3.1 Flash, Nemotron 3 Ultra, Gemma 4 31B) · json-render · React PDF · Upstash Redis · Overture Maps Places · DuckDB · OpenStreetMap (Nominatim, Overpass) · Wikipedia / Wikidata · Tavily · Python · Next.js · MapLibre GL · deck.gl · Tailwind · shadcn/ui · Recharts · Model Context Protocol · US Census ACS 2023

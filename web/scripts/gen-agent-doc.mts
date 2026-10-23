@@ -22,8 +22,9 @@ _Generated from \`web/lib/agent/tools.ts\`, \`tools-v2.ts\` and \`prompt.ts\` by
 
 ## Runtime
 - **Framework:** Vercel AI SDK — \`streamText\` with tools, \`createUIMessageStream\` (tool progress and map actions stream as data parts), \`useChat\` on the client.
-- **Models (free, via OpenRouter, native fallback in this order):** ${OPENROUTER_MODELS.map((m) => `\`${m}\``).join(" → ")}. Visitors can bring their own OpenRouter key.
-- **Caching:** every Qloo / OpenStreetMap / Wikipedia / search response and every live city is cached in Vercel Blob (disk locally), so repeat questions cost nothing.
+- **Models (free, via OpenRouter; if one fails mid-run the next continues from the finished steps):** ${OPENROUTER_MODELS.map((m) => `\`${m}\``).join(" → ")}. Visitors can bring their own OpenRouter key.
+- **Caching:** every Qloo / OpenStreetMap / Wikipedia / search response, every live city, report and username is stored in Upstash Redis (gzipped; disk locally). Qloo answers are kept 30 days and served stale if Qloo is down.
+- **Reports:** \`report_skill\` loads one of seven playbooks (\`web/lib/agent/skills/*.md\`); \`chart\` and \`report\` validate json-render blocks, and every chart and headline number must trace to a tool result.
 - **MCP:** the same tools are served over stdio by \`web/mcp/twin-mcp.mts\` (\`pnpm mcp\`).
 
 ## Tools (${TOOLS.length})
