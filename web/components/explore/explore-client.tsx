@@ -21,10 +21,18 @@ import { ModeToggle } from "./mode-toggle";
 import { SourcePanel, type SourcePin } from "./source-panel";
 import { TwinsPanel } from "./twins-panel";
 import { CommandPalette } from "./command-palette";
-import { AgentPanel } from "@/components/agent/agent-panel";
+import { askAgent } from "@/components/agent/agent-panel";
+import { reportPins } from "@/components/agent/report-view";
+import { useJson } from "@/hooks/use-json";
+import type { Report } from "@/lib/agent/report-types";
 import { runTour } from "@/components/tour/tour";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
+// Client only: the chat seeds its first render from browser storage.
+const AgentPanel = dynamic(() => import("@/components/agent/agent-panel").then((m) => m.AgentPanel), {
+  ssr: false,
+  loading: () => <p className="px-3 py-3 text-[11px] text-dim">loading agent…</p>,
+});
 const ExploreMap = dynamic(() => import("@/components/map/explore-map"), {
   ssr: false,
   loading: () => <div className="absolute inset-0 grid place-items-center bg-background text-[12px] text-dim">loading globe…</div>,
@@ -51,7 +59,22 @@ async function loadCores([, ...ids]: string[]) {
 
 export function ExploreClient() {
   const sp = useSearchParams();
-  const { ds: baseDs, error, refresh } = useDataset();
+  // Once the data is in: put the location in the URL and open a place the link asked for (?focus=hood:… / geo:…).
+  const { ds: baseDs, error, refresh } = useDataset((d) => {
+    syncLocation(locationRef.current);
+    const requested = sp.get("focus");
+    if (requested?.startsWith("geo:")) {
+      const [lat, lon] = requested.slice(4).split(",").map(Number);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) setFocus({ lat, lon, t: Date.now() });
+    } else if (requested?.startsWith("hood:")) {
+      const id = requested.slice(5), h = d.hoods.find((x) => x.id === id), city = d.cities.find((c) => id.startsWith(c.id + "-"));
+      if (h) setFocus({ lat: h.lat, lon: h.lon, label: h.name, t: Date.now() });
+      else if (city) loadCore(city.id).then((core) => {
+        const lh = core.hoods.find((x) => x.id === id);
+        if (lh) setFocus({ lat: lh.lat, lon: lh.lon, label: lh.name, t: Date.now() });
+      }).catch(() => {});
+    }
+  });
   const desktop = useMediaQuery("(min-width: 1024px)", true);
   const [location, setLocation] = useState<ExploreLocation>(() => ({
     fromId: sp.get("from") ?? DEFAULT_FROM, toCity: sp.get("to"),
@@ -64,6 +87,8 @@ export function ExploreClient() {
     locationRef.current = next;
     setLocation(next);
     if (baseDs) syncLocation(next);
+    // remember the pair for "recent" and the popular list
+    if (("fromId" in patch || "toCity" in patch) && !pin && next.toCity && baseDs?.hoods.some((h) => h.id === next.fromId)) visit(next.fromId, next.toCity);
   });
   const [pin, setPin] = useState<SourcePin | null>(null);
   const [mode, setMode] = useState<Mode>("twin");
@@ -82,7 +107,6 @@ export function ExploreClient() {
   const rightP = usePanel("right", 400, 320, 680, "right");
   const setRightCollapsed = rightP.setCollapsed;
   const [ask, setAsk] = useState<BlockInfo | null>(null);
-  const [external, setExternal] = useState<{ text: string; t: number } | null>(null);
   const [agentFocus, setAgentFocus] = useState<{ lat: number; lon: number; label: string } | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number; label?: string; t: number } | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>(sp.get("q") || sp.get("tab") === "agent" || sp.get("view") === "report" ? "agent" : "from");
@@ -91,14 +115,13 @@ export function ExploreClient() {
 
 
   useEffect(() => { void runTour("explore", { delay: 1200 }); }, []);
-  useEffect(() => { if (baseDs) syncLocation(locationRef.current); }, [baseDs]);
 
   // Live cities only have the 40 core dims, so any pair that includes one is compared on core vectors on both sides.
   const rawHood = baseDs?.hoods.find((h) => h.id === fromId) ?? baseDs?.hoods[0] ?? null;
   const sourceCityId = pin?.city ?? rawHood?.city ?? "";
-  const [pinLinks, setPinLinks] = useState<{ label: string; link: string }[]>([]);
-  // An open report numbers its places on the map (1 = its top pick).
-  useEventListener("twin:report-pins" as keyof WindowEventMap, (e) => setPinLinks((e as CustomEvent<{ label: string; link: string }[]>).detail ?? []));
+  // An open report numbers its places on the map (1 = its top pick). Same request as the report panel, so one fetch.
+  const { data: openReport } = useJson<Report>(view === "report" && reportId ? `/api/reports/${encodeURIComponent(reportId)}` : null);
+  const pinLinks = useMemo(() => (openReport ? reportPins(openReport) : []), [openReport]);
   const { data: pins = [] } = useSWR(baseDs && pinLinks.length ? ["pins", pinLinks.map((p) => p.link).join("|")] : null, async () => {
     const cityOf = (id: string) => baseDs!.cities.find((c) => id.startsWith(c.id + "-"));
     const out = await Promise.all(pinLinks.map(async ({ label, link }, i): Promise<MapPin | null> => {
@@ -173,9 +196,6 @@ export function ExploreClient() {
   const { recent, popular, visit, error: pairsError } = usePairs();
   const pickPair = useCallback((p: Pair) => { setPin(null); changeLocation({ fromId: p.from, toCity: p.to }); setSourceOpen(false); }, [changeLocation]);
   // every pair someone actually opens feeds "recent" (this browser) and "most opened" (everyone)
-  useEffect(() => {
-    if (!pin && toCity && ds?.hoods.some((h) => h.id === fromId)) visit(fromId, toCity);
-  }, [fromId, toCity, pin, ds, visit]);
   const pickCity = useCallback((id: string | null) => {
     changeLocation({ toCity: id });
     if (view === "report") { setSourceOpen(false); setRight("agent"); setMobileTab("agent"); }
@@ -213,7 +233,6 @@ export function ExploreClient() {
     setSourceOpen(false);
     if (next === "report") { setRight("agent"); setMobileTab("agent"); setRightCollapsed(false); }
   }, [setRightCollapsed, changeLocation]);
-  useEffect(() => { if (view === "report") setRightCollapsed(false); }, [view, setRightCollapsed]);
 
   const onAgentAction = useCallback((act: AgentAction) => {
     if (!ds) return;
@@ -260,19 +279,6 @@ export function ExploreClient() {
     }
   }, [ds, toCity, sourceCityId, cityAdded, refresh, changeView, changeLocation, setSelected]);
 
-  const focusQueryHandled = useRef(false);
-  useEffect(() => {
-    if (!ds || focusQueryHandled.current) return;
-    const requested = sp.get("focus");
-    if (!requested) return;
-    focusQueryHandled.current = true;
-    if (requested.startsWith("geo:")) {
-      const [lat, lon] = requested.slice(4).split(",").map(Number);
-      if (Number.isFinite(lat) && Number.isFinite(lon)) setFocus({ lat, lon, t: Date.now() });
-    } else if (requested.startsWith("hood:")) {
-      onAgentAction({ type: "focusHood", hood: requested.slice(5) });
-    }
-  }, [ds, sp, onAgentAction]);
 
   const dataError = coreError || srcError || tgtError || evalError || pairsError;
   if (error) return <div className="grid min-h-dvh place-items-center text-destructive">failed to load data: {error}</div>;
@@ -294,12 +300,12 @@ export function ExploreClient() {
     </div>
   );
   const agentUI = <AgentPanel context={{ fromHood: pin ? null : fromId, toCity, focus: agentFocus }} onAction={onAgentAction} className="h-full"
-    initialInput={sp.get("q") ?? undefined} external={external} view={view} reportId={reportId} onViewChange={changeView} />;
-  const askAgent = (b: BlockInfo, question: string) => {
+    initialInput={sp.get("q") ?? undefined} view={view} reportId={reportId} onViewChange={changeView} />;
+  const askFromMap = (b: BlockInfo, question: string) => {
     const where = `${b.near ? `near ${b.near}` : "a block"}, ${ds.cities.find((c) => c.id === b.city)?.name ?? b.city}`;
     setAgentFocus({ lat: b.lat, lon: b.lon, label: where });
-    setExternal({ text: `${question} — ${where}`, t: Date.now() });
     setRight("agent"); setMobileTab("agent"); rightP.setCollapsed(false);
+    askAgent(`${question} — ${where}`);
     setAsk(null);
   };
 
@@ -321,7 +327,7 @@ export function ExploreClient() {
         </div>
       </div>
       {dataError && <p role="status" className="absolute left-3 top-14 z-10 border border-line bg-background/90 px-2 py-1 text-[11px] text-destructive">Some taste data could not be loaded.</p>}
-      {ask && <AskBox block={ask} sourceName={sourceName} onClose={() => setAsk(null)} onAsk={(q) => askAgent(ask, q)}
+      {ask && <AskBox block={ask} sourceName={sourceName} onClose={() => setAsk(null)} onAsk={(q) => askFromMap(ask, q)}
         onUseAsSource={ask.isSource ? () => { onPickSourceCell(ask.index); setAsk(null); } : undefined} />}
       {mode === "twin" ? (
         <div className="pointer-events-none absolute bottom-3 left-3 z-10 border border-line bg-background/90 px-2.5 py-1.5 text-[10.5px] text-dim">

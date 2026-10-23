@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef } from "react";
+import useSWRImmutable from "swr/immutable";
+import { fetchJson } from "@/hooks/use-json";
 import maplibregl from "maplibre-gl";
 import { ColumnLayer, PathLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
@@ -8,6 +10,7 @@ import { colorAt, type PaletteName } from "@/lib/colors";
 import { normalizeRobust } from "@/lib/similarity";
 import type { City, Hood, OpportunityResult, PackedCells } from "@/lib/types";
 
+type Supply = { kinds: string[]; cells: Record<string, number[]> };
 export interface MapPin { n: number; label: string; lat: number; lon: number; city?: string }
 export interface MapTwin { hood: Hood; score: number }
 export interface SourcePoint { lon: number; lat: number; name: string; cityId: string }
@@ -169,7 +172,7 @@ export default function ExploreMap(props: ExploreMapProps) {
         return `<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span style="width:38px;color:#8d8a80">${m.name}</span><span style="flex:1;height:5px;background:#22211d;position:relative"><span style="position:absolute;inset:0 auto 0 0;width:${Math.round(v * 100)}%;background:rgb(${m.rgb.join(",")})"></span></span><span style="width:28px;text-align:right;color:#8d8a80">${Math.round(v * 100)}%</span></div>`;
       }).join("") : "";
       const traits = cells.top[i].slice(0, 3).map((k) => escapeHtml(p.basketLabels[k] ?? "")).filter(Boolean).join(" · ");
-      const sup = supplyRef.current.get(cells.city);
+      const sup = supplyRef.current[cells.city];
       const counts = sup?.cells[cells.g[i]];
       const SHOW: [string, string][] = [["cafe", "cafés"], ["bar", "bars"], ["restaurant", "restaurants"], ["art_gallery", "galleries"], ["music_venue", "venues"], ["record_store", "record shops"]];
       const supply = counts ? SHOW.map(([k, l]) => { const n = counts[sup!.kinds.indexOf(k)] ?? 0; return n ? `${n} ${l}` : ""; }).filter(Boolean).slice(0, 4).join(" · ") : "";
@@ -213,15 +216,10 @@ export default function ExploreMap(props: ExploreMapProps) {
   colsRef.current = { tgtCols, srcCols, oppCols, tgtStack, srcStack };
 
   // Overture venue counts per cell for the hover card (≈150–300 KB per city, loaded once)
-  const supplyRef = useRef(new Map<string, { kinds: string[]; cells: Record<string, number[]> } | null>());
-  const supplyCities = [props.sourceCity?.id, props.targetCity?.id].filter(Boolean).join(",");
-  useEffect(() => {
-    for (const id of supplyCities.split(",").filter(Boolean)) {
-      if (supplyRef.current.has(id)) continue;
-      supplyRef.current.set(id, null);
-      fetch(`/data/supply/${id}.json`).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j) supplyRef.current.set(id, j); }).catch(() => {});
-    }
-  }, [supplyCities]);
+  const { data: srcSupply } = useSWRImmutable<Supply>(props.sourceCity ? `/data/supply/${props.sourceCity.id}.json` : null, fetchJson, { shouldRetryOnError: false });
+  const { data: tgtSupply } = useSWRImmutable<Supply>(props.targetCity ? `/data/supply/${props.targetCity.id}.json` : null, fetchJson, { shouldRetryOnError: false });
+  const supplyRef = useRef<Record<string, Supply | undefined>>({});
+  supplyRef.current = { [props.sourceCity?.id ?? ""]: srcSupply, [props.targetCity?.id ?? ""]: tgtSupply };
 
   // opportunity result: fly to its city
   const oppKey = props.opportunity && props.opportunityCity ? `${props.opportunityCity.id}|${props.opportunity.cells.length}|${props.opportunity.cells[0]?.g}` : "";
@@ -302,11 +300,15 @@ export default function ExploreMap(props: ExploreMapProps) {
       el.innerHTML = `<div style="width:18px;height:18px;display:grid;place-items:center;background:${p.n === 1 ? "#f0a03c" : "#0b0b0a"};color:${p.n === 1 ? "#0b0b0a" : "#f0a03c"};border:1px solid #f0a03c;font:600 10px var(--font-geist-mono),monospace">${p.n}</div>${p.n <= 3 ? `<div style="padding:1px 4px;background:rgba(11,11,10,.82);color:#e8e6df;font:500 10px var(--font-geist-mono),monospace;white-space:nowrap">${escapeHtml(p.label.toLowerCase())}</div>` : ""}`;
       return new maplibregl.Marker({ element: el, anchor: "left" }).setLngLat([p.lon, p.lat]).addTo(map);
     });
-    if (pins.length > 1) {
+    const frame = () => {
+      if (pins.length < 2) return;
       const lats = pins.map((p) => p.lat), lons = pins.map((p) => p.lon);
       const [s, n, w, e] = [Math.min(...lats), Math.max(...lats), Math.min(...lons), Math.max(...lons)];
       if (n - s < 1 && e - w < 1.5) map.fitBounds([[w, s], [e, n]], { padding: 90, maxZoom: 13, pitch: 45, duration: reducedMotion() ? 0 : 1600 });
-    }
+    };
+    // a flight to the report's city may still be running: frame the pins once it lands
+    if (anim.current.flying) map.once("moveend", frame); else frame();
+    return () => { map.off("moveend", frame); pinMarkers.current.forEach((m) => m.remove()); pinMarkers.current = []; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pinKey stands for pins
   }, [ready, pinKey, mapRef]);
 

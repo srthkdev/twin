@@ -1,6 +1,8 @@
 "use client";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDebounceCallback, useIsClient, useUnmount } from "usehooks-ts";
+import { useDebounceCallback, useEventCallback, useEventListener, useUnmount } from "usehooks-ts";
+import { useStickToBottom } from "use-stick-to-bottom";
+import TextareaAutosize from "react-textarea-autosize";
 import useSWR from "swr";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai";
@@ -44,6 +46,10 @@ function saveMarkdown(filename: string, markdown: string) {
 
 /** The conversation survives tab switches, panel collapses and reloads (this browser only). */
 const CHAT_KEY = "twin-chat-v1";
+/** The panel renders on the client only, so the saved chat can seed the first render instead of being restored after it. */
+function readSavedChat(): SavedChat | null {
+  try { const raw = localStorage.getItem(CHAT_KEY); return raw ? JSON.parse(raw) as SavedChat : null; } catch { return null; }
+}
 interface SavedChat { messages: TwinUIMessage[]; files: Record<string, { filename: string; markdown: string }[]>; times: [string, { start: number; end?: number }][] }
 
 /** Past chats and reports, this browser only (there are no accounts; a report's share link is its key). */
@@ -203,10 +209,16 @@ type Group =
   | { kind: "tools"; steps: ToolStep[]; cards: { name: string; data: unknown; id: string; pending?: boolean }[] }
   | { kind: "thinking"; text: string; done: boolean; key: string };
 
-export function AgentPanel({ context, onAction, className, initialInput, external, view = "map", reportId, onViewChange }: {
+/** Ask the agent from elsewhere in the UI (e.g. the map's ask box). A collapsed panel isn't mounted yet, so the
+ *  question waits for it. */
+let panels = 0, pendingAsk: string | null = null;
+export const askAgent = (text: string) => {
+  if (panels) window.dispatchEvent(new CustomEvent("twin:ask", { detail: text }));
+  else pendingAsk = text;
+};
+
+export function AgentPanel({ context, onAction, className, initialInput, view = "map", reportId, onViewChange }: {
   context: { fromHood: string | null; toCity: string | null; focus?: { lat: number; lon: number; label: string } | null };
-  /** A question sent from elsewhere in the UI (e.g. the map's ask box); `t` changes per request. */
-  external?: { text: string; t: number } | null;
   onAction: (a: AgentAction) => void;
   className?: string;
   initialInput?: string;
@@ -219,33 +231,33 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     deserializer: (raw) => ({ ...emptySettings(), ...JSON.parse(raw) }),
   });
   const { data: health = null, error: healthError } = useJson<Health>("/api/agent/health");
-  const [savedChat, saveChat, clearChat] = useStoredState<SavedChat | null>(CHAT_KEY, null);
-  const [history, setHistory] = useStoredState<History>(HISTORY_KEY, emptyHistory);
+  const [, saveChat, clearChat] = useStoredState<SavedChat | null>(CHAT_KEY, null);
+  // A ?q= question starts a fresh conversation; otherwise the last one comes back.
+  const [boot] = useState(() => ({ q: initialInput?.trim() ?? "", saved: initialInput?.trim() ? null : readSavedChat() }));
+  const [history, setLocalHistory] = useStoredState<History>(HISTORY_KEY, emptyHistory);
   const [showHistory, setShowHistory] = useState(false);
-  // With a username, history also lives in Blob: merge the server copy once per sign-in, then push changes (debounced).
+  // With a username, history also lives on the server: merge its copy when it arrives, push every change (debounced).
   const { user, setUser, signOut } = useTwinUser();
-  const { data: remote } = useSWR(user ? ["history", user.name] : null, () => fetchHistory<HistoryChat>(user!), { revalidateOnFocus: false });
-  const mergedFor = useRef<string | null>(null);
   const push = useDebounceCallback((u: TwinUser, h: History) => { void pushHistory(u, h as SyncedHistory).catch(() => {}); }, 1500);
-  useEffect(() => {
-    if (!user || !remote || mergedFor.current === user.name) return;
-    mergedFor.current = user.name;
-    setHistory((h) => mergeHistory(h, remote));
-  }, [user, remote, setHistory]);
-  useEffect(() => { if (user && mergedFor.current === user.name) push(user, history); }, [user, history, push]);
-  const [restored, setRestored] = useState(false);
-  const isClient = useIsClient();
+  const setHistory = useEventCallback((update: (h: History) => History) => setLocalHistory((h) => {
+    const next = update(h);
+    if (user) push(user, next);
+    return next;
+  }));
+  useSWR(user ? ["history", user.name] : null, () => fetchHistory<HistoryChat>(user!), {
+    revalidateOnFocus: false,
+    onSuccess: (remote) => setHistory((h) => mergeHistory(h, remote)),
+  });
   const [showSettings, setShowSettings] = useState(false);
-  const [input, setInput] = useState(initialInput ?? "");
+  const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
   const [speak, setSpeak] = useState(false);
-  const canListen = isClient && !!getRecognition();
+  const canListen = !!getRecognition();
   const [progress, setProgress] = useState<Record<string, string>>({});
-  const [files, setFiles] = useState<Record<string, { filename: string; markdown: string }[]>>({});
-  const times = useRef(new Map<string, { start: number; end?: number }>());
+  const [files, setFiles] = useState<Record<string, { filename: string; markdown: string }[]>>(() => boot.saved?.files ?? {});
+  const times = useRef(new Map<string, { start: number; end?: number }>(boot.saved?.times));
   const recRef = useRef<Recognition | null>(null);
-  const endRef = useRef<HTMLDivElement>(null);
-  const taRef = useRef<HTMLTextAreaElement>(null);
+  const { scrollRef, contentRef } = useStickToBottom({ initial: "instant", resize: "smooth" });
   const live = useRef({ settings, context, onAction, user: null as TwinUser | null });
   live.current = { settings, context, onAction, user };
 
@@ -258,8 +270,15 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     },
   }), []);
 
+  // Saved between answers, never mid-stream.
+  const persist = useEventCallback((msgs: TwinUIMessage[], fs: typeof files) => {
+    const ids = new Set(msgs.flatMap((m) => m.parts.map((p, i) => (isToolUIPart(p) ? p.toolCallId : `${m.id}:r${i}`))));
+    if (msgs.length) saveChat({ messages: msgs.slice(-30), files: fs, times: [...times.current].filter(([k]) => ids.has(k)) });
+    else clearChat();
+  });
   const { messages, sendMessage, status, stop, error, setMessages, regenerate, clearError } = useChat<TwinUIMessage>({
     transport,
+    messages: boot.saved?.messages,
     onData: (part) => {
       const p = part as { type: string; data: unknown };
       if (p.type === "data-progress") {
@@ -272,8 +291,12 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
         if (a.type === "report") setHistory((h) => ({ ...h, reports: [{ id: a.id, title: a.title, at: Date.now() }, ...h.reports.filter((r) => r.id !== a.id)].slice(0, 20) }));
       }
     },
-    onFinish: ({ message }) => {
-      setFiles((f) => (f.last ? { ...f, [message.id]: f.last, last: [] } : f));
+    onFinish: ({ message, messages: all }) => {
+      setFiles((f) => {
+        const next = f.last ? { ...f, [message.id]: f.last, last: [] } : f;
+        persist(all, next);
+        return next;
+      });
       if (speak && "speechSynthesis" in window) {
         const txt = splitNext(message.parts.map((p) => (p.type === "text" ? p.text : "")).join(" ")).body.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*_`#|◎]/g, "");
         if (txt) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(txt)); }
@@ -285,22 +308,6 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
   const reportAsked = /\b(report|plan|analysis|compare|deep dive)\b/i.test(lastAsk);
 
   useUnmount(() => { window.speechSynthesis?.cancel(); });
-  // Restore the chat before allowing persistence or a new request.
-  useEffect(() => {
-    if (!isClient || restored) return;
-    setRestored(true);
-    if (!savedChat?.messages.length || initialInput?.trim()) return;
-    times.current = new Map(savedChat.times);
-    setFiles(savedChat.files ?? {});
-    setMessages(savedChat.messages);
-  }, [isClient, restored, savedChat, initialInput, setMessages]);
-  // persist only between answers, never mid-stream
-  useEffect(() => {
-    if (!restored || (status !== "ready" && status !== "error")) return;
-    const ids = new Set(messages.flatMap((m) => m.parts.map((p, i) => (isToolUIPart(p) ? p.toolCallId : `${m.id}:r${i}`))));
-    if (messages.length) saveChat({ messages: messages.slice(-30), files, times: [...times.current].filter(([k]) => ids.has(k)) });
-    else clearChat();
-  }, [messages, status, files, restored, saveChat, clearChat]);
   const snapshot = useCallback((): SavedChat => ({ messages: messages.slice(-30), files, times: [...times.current] }), [messages, files]);
   const archive = useCallback(() => {
     if (!messages.length) return;
@@ -318,12 +325,8 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     archive();
     times.current = new Map(old.chat.times); setFiles(old.chat.files ?? {}); setProgress({}); clearError();
     setMessages(old.chat.messages); setShowHistory(false);
-  }, [history, archive, setMessages, clearError]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, progress]);
-  useEffect(() => {
-    const t = taRef.current;
-    if (t) { t.style.height = "0px"; t.style.height = `${Math.min(120, t.scrollHeight)}px`; }
-  }, [input]);
+    persist(old.chat.messages, old.chat.files ?? {});
+  }, [history, archive, setMessages, clearError, persist]);
 
   // stamp first/last-seen times per tool call and per reasoning block, so steps can show how long they took
   for (const m of messages) m.parts.forEach((p, idx) => {
@@ -335,25 +338,26 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     times.current.set(key, t);
   });
 
-  const lastExternal = useRef(0);
-  useEffect(() => {
-    if (!restored || !external || external.t === lastExternal.current) return;
-    lastExternal.current = external.t;
-    if (status === "ready" || status === "error") void sendMessage({ text: external.text });
-  }, [external, status, sendMessage, restored]);
-
-  // A question in the link (?q=…, e.g. from the landing tasks) runs once as a fresh conversation, then leaves the URL.
+  // A question in the link (?q=…, e.g. from the landing tasks) runs once, then leaves the URL. Sending is an action
+  // with a side effect, so it waits for mount (and runs once under StrictMode's double mount).
   const autoSent = useRef(false);
   useEffect(() => {
-    const q = initialInput?.trim();
-    if (!restored || autoSent.current || !q) return;
-    autoSent.current = true;
-    setMessages([]); setFiles({}); times.current.clear(); setInput("");
-    void sendMessage({ text: q });
-    const u = new URL(window.location.href);
-    u.searchParams.delete("q");
-    window.history.replaceState(null, "", u.toString());
-  }, [initialInput, sendMessage, setMessages, restored]);
+    panels++;
+    // deferred and cancelled on cleanup, so StrictMode's mount → unmount → mount sends once, from the live instance
+    const t = setTimeout(() => {
+      if (autoSent.current) return;
+      autoSent.current = true;
+      const q = boot.q || pendingAsk;
+      pendingAsk = null;
+      if (q) void sendMessage({ text: q });
+      if (boot.q) {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("q");
+        window.history.replaceState(null, "", u.toString());
+      }
+    }, 0);
+    return () => { panels--; clearTimeout(t); };
+  }, [boot.q, sendMessage]);
 
   const busyRef = useRef(busy);
   busyRef.current = busy;
@@ -363,6 +367,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
     setInput("");
     void sendMessage({ text: t });
   }, [sendMessage]);
+  useEventListener("twin:ask" as keyof WindowEventMap, (e) => send(String((e as CustomEvent).detail ?? "")));
   const save = useCallback((f: { filename: string; markdown: string }) => saveMarkdown(f.filename, f.markdown), []);
 
   const onLink = useCallback((href: string) => {
@@ -417,7 +422,7 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
       </div>
       {showSettings && <AgentSettingsPanel value={settings} onChange={setSettings} health={health} />}
       {showHistory && <div className="max-h-[45%] shrink-0 space-y-4 overflow-y-auto border-b border-line px-3 py-3 text-[11.5px]">
-        <Account user={user} onUser={setUser} onSignOut={() => { mergedFor.current = null; signOut(); }}
+        <Account user={user} onUser={setUser} onSignOut={signOut}
           onHistory={(h) => setHistory((cur) => mergeHistory(cur, h as History))} />
         {!user && <p className="text-[10.5px] leading-relaxed text-dim">Without a name, history stays in this browser. Reports also live at their share link, which anyone with the link can open.</p>}
         <div>
@@ -438,7 +443,8 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
       </div>}
       {healthError && <p role="status" className="border-b border-line px-3 py-2 text-[11.5px] text-dim">Couldn’t load agent availability.</p>}
 
-      <div className={cn("min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden", view === "report" ? "px-4 py-5 md:px-8 md:py-7" : "px-3 py-3")} aria-live="polite">
+      <div ref={scrollRef} className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden", view === "report" ? "px-4 py-5 md:px-8 md:py-7" : "px-3 py-3")} aria-live="polite">
+        <div ref={contentRef} className="space-y-5">
         {!messages.length && (
           <div className="space-y-5">
             <p className="text-[12.5px] leading-relaxed text-muted-foreground">Ask about any neighbourhood in the world: its twin elsewhere, where to go, where to open something, where an artist should play. Ask for a report to get a verdict, charts and a PDF.</p>
@@ -488,15 +494,15 @@ export function AgentPanel({ context, onAction, className, initialInput, externa
             <button type="button" onClick={() => { clearError(); void regenerate(); }} className="shrink-0 border border-destructive/60 px-1.5 text-[11.5px] transition-colors hover:bg-destructive hover:text-background">retry</button>
           </div>
         )}
-        <div ref={endRef} />
+        </div>
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="border-t border-line p-2.5">
         <div className="flex items-end gap-1 border border-line-strong bg-card px-2 py-1.5 transition-colors focus-within:border-primary">
-          <textarea data-tour="ask" ref={taRef} value={input} rows={1} onChange={(e) => setInput(e.target.value)}
+          <TextareaAutosize data-tour="ask" value={input} minRows={1} maxRows={6} onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
             aria-label="Message the Twin agent" placeholder={listening ? "listening…" : "ask about any neighbourhood…"}
-            className="max-h-[120px] min-h-[22px] flex-1 resize-none bg-transparent py-0.5 text-[12.5px] leading-[1.45] outline-none placeholder:text-dim" />
+            className="min-h-[22px] flex-1 resize-none bg-transparent py-0.5 text-[12.5px] leading-[1.45] outline-none placeholder:text-dim" />
           {canListen && (
             <button type="button" onClick={toggleMic} aria-pressed={listening} aria-label={listening ? "Stop listening" : "Voice input"}
               className={cn("grid size-6 shrink-0 place-items-center transition-colors", listening ? "text-primary" : "text-dim hover:text-foreground")}>

@@ -1,16 +1,12 @@
 "use client";
-import { useEffect } from "react";
+import { useEventListener } from "usehooks-ts";
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import type { DataSet } from "@/lib/types";
 
 export function CommandPalette({ open, onOpenChange, ds, sourceCity, onPickHood, onPickCity }: {
   open: boolean; onOpenChange: (o: boolean) => void; ds: DataSet; sourceCity: string; onPickHood: (id: string) => void; onPickCity: (id: string) => void;
 }) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); onOpenChange(!open); } };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [open, onOpenChange]);
+  useEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); onOpenChange(!open); } });
   const run = (fn: () => void) => { fn(); onOpenChange(false); };
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange} title="Search" description="Search neighbourhoods and cities" className="rounded-none border border-line-strong bg-popover font-mono shadow-none sm:max-w-xl">

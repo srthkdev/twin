@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useJson } from "@/hooks/use-json";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { MapLink, Report } from "@/lib/agent/report-types";
 import { isChartSpec, Chart } from "./chart";
@@ -269,15 +270,9 @@ function ReportCard({ data, onOpen }: { data: unknown; onOpen?: (id: string, tit
   const nested = d.report && typeof d.report === "object" ? d.report as Any : d;
   const id = str(nested.id ?? d.report_id ?? d.id);
   const title = str(nested.title ?? d.title) || "Twin report";
-  const [report, setReport] = useState<Report | null>(null);
+  const { data: report = null } = useJson<Report>(id ? `/api/reports/${encodeURIComponent(id)}` : null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
-  useEffect(() => {
-    if (!id) return;
-    const controller = new AbortController();
-    fetch(`/api/reports/${encodeURIComponent(id)}`, { signal: controller.signal }).then((r) => r.ok ? r.json() as Promise<Report> : null).then((r) => { if (r) setReport(r); }).catch(() => {});
-    return () => controller.abort();
-  }, [id]);
   if (!id) return null;
   const blocks = report ? reportBlocks(report) : [];
   const verdict = blocks.find((b) => b.type === "Verdict")?.props ?? report?.verdict ?? (nested.verdict && typeof nested.verdict === "object" ? nested.verdict as Report["verdict"] : undefined);

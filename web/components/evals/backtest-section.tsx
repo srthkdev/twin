@@ -1,6 +1,7 @@
 "use client";
+import { useJson } from "@/hooks/use-json";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type Interval = [number, [number, number]];
@@ -171,14 +172,8 @@ function BrandStrip({ data }: { data: Backtest }) {
 }
 
 export function BacktestSection() {
-  const [data, setData] = useState<Backtest | null>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    fetch("/data/backtest.json").then((response) => {
-      if (!response.ok) throw new Error("backtest data unavailable");
-      return response.json();
-    }).then((result: Backtest) => setData(result)).catch(() => setFailed(true));
-  }, []);
+  const { data = null, error } = useJson<Backtest>("/data/backtest.json");
+  const failed = !!error;
 
   return (
     <div className="mt-4 space-y-4">

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { useJson } from "@/hooks/use-json";
 import type { MapLink, Report } from "@/lib/agent/report-types";
 import { reportBlocks } from "@/lib/report/normalize";
@@ -30,17 +30,10 @@ export function reportPins(report: Report): { label: string; link: MapLink }[] {
 
 export function ReportView({ id, onLink }: { id: string; onLink?: (link: MapLink) => void }) {
   const { data: report, error, mutate, isValidating } = useJson<Report>(`/api/reports/${encodeURIComponent(id)}`);
-  const reportRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!report) return;
-    reportRef.current?.scrollIntoView({ block: "start" });
-    // the map shows what the report is about while it is open
-    window.dispatchEvent(new CustomEvent("twin:report-pins", { detail: reportPins(report) }));
-    return () => { window.dispatchEvent(new CustomEvent("twin:report-pins", { detail: [] })); };
-  }, [report]);
   if (error && !isValidating) return <div className="flex items-center justify-between gap-3 border-t border-line pt-4 text-[12px] text-destructive"><span>Couldn’t load this report.</span><button type="button" onClick={() => void mutate()} className="border border-line-strong px-2 py-1 text-muted-foreground hover:text-foreground">Retry</button></div>;
   if (!report) return <p role="status" className="border-t border-line pt-4 text-[11px] text-dim"><span className="cursor-block">loading report</span></p>;
-  return <div ref={reportRef}><ReportDocument report={report} onLink={onLink} /></div>;
+  // scrolls the chat to the report once, when it first renders
+  return <div ref={(el) => el?.scrollIntoView({ block: "start" })}><ReportDocument report={report} onLink={onLink} /></div>;
 }
 
 export function ReportDocument({ report, onLink }: { report: Report; onLink?: (link: MapLink) => void }) {

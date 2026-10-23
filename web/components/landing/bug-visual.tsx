@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useJson } from "@/hooks/use-json";
+import { useMemo, useState } from "react";
 import { useDataset } from "@/hooks/use-dataset";
 import { isLive, loadCells } from "@/lib/data";
 import { cn } from "@/lib/utils";
@@ -7,17 +8,12 @@ import type { PackedCells } from "@/lib/types";
 
 export function BugVisual() {
   const { ds, error } = useDataset();
-  const [cells, setCells] = useState<PackedCells | null>(null);
-  const [failed, setFailed] = useState(false);
+
   const [taste, setTaste] = useState(true);
   const city = ds?.cities.find((c) => !isLive(c));
   const item = ds?.basket.find((b) => b.id === "artist-kendrick-lamar") ?? ds?.basket.find((b) => b.kind === "artist");
-  useEffect(() => {
-    if (!city) return;
-    let alive = true;
-    loadCells(city.id).then((data) => { if (alive) setCells(data); }).catch(() => { if (alive) setFailed(true); });
-    return () => { alive = false; };
-  }, [city]);
+  const { data: cells = null, error: cellsError } = useJson<PackedCells>(city ? `twin:cells:${city.id}` : null, () => loadCells(city!.id));
+  const failed = !!cellsError;
   const points = useMemo(() => {
     if (!cells || !item || !cells.n) return [];
     const lon = Array.from(cells.lon), lat = Array.from(cells.lat);

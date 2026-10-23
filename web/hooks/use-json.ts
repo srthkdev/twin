@@ -1,5 +1,5 @@
 "use client";
-import useSWR from "swr";
+import useSWR, { type SWRConfiguration } from "swr";
 
 export async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -7,6 +7,6 @@ export async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function useJson<T>(key: string | null, load: (url: string) => Promise<T> = fetchJson<T>) {
-  return useSWR<T, Error>(key, load, { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false });
+export function useJson<T>(key: string | null, load: (url: string) => Promise<T> = fetchJson<T>, config?: SWRConfiguration<T, Error>) {
+  return useSWR<T, Error>(key, load, { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false, ...config });
 }

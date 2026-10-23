@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useJson } from "@/hooks/use-json";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis, Area, AreaChart, Scatter, ScatterChart, ZAxis } from "recharts";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
@@ -51,17 +52,14 @@ function Kpi({ label, value, decimals = 2, suffix = "", note, accent }: { label:
 
 interface AgentTasks { measuredAt: string; model: string; note: string; tasks: { q: string; seconds: number; tools: string[]; qlooLive: number; qlooCached: number; outcome: string }[] }
 
+const NO_HOODS: Hood[] = [];
+
 export function EvalsClient() {
-  const [ev, setEv] = useState<Evals | null>(null);
-  const [tasks, setTasks] = useState<AgentTasks | null>(null);
-  const [hoods, setHoods] = useState<Hood[]>([]);
+  const { data: ev = null } = useJson<Evals>("/data/evals.json", loadEvals);
+  const { data: tasks = null } = useJson<AgentTasks>("/data/agent-tasks.json");
+  const { data: hoods = NO_HOODS } = useJson<Hood[]>("/data/hoods.json", loadHoods);
   const [split, setSplit] = useState<"test" | "dev" | "all">("test");
   const [sk, setSk] = useState<string | null>(null);
-  useEffect(() => {
-    loadEvals().then(setEv).catch(() => {});
-    loadHoods().then(setHoods).catch(() => {});
-    fetch("/data/agent-tasks.json").then((r) => r.json()).then(setTasks).catch(() => {});
-  }, []);
   const name = useMemo(() => new Map(hoods.map((h) => [h.id, h.name])), [hoods]);
   const cityOf = useMemo(() => new Map(hoods.map((h) => [h.id, h.city])), [hoods]);
 
