@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { type ModelMessage, consumeStream, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText, toUIMessageStream, type ToolSet } from "ai";
 import { loadServerDataSet } from "@/lib/agent/server-data";
-import { agentAttempts, aiTools, cappedOn, isDailyCap, utcDay, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
+import { agentAttempts, aiTools, cappedOn, isDailyCap, utcDay, withThoughtSignatures, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
 import { repairToolCall } from "@/lib/agent/repair";
 import type { AgentRunContext } from "@/lib/agent/report";
@@ -49,7 +49,8 @@ export async function POST(req: Request) {
   const ctx = contextLine(body.context);
   const meta: RunMeta = { qlooLive: 0, qlooCached: 0 };
   const question = [...messages].reverse().find((m) => m.role === "user")?.parts.flatMap((p) => p.type === "text" ? [p.text] : []).join("\n").trim();
-  const reportRun = /\b(report|plan|analysis|comparison|compare|deep dive)\b/i.test(question ?? "");
+  // "no report" / "without a report" asks for the opposite
+  const reportRun = /\b(report|plan|analysis|comparison|compare|deep dive)\b/i.test(question ?? "") && !/\b(no|not a|without an?|skip the) (report|plan|analysis)\b/i.test(question ?? "");
   const userName = req.headers.get("x-twin-user")?.trim().toLowerCase(), userCode = req.headers.get("x-twin-code")?.trim();
   const run: AgentRunContext = { user: userName && userCode ? { name: userName, code: userCode } : undefined, evidence: [], charts: new Map(), nextChartId: 1, question, model: () => meta.model, reportMode: reportRun };
   const t0 = Date.now();
@@ -67,10 +68,12 @@ export async function POST(req: Request) {
       // the user sees one continuous answer.
       const done: ModelMessage[] = [];
       let stepsDone = 0, nudged = false, started = false;
-      const waited = new Set<number>();
+      // per-minute limits: a model is skipped until its limit clears; we only wait when every open model is limited
+      const limitedUntil = new Map<string, number>();
+      let waits = 0;
       // one start and one finish for the whole answer, however many rounds it takes
       let finish: Parameters<typeof writer.write>[0] | undefined;
-      const open = (a: { capKey: string }) => cappedOn.get(a.capKey) !== utcDay();
+      const open = (a: { capKey: string }) => cappedOn.get(a.capKey) !== utcDay() && (limitedUntil.get(a.capKey) ?? 0) <= Date.now();
       for (let i = 0; i < attempts.length; i++) {
         const { capKey, label, model, providerOptions } = attempts[i];
         const later = () => attempts.slice(i + 1).some(open);
@@ -83,31 +86,37 @@ export async function POST(req: Request) {
           // counted across failovers, so a model switch does not reset the budget
           stopWhen: () => stepsDone >= (run.reportMode ? 16 : 8),
           // the last step must be an answer, never another tool call
-          prepareStep: () => {
+          prepareStep: ({ messages: stepMessages }) => {
             const step = stepsDone, elapsed = Date.now() - t0;
-            if (step >= (run.reportMode ? 15 : 7)) return { toolChoice: "none" as const };
+            const fix = attempts[i].gemini ? { messages: withThoughtSignatures(stepMessages) } : {};
+            if (step >= (run.reportMode ? 15 : 7)) return { ...fix, toolChoice: "none" as const };
             // A report must land inside the function's 300 s: past the research budget the model may only chart
             // and write, then must write, with what it has.
             if (run.reportMode && !run.reportId) {
-              if (nudged || step >= 12 || elapsed > 190_000) return { toolChoice: { type: "tool" as const, toolName: "report" } };
-              if (step >= 10 || elapsed > 150_000) return { activeTools: ["chart", "report"], toolChoice: "required" as const };
+              if (nudged || step >= 12 || elapsed > 190_000) return { ...fix, toolChoice: { type: "tool" as const, toolName: "report" } };
+              // (the tool list stays whole: Gemini rejects history that calls tools the request no longer declares)
+              if (step >= 10 || elapsed > 150_000) return { ...fix, toolChoice: "required" as const };
             }
-            return undefined;
+            return fix;
           },
           timeout: { firstChunkMs: 30_000, chunkMs: 45_000, stepMs: 190_000 },
           temperature: 0.4,
           // a 429 means a daily or per-minute cap: retrying the same model only waits; the next model answers now
           maxRetries: 0,
           repairToolCall,
+          onError: ({ error }) => { const b = (error as { responseBody?: string }).responseBody; if (b) console.warn(`[agent] ${label} error body: ${b.slice(0, 600)}`); },
           providerOptions,
           onStepFinish: (step) => { stepsDone++; meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
         });
-        let shown = false, retry = false, wait = false, lastError = "";
+        let shown = false, retry = false, wait = false, lastError = "", resumeAt = i;
         const parts = toUIMessageStream<ToolSet, TwinUIMessage>({
           stream: result.stream,
           sendStart: !started,
           messageMetadata: ({ part }) => (part.type === "finish" ? { ...meta, ms: Date.now() - t0 } : undefined),
-          onError: (e) => (e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e) ?? "agent failed").replace(/sk-[A-Za-z0-9_-]+/g, "[key]").slice(0, 300),
+          onError: (e) => {
+            const body = (e as { responseBody?: string }).responseBody, detail = body?.match(/"message":\s*"([^"]{0,400})/)?.[1];
+            return `${e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e) ?? "agent failed"}${detail ? `: ${detail}` : ""}`.replace(/sk-[A-Za-z0-9_-]+/g, "[key]").slice(0, 500);
+          },
         });
         const reader = parts.getReader();
         for (let r = await reader.read(); !r.done; r = await reader.read()) {
@@ -115,21 +124,25 @@ export async function POST(req: Request) {
           if (chunk.type === "error") {
             lastError = chunk.errorText;
             if (!userKey && isDailyCap(chunk.errorText)) cappedOn.set(capKey, utcDay());
-            // A per-minute limit clears in seconds: wait for it once rather than fall through to capped models.
-            else if (/429|RESOURCE_EXHAUSTED|rate.?limit|quota/i.test(chunk.errorText) && !waited.has(i) && Date.now() - t0 < 200_000) {
-              waited.add(i);
-              const hint = Number(chunk.errorText.match(/retry(?:Delay)?[^0-9]{0,12}(\d+(?:\.\d+)?)\s*s/i)?.[1] ?? 12);
-              await new Promise((r) => setTimeout(r, Math.min(25, Math.max(4, hint)) * 1000));
-              wait = true; void reader.cancel(); break;
+            else if (/429|too many requests|RESOURCE_EXHAUSTED|rate.?limit|per minute/i.test(chunk.errorText)) {
+              const hint = Number(chunk.errorText.match(/retry(?: in|Delay)?[^0-9]{0,12}(\d+(?:\.\d+)?)\s*s/i)?.[1] ?? 20);
+              limitedUntil.set(capKey, Date.now() + Math.min(60, Math.max(4, hint)) * 1000);
             }
             if (later()) { retry = true; void reader.cancel(); break; }
+            // nothing else is open right now: wait for the soonest per-minute limit to clear, then go back to it
+            const soonest = attempts.map((a, j) => ({ j, at: limitedUntil.get(a.capKey) ?? 0 })).filter((x) => x.at > Date.now() && cappedOn.get(attempts[x.j].capKey) !== utcDay()).sort((a, b) => a.at - b.at)[0];
+            if (soonest && waits < 2 && soonest.at - Date.now() <= 25_000 && Date.now() - t0 < 200_000) {
+              waits++;
+              await new Promise((r) => setTimeout(r, soonest.at - Date.now() + 250));
+              wait = true; resumeAt = soonest.j; void reader.cancel(); break;
+            }
           }
           if (chunk.type === "start") started = true;
           if (chunk.type === "finish") { finish = chunk; continue; }
           if (chunk.type !== "start" && chunk.type !== "start-step" && chunk.type !== "finish-step") shown = true;
           writer.write(chunk);
         }
-        if (wait) { console.warn(`[agent] ${label} hit a per-minute limit; retrying after a pause`); i--; continue; }
+        if (wait) { console.warn(`[agent] every model is rate-limited; resuming with ${attempts[resumeAt].label} after a pause`); i = resumeAt - 1; continue; }
         // Some models end a report run after the research, without writing it: ask once more and require the report tool.
         if (!retry && run.reportMode && !run.reportId && !nudged && stepsDone < 15 && Date.now() - t0 < 240_000) {
           nudged = true;
