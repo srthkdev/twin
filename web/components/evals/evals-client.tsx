@@ -7,7 +7,6 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AnimatedNumber } from "@/components/animated-number";
 import { loadEvals, loadHoods } from "@/lib/data";
 import { cosine } from "@/lib/similarity";
 import { CITY_CODES } from "@/lib/groups";
@@ -23,9 +22,31 @@ const config: ChartConfig = Object.fromEntries(METHODS.map((m) => [m, { label: N
 const tick = { fill: INK.dim, fontSize: 11, fontFamily: "var(--font-geist-mono)" };
 const f2 = (x?: number) => (x == null ? "--" : x.toFixed(2));
 
-function Panel({ title, sub, children, className }: { title: string; sub?: React.ReactNode; children: React.ReactNode; className?: string }) {
+// The headline of each test, from the committed results (pipeline/backtest/FINDINGS.md, evals.json, census.json).
+const VERDICTS = [
+  { id: "backtest", q: "Does taste predict where real chains open?", a: "Among equally busy blocks, yes for taste-led chains: AUC 0.69 (0.55 for convenience chains). Raw popularity still wins overall.", verdict: "holds, with a limit" },
+  { id: "collapse", q: "Does removing popularity separate places?", a: "Mean cross-city cosine 0.95 on raw scores, 0.16 after the correction.", verdict: "holds" },
+  { id: "census", q: "Does the corrected map agree with the census?", a: "Right sign in 32 of 36 pre-registered tests, better than raw in 21. Worse on affluence.", verdict: "mostly holds" },
+  { id: "twins", q: "Does Twin find the twins people already name?", a: "No. An LLM with no data wins (MRR 0.67 vs 0.34): it has read the same articles.", verdict: "fails" },
+];
+
+/** Secondary detail, closed until asked for. */
+function Fold({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <motion.section initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.5 }} className={cn("panel p-5 sm:p-6", className)}>
+    <details className="panel group mt-4">
+      <summary className="flex cursor-pointer list-none items-baseline gap-3 px-5 py-4 sm:px-6">
+        <span className="text-dim transition-transform group-open:rotate-90">›</span>
+        <span className="text-[14px] text-foreground">{title}</span>
+        {sub && <span className="hidden truncate text-[11.5px] text-dim sm:inline">{sub}</span>}
+      </summary>
+      <div className="px-5 pb-6 sm:px-6">{children}</div>
+    </details>
+  );
+}
+
+function Panel({ id, title, sub, children, className }: { id?: string; title: string; sub?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return (
+    <motion.section initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.5 }} id={id} className={cn("panel scroll-mt-24 p-5 sm:p-6", className)}>
       <h2 className="text-[15px] font-medium tracking-[-0.02em] text-foreground">{title}</h2>
       {sub && <p className="mt-1.5 max-w-3xl text-[12px] leading-relaxed text-muted-foreground">{sub}</p>}
       <div className="mt-5">{children}</div>
@@ -38,25 +59,12 @@ function RankChip({ rank }: { rank: number }) {
   return <span className={cn("inline-flex min-w-9 justify-center border px-1.5 py-0.5 text-[11px] tabular-nums", tone)}>{Number.isInteger(rank) ? rank : rank.toFixed(1)}</span>;
 }
 
-function Kpi({ label, value, decimals = 2, suffix = "", note, accent }: { label: string; value: number | null; decimals?: number; suffix?: string; note: React.ReactNode; accent?: boolean }) {
-  return (
-    <div className="panel p-5">
-      <div className="text-[12px] text-muted-foreground">{label}</div>
-      <div className={cn("num mt-3 text-[44px] leading-none tracking-tight", accent ? "text-primary" : "text-foreground")}>
-        {value == null ? "--" : <AnimatedNumber value={value} decimals={decimals} suffix={suffix} />}
-      </div>
-      <div className="mt-4 text-[11.5px] leading-relaxed text-dim">{note}</div>
-    </div>
-  );
-}
 
-interface AgentTasks { measuredAt: string; model: string; note: string; tasks: { q: string; seconds: number; tools: string[]; qlooLive: number; qlooCached: number; outcome: string }[] }
 
 const NO_HOODS: Hood[] = [];
 
 export function EvalsClient() {
   const { data: ev = null } = useJson<Evals>("/data/evals.json", loadEvals);
-  const { data: tasks = null } = useJson<AgentTasks>("/data/agent-tasks.json");
   const { data: hoods = NO_HOODS } = useJson<Hood[]>("/data/hoods.json", loadHoods);
   const [split, setSplit] = useState<"test" | "dev" | "all">("test");
   const [sk, setSk] = useState<string | null>(null);
@@ -96,33 +104,32 @@ export function EvalsClient() {
           What the data <span className="text-primary">supports.</span>
         </h1>
         <p className="mt-4 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
-          Four questions, each with labels or hypotheses committed before any result was computed: does taste predict where real chains
-          open, does raw Qloo data separate neighbourhoods, does the corrected map agree with the census, and does Twin find the twins
-          people already name. Losses are shown next to wins.
+          Four questions. Every label and hypothesis was committed before a result was computed, and losses are shown next to wins.
         </p>
-        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-dim">
+        <ol className="mt-6 divide-y divide-line border-y border-line">
+          {VERDICTS.map((v, i) => (
+            <li key={v.id}>
+              <a href={`#${v.id}`} className="grid gap-x-6 gap-y-1 py-3.5 transition-colors hover:bg-raised sm:grid-cols-[2rem_minmax(0,1fr)_minmax(0,1.25fr)_6.5rem] sm:items-baseline sm:px-2">
+                <span className="num text-[11px] text-dim">0{i + 1}</span>
+                <span className="text-[13px] text-foreground">{v.q}</span>
+                <span className="text-[12px] leading-relaxed text-muted-foreground">{v.a}</span>
+                <span className={cn("label text-[10px]", v.verdict === "fails" ? "text-destructive" : v.verdict === "holds" ? "text-primary" : "text-foreground")}>{v.verdict}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-dim">
           <span>ground truth <span className="text-muted-foreground">edf9056</span></span>
           {census && <span>census hypotheses <span className="text-muted-foreground">{census.preregisteredCommit.slice(0, 7)}</span></span>}
+          <span>chain hypotheses <span className="text-muted-foreground">pipeline/backtest/HYPOTHESES.md</span></span>
         </div>
       </div>
 
       <BacktestSection />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {ev ? (
-          <>
-            <Kpi label="cross-city cosine, corrected" value={ev.rawCollapse.twin_mean_cos ?? null} accent
-              note={<>raw scores average <span className="text-foreground">{f2(ev.rawCollapse.raw_mean_cos)}</span> — every pair looks the same</>} />
-            <Kpi label="census tests where corrected beats raw" value={census ? census.summary.correctedBeatsRaw : null} decimals={0} suffix={census ? ` / ${census.summary.n}` : ""} accent
-              note={<>pre-registered, LA + NYC · worse on affluence</>} />
-            <Kpi label="hit@3 on published twins, data only" value={ev.methods.twin.hit3}
-              note={<>LLM with no data <span className="text-foreground">{f2(ev.methods.llm.hit3)}</span> · random {f2(ev.methods.random.hit3)}</>} />
-          </>
-        ) : Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-none bg-card" />)}
-      </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Panel title="The raw collapse" sub={<>Cosine between neighbourhoods in different cities. Raw scores sit near <span className="num text-foreground">{f2(ev?.rawCollapse.raw_mean_cos)}</span> for almost every pair; corrected scores spread out around <span className="num text-primary">{f2(ev?.rawCollapse.twin_mean_cos)}</span>.</>}>
+        <Panel id="collapse" title="The raw collapse" sub={<>Cosine between neighbourhoods in different cities. Raw scores sit near <span className="num text-foreground">{f2(ev?.rawCollapse.raw_mean_cos)}</span> for almost every pair; corrected scores spread out around <span className="num text-primary">{f2(ev?.rawCollapse.twin_mean_cos)}</span>.</>}>
           {hist.length ? (
             <ChartContainer config={{ twin: { label: "corrected", color: INK.accent } }} className="aspect-auto h-60 w-full">
               <AreaChart data={hist}>
@@ -140,7 +147,7 @@ export function EvalsClient() {
           </div>
         </Panel>
 
-        <Panel title="Methods on published twins" sub="Held-out test pairs, both directions. Claude has read the same articles the labels come from, so it wins here.">
+        <Panel id="twins" title="Methods on published twins" sub="Held-out test pairs, both directions. Claude has read the same articles the labels come from, so it wins here.">
           {ev ? (
             <ChartContainer config={config} className="aspect-auto h-60 w-full">
               <BarChart data={bars} barGap={2}>
@@ -157,7 +164,7 @@ export function EvalsClient() {
       </div>
 
       {census && (
-        <Panel className="mt-4" title="Census check"
+        <Panel id="census" className="mt-4" title="Census check"
           sub={<>{census.summary.n} pre-registered hypotheses (ACS {census.acsYear}, tracts joined to 1 km cells). Spearman ρ between a census variable and the cells&apos; taste score.
             Correct sign: corrected <span className="text-foreground">{census.summary.correctSignCorrected}</span>, raw <span className="text-foreground">{census.summary.correctSignRaw}</span>.
             Mean |ρ|: corrected <span className="text-primary">{f2(census.summary.meanAbsRhoCorrected)}</span>, raw {f2(census.summary.meanAbsRhoRaw)}.</>}>
@@ -212,7 +219,7 @@ export function EvalsClient() {
         </Panel>
       )}
 
-      <Panel title="Per-pair results" sub="Rank of the published twin among every neighbourhood of the target city (1 = best). Hover a source for the quote." className="mt-4">
+      <Fold title="Per-pair results" sub="Rank of the published twin among every neighbourhood of the target city (1 = best). Hover a source for the quote.">
         <div className="mb-4 flex gap-1.5">
           {(["test", "dev", "all"] as const).map((s) => (
             <button key={s} onClick={() => setSplit(s)}
@@ -249,9 +256,9 @@ export function EvalsClient() {
             </TableBody>
           </Table>
         </div>
-      </Panel>
+      </Fold>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <Fold title="Sensitivity" sub="Basket size and neighbourhood radius."><div className="grid gap-4 lg:grid-cols-2">
         {([["basketSweep", "size", "Basket size sweep", "MRR as the number of taste dimensions grows — more dimensions keep helping."],
           ["radiusSweep", "km", "Radius sweep", "MRR as the neighbourhood averaging radius changes — it barely matters."]] as const).map(([k, x, t, s]) => (
           <Panel key={k} title={t} sub={s}>
@@ -268,9 +275,9 @@ export function EvalsClient() {
             ) : <Skeleton className="h-52 rounded-none bg-card" />}
           </Panel>
         ))}
-      </div>
+      </div></Fold>
 
-      <Panel title="Sanity checks" sub="Single facts we already know: percentile of one item in one neighbourhood within its city, raw vs corrected." className="mt-4">
+      <Fold title="Sanity checks" sub="Single facts we already know: percentile of one item in one neighbourhood, raw vs corrected.">
         {ev ? (
           <div className="overflow-x-auto">
             <Table>
@@ -299,38 +306,17 @@ export function EvalsClient() {
             </Table>
           </div>
         ) : <Skeleton className="h-40 rounded-none bg-card" />}
-      </Panel>
+      </Fold>
 
-      {tasks && (
-        <Panel className="mt-4" title="Agent tasks" sub={<>One live run per task, {tasks.measuredAt}, {tasks.model}. {tasks.note} Click a task to run it yourself.</>}>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent"><TableHead>Task</TableHead><TableHead>Tools</TableHead><TableHead className="text-right">Qloo live / cached</TableHead><TableHead className="text-right">Time</TableHead><TableHead>Outcome</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {tasks.tasks.map((t) => (
-                  <TableRow key={t.q}>
-                    <TableCell className="max-w-[16rem]"><a href={`/explore?tab=agent&q=${encodeURIComponent(t.q)}`} className="link text-foreground">{t.q}</a></TableCell>
-                    <TableCell className="text-[11.5px] text-muted-foreground">{t.tools.join(", ")}</TableCell>
-                    <TableCell className="num text-right text-muted-foreground"><span className="text-primary">{t.qlooLive}</span> / {t.qlooCached}</TableCell>
-                    <TableCell className="num text-right">{t.seconds}s</TableCell>
-                    <TableCell className="max-w-[18rem] text-[11.5px] text-muted-foreground">{t.outcome}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </Panel>
-      )}
+      
 
-      <Panel title="Methodology" className="mt-4">
+      <Fold title="How these tests were set up" sub="Labels first, a dev/test split, and a fair LLM baseline.">
         <div className="grid gap-6 text-[12.5px] leading-relaxed text-muted-foreground md:grid-cols-3">
           <div><h3 className="mb-1.5 text-foreground"><span className="text-primary">01</span> labels first</h3><p>Every pair cites a published comparison with a quote, and the census hypotheses list their expected sign. Both files were committed before any model or correlation ran.</p></div>
           <div><h3 className="mb-1.5 text-foreground"><span className="text-primary">02</span> dev / test</h3><p>Only dev pairs were used for tuning. Headline numbers use test pairs. With 21 test pairs, small differences between Twin and raw are within noise.</p></div>
           <div><h3 className="mb-1.5 text-foreground"><span className="text-primary">03</span> fair baseline</h3><p>The LLM gets the same candidate list and must rank it with no Qloo data. Random and raw-Qloo rankings are scored the same way.</p></div>
         </div>
-      </Panel>
+      </Fold>
     </main>
   );
 }

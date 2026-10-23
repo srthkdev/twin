@@ -40,9 +40,9 @@ const CLASS_LABEL: Record<string, string> = { taste: "Taste-led", convenience: "
 const fmt = (n: number, digits = 3) => n.toFixed(digits);
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
-function Panel({ title, sub, children, className }: { title: string; sub?: React.ReactNode; children: React.ReactNode; className?: string }) {
+function Panel({ id, title, sub, children, className }: { id?: string; title: string; sub?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={cn("panel p-5 sm:p-6", className)}>
+    <section id={id} className={cn("panel scroll-mt-24 p-5 sm:p-6", className)}>
       <h2 className="text-[15px] font-medium tracking-[-0.02em] text-foreground">{title}</h2>
       {sub && <p className="mt-1.5 max-w-3xl text-[12px] leading-relaxed text-muted-foreground">{sub}</p>}
       <div className="mt-5">{children}</div>
@@ -176,19 +176,31 @@ export function BacktestSection() {
   const failed = !!error;
 
   return (
-    <div className="mt-4 space-y-4">
-        <Panel title="Does taste predict where real businesses open?" sub={<>Chain placement backtest · {data ? data.generatedAt : "loading results"} · {data?.source}</>}>
-        {data ? <div className="space-y-1 text-[11.5px] leading-relaxed text-muted-foreground">
-          <p>{data.sites.toLocaleString()} branded places from Overture; {data.classes.all.brands} chains; {data.classes.all.pairs.toLocaleString()} directed (brand, A → B) pairs across six cities.</p>
-          <p>The strip below includes {data.brands.filter((row) => row[3] >= 6).length} brands with at least six pairs.</p>
-          <p>For each pair, score each city-B block by the cosine between the brand&apos;s city-A fingerprint and the block fingerprint.</p>
-          <p>Label a block positive when it contains at least one site of that brand.</p>
-        </div> : <p className="text-[11px] text-dim">{failed ? "Could not load /data/backtest.json." : "loading /data/backtest.json…"}</p>}
+    <div className="mt-6 space-y-4">
+      <Panel id="backtest" title="Does taste predict where real businesses open?" sub={<>Chain placement backtest · {data ? data.generatedAt : "loading results"} · {data?.source}</>}>
+        {data ? <>
+          <p className="max-w-4xl text-[12px] leading-relaxed text-muted-foreground">
+            {data.sites.toLocaleString()} branded places from Overture, {data.classes.all.brands} chains, {data.classes.all.pairs.toLocaleString()} (brand, city A → city B) pairs.
+            For each pair, every block in city B is scored by how much its taste matches the blocks where the brand already is in city A; a block counts as a hit when the brand has a site there.
+            <span className="text-foreground"> Chains follow footfall, so raw popularity ranks real sites best overall. Among equally busy blocks, taste still picks the right ones for taste-led brands.</span> Twin therefore ranks by busyness first, then taste.
+          </p>
+          <div className="mt-5"><AucChart data={data} /></div>
+        </> : <p className="text-[11px] text-dim">{failed ? "Could not load /data/backtest.json." : "loading /data/backtest.json…"}</p>}
       </Panel>
 
       {data && <>
-        <Panel title="Pre-registration and verdicts" sub="Confirmatory hypotheses were written before scoring. Exploratory combinations were added after H1–H4; failures stay in the table.">
-          <div className="overflow-x-auto">
+        <Panel title="Every chain, by how well taste predicts it" sub="One dot per brand: median AUC among equally busy blocks across its city pairs. Search a brand or filter by class.">
+          <BrandStrip data={data} />
+        </Panel>
+
+        <details className="panel group">
+          <summary className="flex cursor-pointer list-none items-baseline gap-3 px-5 py-4 sm:px-6">
+            <span className="text-dim transition-transform group-open:rotate-90">›</span>
+            <span className="text-[14px] text-foreground">Pre-registration, model and limits</span>
+            <span className="hidden truncate text-[11.5px] text-dim sm:inline">Hypotheses H1–H5c, a learned model with brand-held-out folds, the AUC distribution</span>
+          </summary>
+          <div className="space-y-6 px-5 pb-6 sm:px-6">
+            <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-left text-[11px]">
               <thead><tr className="border-b border-line text-[9.5px] uppercase tracking-[0.12em] text-dim"><th className="w-14 py-2 pr-3">ID</th><th className="py-2 pr-4">Hypothesis</th><th className="w-28 py-2 pr-4">Pre-registered</th><th className="w-24 py-2">Verdict</th></tr></thead>
               <tbody>{data.hypotheses.map((hypothesis) => <tr key={hypothesis.id} className="border-b border-line/60 align-top">
@@ -199,43 +211,22 @@ export function BacktestSection() {
             </table>
           </div>
           <p className="mt-3 max-w-4xl text-[11px] leading-relaxed text-muted-foreground"><span className="text-destructive">H2 fails.</span> The corrected fingerprint removes footfall by design; chains follow footfall, so raw popularity ranks their real blocks better overall.</p>
-        </Panel>
 
-        <Panel title="Taste adds signal after controlling for busyness" sub="Per-pair median ROC AUC across the full city-B candidate set. Intervals are 95% bootstrap CIs; the dashed line is chance (0.5).">
-          <AucChart data={data} />
-        </Panel>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Panel title="Within-busyness AUC distribution" sub={`${data.hist.taste.length} bins from 0 to 1. Higher values mean the source-city taste profile ranks occupied blocks above unoccupied blocks within busyness strata.`}>
-            <Histogram data={data} />
-          </Panel>
-          <Panel title="Learned model · GroupKFold by brand" sub="Logistic regression with brand-held-out folds; compare the per-trait model against the busyness-only model.">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div><p className="label mb-3">AUC distribution among equally busy blocks</p><Histogram data={data} /></div>
+              <div><p className="label mb-3">Learned per-trait model · GroupKFold by brand</p>
             <div className="grid grid-cols-3 divide-x divide-line border-y border-line py-4 text-center">
               <div><p className="label">Δ median AUC</p><p className="num mt-2 text-[22px] text-primary">+{fmt(data.classes.all.model.delta, 4)}</p><p className="num mt-1 text-[10px] text-dim">95% CI [{fmt(data.classes.all.model.delta_ci[0], 4)}, {fmt(data.classes.all.model.delta_ci[1], 4)}]</p></div>
               <div><p className="label">pairs improved</p><p className="num mt-2 text-[22px] text-foreground">{pct(data.classes.all.model.improves)}</p><p className="mt-1 text-[10px] text-dim">{data.classes.all.model.n.toLocaleString()} held-out pairs</p></div>
               <div><p className="label">median AUC</p><p className="num mt-2 text-[22px] text-foreground">{fmt(data.classes.all.model.busy, 4)} <span className="text-dim">→</span> {fmt(data.classes.all.model.model, 4)}</p><p className="mt-1 text-[10px] text-dim">busy → model</p></div>
             </div>
             <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">The gain is tiny because busyness already ranks occupied blocks very well, leaving little headroom for taste to improve the full candidate ordering.</p>
-          </Panel>
-        </div>
-
-        <Panel title="Brand strip · sorted by within-busyness AUC" sub="Each dot is one brand&apos;s median AUC across its city pairs. Hover a row for category and raw Twin AUC; the class filter and search update the full set.">
-          <BrandStrip data={data} />
-        </Panel>
-
-        <Panel title="What this means">
-          <ul className="space-y-2 text-[12px] leading-relaxed text-muted-foreground">
-            <li><span className="mr-2 text-primary">01</span>Taste does not replace footfall.</li>
-            <li><span className="mr-2 text-primary">02</span>Taste helps decide which busy blocks fit a chain.</li>
-            <li><span className="mr-2 text-primary">03</span>The product should rank by busyness first, then by taste match.</li>
-          </ul>
-          <div className="mt-5 border-t border-line pt-4">
-            <p className="label">Limitations</p>
-            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">Overture brand coverage is incomplete; a geohash-6 cell is the unit of analysis; chains do not represent independent businesses; the sample covers six cities.</p>
+              </div>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground"><span className="text-foreground">Limits.</span> Overture brand coverage is incomplete; a 1 km cell is the unit; chains are not independent businesses; six cities.
+              Code: <a className="link" href="https://github.com/srthkdev/twin/tree/main/pipeline/backtest/backtest.py" target="_blank" rel="noreferrer">backtest.py ↗</a> · <a className="link" href="https://github.com/srthkdev/twin/tree/main/pipeline/backtest/model.py" target="_blank" rel="noreferrer">model.py ↗</a></p>
           </div>
-        </Panel>
-
-        <p className="px-1 text-[10.5px] text-dim">Implementation: <a className="link text-muted-foreground" href="https://github.com/srthkdev/twin/tree/main/pipeline/backtest/backtest.py" target="_blank" rel="noreferrer">backtest.py ↗</a><span className="mx-2">·</span><a className="link text-muted-foreground" href="https://github.com/srthkdev/twin/tree/main/pipeline/backtest/model.py" target="_blank" rel="noreferrer">model.py ↗</a></p>
+        </details>
       </>}
     </div>
   );
