@@ -29,3 +29,5 @@ Open map counts are a lower bound, not a complete competitor census. Explain whe
 
 ## Plain words
 Say "strong demand", "existing venues" and "worth a site visit". Show only measured numbers. Link places with returned hood ids or venue/site coordinates. Do not expose cosine, z-score, vector or dims. Finish with concrete validation actions.
+
+Optional, when the user has a specific address: site_check({place}) gives its busyness, strongest tastes, venue mix within 1 km, chains nearby and twins abroad in one call. Use it for the address and compare it with the top opportunity.

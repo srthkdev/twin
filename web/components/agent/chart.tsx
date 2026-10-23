@@ -30,7 +30,7 @@ export function streamingChart(input: unknown, id: string): ChartSpec | null {
 const sourceText = (s: string) => ({
   find_twins: "twin match", twins_anywhere: "twin match", explain_match: "twin match",
   local_scene: "Qloo", scene: "Qloo", compare_taste: "Qloo", trend: "Qloo", opportunity: "Qloo",
-  venue_supply: "Overture", geocode: "OpenStreetMap", web_search: "web search", wiki: "Wikipedia",
+  venue_supply: "Overture", brand_whitespace: "Overture chains", lookalike_sites: "twin match", site_check: "Twin", geocode: "OpenStreetMap", web_search: "web search", wiki: "Wikipedia",
 }[s] ?? s.replace(/_/g, " "));
 
 export function Chart({ spec, onLink }: { spec: ChartSpec; onLink?: (link: MapLink) => void }) {

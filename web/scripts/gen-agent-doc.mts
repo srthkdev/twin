@@ -9,7 +9,7 @@ const SOURCE: Record<string, string> = {
   tour: "Qloo (live)", opportunity: "Qloo demand + Overture supply", add_city: "Qloo heatmaps + OpenStreetMap",
   find_twins: "Twin fingerprints", explain_match: "Twin fingerprints", taste_profile: "Twin fingerprints", where_in_city: "Twin fingerprints (+ Qloo live)",
   pin_twins: "Twin fingerprints", twins_anywhere: "Twin fingerprints", list_cities: "Twin fingerprints", search_hoods: "Twin fingerprints",
-  venue_supply: "Overture Maps (OSM fallback)", geocode: "OpenStreetMap Nominatim", web_search: "Tavily / web", read_page: "Jina Reader", wiki: "Wikipedia + Wikidata", brief: "—",
+  venue_supply: "Overture Maps (OSM fallback)", brand_whitespace: "Overture chains + Twin taste grid", lookalike_sites: "Twin taste grid + busyness", site_check: "Twin + Overture (no Qloo quota)", geocode: "OpenStreetMap Nominatim", web_search: "Tavily / web", read_page: "Jina Reader", wiki: "Wikipedia + Wikidata", brief: "—",
 };
 const params = (t: (typeof TOOLS)[number]) => {
   const s = jsonSchemaOf(t) as { properties?: Record<string, { description?: string; type?: string; enum?: string[] }>; required?: string[] };

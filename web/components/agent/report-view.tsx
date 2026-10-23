@@ -12,6 +12,7 @@ const sourceLabel = (tool: string) => ({
   local_scene: "Qloo", scene: "Qloo", compare_taste: "Qloo", trend: "Qloo", opportunity: "Qloo", tour: "Qloo",
   audience: "Qloo", cross_domain: "Qloo", add_city: "Qloo", venue_supply: "Overture", geocode: "OpenStreetMap",
   web_search: "Web", read_page: "Web", wiki: "Wikipedia", chart: "Chart", report_skill: "Playbook",
+  brand_whitespace: "Overture", lookalike_sites: "Twin", site_check: "Twin",
 }[tool] ?? "Twin");
 
 function exploreHref(reportId: string, link?: MapLink) {

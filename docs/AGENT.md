@@ -9,7 +9,7 @@ _Generated from `web/lib/agent/tools.ts`, `tools-v2.ts` and `prompt.ts` by `web/
 - **Reports:** `report_skill` loads one of seven playbooks (`web/lib/agent/skills/*.md`); `chart` and `report` validate json-render blocks, and every chart and headline number must trace to a tool result.
 - **MCP:** the same tools are served over stdio by `web/mcp/twin-mcp.mts` (`pnpm mcp`).
 
-## Tools (26)
+## Tools (29)
 | Tool | Source | Arguments | What it does |
 |---|---|---|---|
 | `list_cities` | Twin fingerprints | `city`? | List every fingerprinted city (6 built-in + any added live). Without `city`: built-in cities with their neighbourhood ids, live ones with a count. With `city`: that city's neighbourhoods (id + name). |
@@ -22,6 +22,9 @@ _Generated from `web/lib/agent/tools.ts`, `tools-v2.ts` and `prompt.ts` by `web/
 | `local_scene` | Qloo (live) | `hood_id`, `kinds`?, `taste_of`?, `interests`?, `radius_m`?, `take`?, `place_type`?, `max_price_level`? | LIVE Qloo call. What to actually go to in a neighbourhood: real places (hard-filtered to a radius of the hood centre), plus artists and brands with local affinity (location is only a loose bias for those). Steer by taste: pass `taste_of` (a hood whose top traits the user loves, e.g. Silver Lake when they're moving to Neukolln) and/or explicit `interests` (basket labels). Returns names, addresses, distances and Qloo affinity. |
 | `audience` | Qloo (live) | `item_label` | LIVE Qloo call. Demographic skew (age bands and gender) of the audience of an artist, brand, movie, show, etc. Values are Qloo deviations from the baseline population (positive = over-indexes). |
 | `cross_domain` | Qloo (live) | `item_label`, `target_kind`, `location`?, `take`? | LIVE Qloo call. Cross-domain taste transfer: what other brands / artists / places / films / books do fans of an item like? e.g. brands for fans of an artist, or places in London for fans of Peso Pluma. Optionally condition on a location (hood id/name, city id/name; places are hard-filtered to the radius, other kinds only softly biased). |
+| `brand_whitespace` | Overture chains + Twin taste grid | `brand`, `city`, `target_city`?, `k`? | Chain expansion (the whitespace analysis location-intelligence firms sell): where a chain already is in a city (Overture Maps Places, 1,700+ chains per built-in city), and the busy blocks that match the taste of its existing sites but have no branch within 1 km. With target_city, takes the chain's taste profile from `city` to a city where it is absent or thin. Returns the chain's own backtest result when it was tested. Built-in cities only. |
+| `lookalike_sites` | Twin taste grid + busyness | `places`, `target_city`, `k`? | Find blocks like your best locations: give 1–5 addresses or neighbourhoods where something already works, and a target city; returns busy blocks there whose taste matches the average of yours (works for any fingerprinted city, built-in or added). Use for 'my shops at X and Y do well, where else?' |
+| `site_check` | Twin + Overture (no Qloo quota) | `place` | Scorecard for ONE address or venue (no Qloo quota): busyness, the block's strongest and weakest tastes vs its city, the venue mix within ~1 km, chains nearby, and the nearest neighbourhood with its closest twins abroad. Use when someone has a specific site in mind. |
 | `add_city` | Qloo heatmaps + OpenStreetMap | `name` | Fingerprint ANY city on Earth live from Qloo (≈40 heatmaps on the core basket, our popularity correction, neighbourhoods from OpenStreetMap). Cached forever after the first build. Use before twins_anywhere/opportunity/tour on a city that isn't available yet. Reports coverage honestly; fails if Qloo has too little data. |
 | `geocode` | OpenStreetMap Nominatim | `query` | OpenStreetMap Nominatim: turn a place name or address into coordinates and a bounding box. Facts only — no taste. |
 | `twins_anywhere` | Twin fingerprints | `source`, `target_city`, `k`? | Cultural twins between ANY two fingerprinted cities (the 6 built-in ones or any added with add_city), compared on the 40-dim core basket. `source` can be a neighbourhood id or name, or any place/address (geocoded and matched to the 1 km taste cells around it). |
@@ -61,6 +64,9 @@ evidence, not stereotypes.
 | Taste: twins, vibe, what over-indexes, venue picks, audiences, brands, momentum, demand | **Qloo** | find_twins, twins_anywhere, explain_match, taste_profile, scene, local_scene, audience, cross_domain, compare_taste, trend, where_in_city, opportunity (demand), tour |
 | What physically exists / how many | Overture Maps (OSM fallback) | venue_supply, opportunity (supply) |
 | What is scarce at home but common in its foreign twins | Saved Qloo twins + Overture venue shares | gap_scan(home, cities?, twins?, radius_m?) |
+| Where a chain is, and where it isn't but should be | Overture chain locations + Twin taste grid | brand_whitespace(brand, city, target_city?) |
+| Blocks like the user's own best locations | Twin taste grid + busyness | lookalike_sites(places[], target_city) |
+| One specific address: busyness, taste, venues, chains, twins | Twin + Overture (no Qloo quota) | site_check(place) |
 | Site ranking and GO verdicts | Busyness first, then taste fit, then competition; quiet sites are at most WATCH | opportunity (busy_pct, busy_tier), venue_supply (busy); active or busy required for GO |
 | Coordinates | OpenStreetMap Nominatim | geocode |
 | Background facts | Wikipedia / Wikidata | wiki |
@@ -79,6 +85,10 @@ Never answer a taste question from the web or from memory when a Qloo tool can a
 5. **"What's X like?"** — scene(X), plus wiki(X) for a line of background.
 6. **"Compare A and B"** — explain_match (built-in hoods) or compare_taste (any two tastes or places).
 7. **"Is Z rising?"** — trend(Z).
+7b. **"Where should <chain> open next?" / "where is <chain> missing?"** — brand_whitespace(brand, city[, target_city]).
+   Say how many branches it has, the top whitespace blocks (neighbourhood, match %, busy tier), and its backtest
+   result if returned. **"My places at A and B work — where else in C?"** — lookalike_sites([A, B], C).
+   **"Is <address> a good spot?"** — site_check(address) first; add opportunity or local_scene only if needed.
 8. **Reports and decisions** — for ANY report, plan, analysis, comparison, deep dive or decision, call report_skill
    FIRST, choosing the matching skill below. Follow its evidence list in order, plan the block outline from that
    evidence, call chart(...) for supported measurements, then report({title, subtitle?, skill, blocks}). Use 12–36

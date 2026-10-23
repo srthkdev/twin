@@ -67,8 +67,9 @@ const REPORTS = [
   ["tour", "Make me a report: Where should Peso Pluma play in Europe? Compare London, Paris and Berlin."],
 ] as const;
 const SUGGEST = [
-  "Find the Silver Lake of Berlin",
-  "What's the vibe of Shimokitazawa, Tokyo?",
+  "Where should Pret A Manger open next in London?",
+  "Is Weserstraße 50, Berlin a good spot for a café?",
+  "My cafés on Redchurch Street and Broadway Market in London do well. Where in Paris should I look?",
   "Find the Shoreditch of Lisbon",
 ];
 

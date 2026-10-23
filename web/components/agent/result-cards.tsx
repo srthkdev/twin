@@ -316,6 +316,9 @@ export function stepLabel(name: string, a: Any = {}): string {
     case "cross_domain": return `What ${str(a.item_label)} fans like`;
     case "where_in_city": return `Where ${str(a.item_or_group)} fans are in ${p("city")}`;
     case "venue_supply": return `Counting venues near ${str(a.place) || "the spot"}`;
+    case "brand_whitespace": return `Mapping where ${str(a.brand)} is, and where it isn't`;
+    case "lookalike_sites": return `Finding blocks like yours in ${p("target_city")}`;
+    case "site_check": return `Checking ${str(a.place)}`;
     case "add_city": return `Fingerprinting ${str(a.name)}`;
     case "list_cities": return "Checking which cities exist";
     case "search_hoods": return `Looking up "${str(a.query)}"`;

@@ -15,7 +15,7 @@ const SOURCE: Record<string, string> = {
   tour: "qloo", opportunity: "qloo", add_city: "qloo",
   find_twins: "twin", explain_match: "twin", taste_profile: "twin", where_in_city: "twin", pin_twins: "twin",
   twins_anywhere: "twin", list_cities: "twin", search_hoods: "twin",
-  venue_supply: "overture", geocode: "osm", web_search: "web", read_page: "web", wiki: "wiki", brief: "brief", report_skill: "playbook",
+  venue_supply: "overture", brand_whitespace: "overture", lookalike_sites: "twin", site_check: "twin", gap_scan: "overture", geocode: "osm", web_search: "web", read_page: "web", wiki: "wiki", brief: "brief", report_skill: "playbook",
 };
 
 export function recheckLabel(step: ToolStep): string | null {

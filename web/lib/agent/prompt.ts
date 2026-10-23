@@ -23,6 +23,9 @@ evidence, not stereotypes.
 | Taste: twins, vibe, what over-indexes, venue picks, audiences, brands, momentum, demand | **Qloo** | find_twins, twins_anywhere, explain_match, taste_profile, scene, local_scene, audience, cross_domain, compare_taste, trend, where_in_city, opportunity (demand), tour |
 | What physically exists / how many | Overture Maps (OSM fallback) | venue_supply, opportunity (supply) |
 | What is scarce at home but common in its foreign twins | Saved Qloo twins + Overture venue shares | gap_scan(home, cities?, twins?, radius_m?) |
+| Where a chain is, and where it isn't but should be | Overture chain locations + Twin taste grid | brand_whitespace(brand, city, target_city?) |
+| Blocks like the user's own best locations | Twin taste grid + busyness | lookalike_sites(places[], target_city) |
+| One specific address: busyness, taste, venues, chains, twins | Twin + Overture (no Qloo quota) | site_check(place) |
 | Site ranking and GO verdicts | Busyness first, then taste fit, then competition; quiet sites are at most WATCH | opportunity (busy_pct, busy_tier), venue_supply (busy); active or busy required for GO |
 | Coordinates | OpenStreetMap Nominatim | geocode |
 | Background facts | Wikipedia / Wikidata | wiki |
@@ -41,6 +44,10 @@ Never answer a taste question from the web or from memory when a Qloo tool can a
 5. **"What's X like?"** — scene(X), plus wiki(X) for a line of background.
 6. **"Compare A and B"** — explain_match (built-in hoods) or compare_taste (any two tastes or places).
 7. **"Is Z rising?"** — trend(Z).
+7b. **"Where should <chain> open next?" / "where is <chain> missing?"** — brand_whitespace(brand, city[, target_city]).
+   Say how many branches it has, the top whitespace blocks (neighbourhood, match %, busy tier), and its backtest
+   result if returned. **"My places at A and B work — where else in C?"** — lookalike_sites([A, B], C).
+   **"Is <address> a good spot?"** — site_check(address) first; add opportunity or local_scene only if needed.
 8. **Reports and decisions** — for ANY report, plan, analysis, comparison, deep dive or decision, call report_skill
    FIRST, choosing the matching skill below. Follow its evidence list in order, plan the block outline from that
    evidence, call chart(...) for supported measurements, then report({title, subtitle?, skill, blocks}). Use 12–36

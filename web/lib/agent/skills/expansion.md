@@ -28,3 +28,5 @@ Taste similarity does not predict sales or margins. Counts are a lower bound and
 
 ## Plain words
 Use "82% match", "fewer existing venues" and concrete shared tastes. Never show cosine, z-score, vector or dims. Keep every displayed number tied to this run's tools; link returned places and state the unanswered commercial questions.
+
+Optional, when the user names their own locations or a chain: lookalike_sites({places:[…their sites], target_city:B}) ranks busy blocks in B like their sites; brand_whitespace({brand, city:A, target_city:B}) does the same from a chain's real branches. Use their match_pct and busy_tier in the candidate comparison.

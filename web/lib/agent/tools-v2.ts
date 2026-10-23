@@ -10,8 +10,9 @@ import {
   CORE_BASKET, allCities, correctItem, ensureCity, fetchHeat, findCityAny, hoodVec, loadCore, qlooQueryFor,
   type CityMeta, type CoreFile, type CoreHood,
 } from "./city-live";
-import { cosine, hav } from "./geo";
-import { geocode } from "./net";
+import { cosine, geohashCenter, hav } from "./geo";
+import { join } from "node:path";
+import { geocode, readJson, webRoot } from "./net";
 import { BASKET_KEYS, loadCellsFile, loadDataSet } from "./node-data";
 import { osmAround, osmSupplyGrid } from "./osm";
 import { GAP_KINDS, OSM_FALLBACK, SUPPLY_KINDS, loadKindCategories, loadSupply, supplyAround, type SupplyKind } from "./supply";
@@ -565,4 +566,167 @@ const venue_supply = defineTool({
   },
 });
 
-export const TOOLS_V2: ToolDef[] = [add_city, geocode_tool, twins_anywhere, gap_scan, scene, compare_taste, trend, opportunity, tour, web_search, read_page, wiki, venue_supply, reportSkillTool, ...REPORT_TOOLS];
+
+// ───────────── location intelligence: chains, lookalikes, one site ─────────────
+interface BrandIndex { city: string; source: string; brands: Record<string, { cat: string; class: "taste" | "convenience" | "other"; g: Record<string, number> }> }
+const brandMem = new Map<string, Promise<BrandIndex | null>>();
+const loadBrands = (city: string) => {
+  let p = brandMem.get(city);
+  if (!p) { p = readJson<BrandIndex>(join(webRoot(), "public", "data", "brands", `${city}.json`)); brandMem.set(city, p); }
+  return p as Promise<BrandIndex | null>;
+};
+/** Chain name → the city's index entry: exact, then the closest name that contains it or that it contains. */
+function findBrand(idx: BrandIndex, text: string) {
+  const q = norm(text), names = Object.keys(idx.brands);
+  const exact = names.find((n) => norm(n) === q);
+  const fuzzy = exact ?? names.filter((n) => norm(n).includes(q) || q.includes(norm(n))).sort((a, b) => Object.keys(idx.brands[b].g).length - Object.keys(idx.brands[a].g).length)[0];
+  return fuzzy ? { name: fuzzy, ...idx.brands[fuzzy] } : null;
+}
+let backtestMem: Promise<{ brands: [string, string, string, number, number, number][] } | null> | null = null;
+/** The brand's own pre-registered backtest result, when it was one of the tested chains. */
+async function brandEvidence(name: string) {
+  backtestMem ??= readJson(join(webRoot(), "public", "data", "backtest.json"));
+  const row = (await backtestMem)?.brands.find((b) => b[0] === name.toLowerCase());
+  return row ? { class: row[1], cities_tested: row[3], taste_auc_within_equally_busy_blocks: row[4], busyness_auc: row[5] } : null;
+}
+
+/** Weighted mean fingerprint of some cells. */
+function meanVec(cells: { v: number[]; w: number }[]) {
+  const dim = cells[0]?.v.length ?? 0, tot = cells.reduce((s, c) => s + c.w, 0) || 1;
+  return Array.from({ length: dim }, (_, i) => cells.reduce((s, c) => s + c.v[i] * c.w, 0) / tot);
+}
+
+/**
+ * Rank a city's blocks by taste likeness to a fingerprint, busy blocks first (the backtest: chains follow footfall,
+ * taste decides which busy blocks fit). Blocks within `gapM` of an existing site are left out; two per neighbourhood.
+ */
+async function rankLookalikes(city: CityMeta, core: CoreFile, fp: number[], k: number, avoid: { lat: number; lon: number }[], gapM = 1000) {
+  const scored = core.cells.filter((c) => !avoid.some((a) => hav(a.lat, a.lon, c.lat, c.lon) < gapM)).map((c) => ({ c, match: cosine(fp, c.v) }));
+  scored.sort((a, b) => b.match - a.match);
+  const out: { lat: number; lon: number; g: string; match_pct: number; busy_pct: number; busy_tier: Busyness["tier"]; near?: string; link: string }[] = [];
+  const perHood = new Map<string, number>();
+  for (const { c, match } of scored.slice(0, 400)) {
+    const busy = await busyAt(city.id, c.lat, c.lon).catch(() => null);
+    if (!busy || busy.tier === "quiet") continue;
+    const near = nearestCoreHood(core, c.lat, c.lon)?.h.name, n = perHood.get(near ?? c.g) ?? 0;
+    if (n >= 2) continue;
+    perHood.set(near ?? c.g, n + 1);
+    out.push({ lat: c.lat, lon: c.lon, g: c.g, match_pct: Math.round(match * 100), busy_pct: busy.pct, busy_tier: busy.tier, near, link: `geo:${c.lat},${c.lon}` });
+    if (out.length >= k) break;
+  }
+  return out;
+}
+const paint = (city: string, rows: { g: string; lat: number; lon: number; match_pct: number }[], label: string): AgentAction =>
+  ({ type: "opportunity", city, kind: "lookalike", taste: label, cells: rows.map((r) => ({ g: r.g, lon: r.lon, lat: r.lat, demand: r.match_pct / 100, supply: 0, score: r.match_pct / 100 })) });
+
+const brand_whitespace = defineTool({
+  name: "brand_whitespace",
+  description: "Chain expansion (the whitespace analysis location-intelligence firms sell): where a chain already is in a city (Overture Maps Places, 1,700+ chains per built-in city), and the busy blocks that match the taste of its existing sites but have no branch within 1 km. With target_city, takes the chain's taste profile from `city` to a city where it is absent or thin. Returns the chain's own backtest result when it was tested. Built-in cities only.",
+  schema: z.object({
+    brand: z.string().describe("chain name, e.g. 'Pret A Manger', 'Uniqlo', 'Aesop'"),
+    city: z.string().describe("a city where the chain has branches"),
+    target_city: z.string().optional().describe("look for whitespace here instead (taste profile still comes from `city`)"),
+    k: z.number().int().min(3).max(10).optional(),
+  }),
+  async run({ brand, city, target_city, k }, { stats, progress }) {
+    const src = await cityOrThrow(city, { stats, progress });
+    const idx = await loadBrands(src.city.id);
+    if (!idx) throw new ToolError(`No chain data for ${src.city.name}; brand tools cover the six built-in cities.`);
+    const b = findBrand(idx, brand);
+    if (!b) throw new ToolError(`No chain called "${brand}" with 3+ branches in ${src.city.name} (Overture Maps).`);
+    const byG = new Map(src.core.cells.map((c) => [c.g, c]));
+    const sites = Object.entries(b.g).flatMap(([g, n]) => { const c = byG.get(g); return c ? [{ ...c, w: n }] : []; });
+    if (sites.length < 2) throw new ToolError(`${b.name}'s branches in ${src.city.name} fall outside Twin's taste grid.`);
+    const fp = meanVec(sites);
+    const tgt = target_city ? await cityOrThrow(target_city, { stats, progress }) : src;
+    const tIdx = tgt === src ? idx : await loadBrands(tgt.city.id);
+    const existing = tgt === src ? sites : Object.entries(tIdx ? findBrand(tIdx, b.name)?.g ?? {} : {}).map(([g]) => { const [lat, lon] = geohashCenter(g); return { lat, lon }; });
+    const gaps = await rankLookalikes(tgt.city, tgt.core, fp, k ?? 6, existing);
+    const fit = sites.map((s) => cosine(fp, s.v)).sort((x, y) => x - y)[Math.floor(sites.length / 2)];
+    return {
+      data: {
+        brand: b.name, category: b.cat, chain_class: b.class, home_city: src.city.name, branches_in_home_city: Object.values(b.g).reduce((x, y) => x + y, 0),
+        branches_in_target: target_city ? existing.length : undefined, target_city: tgt.city.name, whitespace: gaps,
+        typical_branch_match_pct: Math.round(fit * 100),
+        backtest: await brandEvidence(b.name),
+        how: "fingerprint = mean taste of the blocks with branches; whitespace = busy or active blocks with the highest taste match and no branch within 1 km",
+        caveat: b.class === "convenience" ? "convenience chains follow footfall more than taste (backtest AUC 0.55 within equally busy blocks)" : "taste-led chains: taste ranked real sites above equally busy blocks 69% of the time in the backtest",
+        source: idx.source,
+      },
+      summary: `${b.name}: ${Object.keys(b.g).length} sites in ${src.city.name}; ${gaps.length} whitespace blocks in ${tgt.city.name}`,
+      uiActions: [paint(tgt.city.id, gaps, `${b.name} whitespace`)],
+    };
+  },
+});
+
+const lookalike_sites = defineTool({
+  name: "lookalike_sites",
+  description: "Find blocks like your best locations: give 1–5 addresses or neighbourhoods where something already works, and a target city; returns busy blocks there whose taste matches the average of yours (works for any fingerprinted city, built-in or added). Use for 'my shops at X and Y do well, where else?'",
+  schema: z.object({
+    places: z.array(z.string()).min(1).max(5).describe("addresses, venues or neighbourhoods that work today"),
+    target_city: z.string(),
+    k: z.number().int().min(3).max(10).optional(),
+  }),
+  async run({ places, target_city, k }, { ds, stats, progress }) {
+    const cities = await allCities();
+    const found = await Promise.all(places.map((p) => twinSource(ds, p, cities, { stats, progress }).catch(() => null)));
+    const ok = found.filter((x): x is NonNullable<typeof x> => !!x);
+    if (!ok.length) throw new ToolError(`Couldn't place any of: ${places.join("; ")}.`);
+    const tgt = await cityOrThrow(target_city, { stats, progress });
+    // compare on the 40-dim core basket shared by every city
+    const vecs = await Promise.all(ok.map(async (x) => {
+      const core = await loadCore(x.city.id);
+      return core ? hoodVec(core.cells, x.lat, x.lon)?.v ?? null : null;
+    }));
+    const usable = vecs.filter((v): v is number[] => !!v);
+    if (!usable.length) throw new ToolError("No taste data around those places.");
+    const fp = meanVec(usable.map((v) => ({ v, w: 1 })));
+    const same = ok.filter((x) => x.city.id === tgt.city.id).map((x) => ({ lat: x.lat, lon: x.lon }));
+    const sites = await rankLookalikes(tgt.city, tgt.core, fp, k ?? 6, same, 700);
+    return {
+      data: { from: ok.map((x) => ({ name: x.label, city: x.city.name })), unplaced: places.filter((_, i) => !found[i]), target_city: tgt.city.name, lookalikes: sites, dims: "40-dim core basket", ranking: "busy or active blocks only, by taste match to the average of your places; at most two per neighbourhood" },
+      summary: `${sites.length} lookalike blocks in ${tgt.city.name} (top ${sites[0]?.near ?? "—"} ${sites[0]?.match_pct ?? ""}%)`,
+      uiActions: [paint(tgt.city.id, sites, "lookalike sites")],
+    };
+  },
+});
+
+const site_check = defineTool({
+  name: "site_check",
+  description: "Scorecard for ONE address or venue (no Qloo quota): busyness, the block's strongest and weakest tastes vs its city, the venue mix within ~1 km, chains nearby, and the nearest neighbourhood with its closest twins abroad. Use when someone has a specific site in mind.",
+  schema: z.object({ place: z.string().describe("address or venue, e.g. 'Weserstraße 50, Berlin'") }),
+  async run({ place }, { ds }) {
+    const g = (await geocode(place, 1))[0];
+    if (!g) throw new ToolError(`Could not place "${place}".`);
+    const city = (await allCities()).find((c) => hav(g.lat, g.lon, c.center[1], c.center[0]) < 80_000);
+    if (!city) throw new ToolError(`"${place}" is not in a fingerprinted city; add_city can build it.`);
+    const core = await loadCore(city.id);
+    if (!core) throw new ToolError(`No taste data for ${city.name}.`);
+    const hv = hoodVec(core.cells, g.lat, g.lon, 0.8);
+    const labels = coreLabels(core);
+    const ranked = hv ? hv.v.map((x, i) => ({ trait: labels[i], z: r2(x) })).sort((a, b) => b.z - a.z) : [];
+    const sup = await loadSupply(city.id);
+    const mix = sup ? supplyAround(sup, g.lat, g.lon, 1000, [...SUPPLY_KINDS]) : null;
+    const brands = await loadBrands(city.id);
+    const near = brands ? Object.entries(brands.brands).flatMap(([name, b]) => {
+      const n = Object.entries(b.g).filter(([gg]) => { const [la, lo] = geohashCenter(gg); return hav(g.lat, g.lon, la, lo) <= 1000; }).reduce((s, [, c]) => s + c, 0);
+      return n ? [{ name, n, class: b.class }] : [];
+    }).sort((a, b) => b.n - a.n).slice(0, 10) : [];
+    const hood = nearestCoreHood(core, g.lat, g.lon);
+    const staticHood = hood && ds.hoods.find((h) => h.id === hood.h.id);
+    const twins = staticHood ? Object.entries(ds.twins[staticHood.id] ?? {}).map(([c, list]) => ({ city: c, twin: ds.hoods.find((h) => h.id === list[0]?.hood)?.name, match_pct: Math.round((list[0]?.score ?? 0) * 100) })).sort((a, b) => b.match_pct - a.match_pct).slice(0, 3) : [];
+    return {
+      data: {
+        place: g.display, link: `geo:${g.lat},${g.lon}`, city: city.name, neighbourhood: hood?.h.name, busy: await busyAt(city.id, g.lat, g.lon).catch(() => null),
+        leans_into: ranked.slice(0, 6), leans_away_from: ranked.slice(-4).reverse(),
+        venues_within_1km: mix ? Object.fromEntries(Object.entries(mix.counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 10)) : null,
+        chains_within_1km: near, twins_abroad: twins,
+        sources: ["Twin taste grid (Qloo heatmaps, popularity-corrected)", sup ? `${sup.source} ${sup.release}` : null, brands?.source].filter(Boolean),
+      },
+      summary: `${g.display.split(",").slice(0, 2).join(",")}: ${hood?.h.name ?? city.name}`,
+      uiActions: [{ type: "focus", lat: g.lat, lon: g.lon, label: g.display.split(",")[0] }],
+    };
+  },
+});
+
+export const TOOLS_V2: ToolDef[] = [brand_whitespace, lookalike_sites, site_check, add_city, geocode_tool, twins_anywhere, gap_scan, scene, compare_taste, trend, opportunity, tour, web_search, read_page, wiki, venue_supply, reportSkillTool, ...REPORT_TOOLS];
