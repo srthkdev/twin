@@ -1,5 +1,5 @@
 import { NextResponse, after } from "next/server";
-import { type ModelMessage, consumeStream, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type ToolSet } from "ai";
+import { type ModelMessage, consumeStream, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText, toUIMessageStream, type ToolSet } from "ai";
 import { loadServerDataSet } from "@/lib/agent/server-data";
 import { OPENROUTER_MODELS, aiTools, cappedOn, fallbackOptions, isDailyCap, openrouter, usableKeys, utcDay, type RunMeta, type TwinUIMessage } from "@/lib/agent/ai";
 import { SYSTEM_PROMPT, contextLine } from "@/lib/agent/prompt";
@@ -69,6 +69,7 @@ export async function POST(req: Request) {
       const order = [primary, ...OPENROUTER_MODELS.filter((m) => m !== primary)];
       const attempts = keys.flatMap((key) => order.map((model) => ({ key, model })));
       const done: ModelMessage[] = [];
+      let stepsDone = 0;
       const open = (a: { key: string }) => cappedOn.get(a.key) !== utcDay();
       for (let i = 0; i < attempts.length; i++) {
         const { key, model } = attempts[i];
@@ -79,16 +80,27 @@ export async function POST(req: Request) {
           instructions: SYSTEM_PROMPT,
           messages: [...modelMessages, ...done],
           tools: aiTools(ds, writer, meta, run),
-          stopWhen: (options) => isStepCount(run.reportMode ? 16 : 8)(options),
+          // counted across failovers, so a model switch does not reset the budget
+          stopWhen: () => stepsDone >= (run.reportMode ? 16 : 8),
           // the last step must be an answer, never another tool call
-          prepareStep: ({ stepNumber }) => (stepNumber >= (run.reportMode ? 15 : 7) ? { toolChoice: "none" as const } : undefined),
+          prepareStep: () => {
+            const step = stepsDone, elapsed = Date.now() - t0;
+            if (step >= (run.reportMode ? 15 : 7)) return { toolChoice: "none" as const };
+            // A report must land inside the function's 300 s: past the research budget the model may only chart
+            // and write, then must write, with what it has.
+            if (run.reportMode && !run.reportId) {
+              if (step >= 12 || elapsed > 190_000) return { toolChoice: { type: "tool" as const, toolName: "report" } };
+              if (step >= 10 || elapsed > 150_000) return { activeTools: ["chart", "report"], toolChoice: "required" as const };
+            }
+            return undefined;
+          },
           timeout: { firstChunkMs: 30_000, chunkMs: 45_000, stepMs: 190_000 },
           temperature: 0.4,
           // a 429 means a daily or per-minute cap: retrying the same model only waits; the next model answers now
           maxRetries: 0,
           repairToolCall,
           providerOptions: fallbackOptions(model),
-          onStepFinish: (step) => { meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
+          onStepFinish: (step) => { stepsDone++; meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
         });
         let shown = false, retry = false;
         const parts = toUIMessageStream<ToolSet, TwinUIMessage>({

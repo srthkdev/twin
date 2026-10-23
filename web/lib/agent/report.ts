@@ -17,6 +17,8 @@ export interface AgentRunContext {
   model?: () => string | undefined;
   reportMode?: boolean;
   skill?: string;
+  /** set once a report is saved */
+  reportId?: string;
 }
 type ReportToolContext = ToolContext & { run?: AgentRunContext };
 
@@ -357,6 +359,7 @@ const reportTool = defineTool({
     const markdown = reportMarkdown(report);
     const filename = `${slug(report.title) || "twin-report"}.md`;
     await storePut(`reports/${id}.json`, report);
+    run.reportId = id;
     if (run.user) await appendReport(run.user.name, run.user.code, { id, title: report.title, at: Date.now() }).catch(() => {});
     return {
       data: { id, url: `/r/${id}`, title: report.title, grounding: report.grounding },

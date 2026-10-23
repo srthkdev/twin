@@ -431,17 +431,29 @@ const opportunity = defineTool({
       .filter((x): x is { cell: typeof x.cell; demand: number; supply: number } => x.supply !== null && (!!saved || heat!.has(x.cell.g)));
     if (rows.length < 30) throw new ToolError("Venue supply data is unavailable for most of the city right now. Try again shortly.");
     const sz = zs(rows.map((x) => Math.log1p(x.supply)));
-    const cells: (OpportunityCell & { busy_pct: number; busy_tier: Busyness["tier"] })[] = await Promise.all(rows.map(async (x, i) => {
+    // Scene fit: one block can spike on anything (a mall, a station), so its demand is blended with the blocks within
+    // 1.3 km. A gap only counts where the surrounding area leans into the taste too.
+    const kmLon = 111.32 * Math.cos((rows[0].cell.lat * Math.PI) / 180);
+    const area = rows.map((x) => {
+      let sum = 0, n = 0;
+      for (const y of rows) { const dx = (y.cell.lon - x.cell.lon) * kmLon, dy = (y.cell.lat - x.cell.lat) * 111.32; if (dx * dx + dy * dy <= 1.69) { sum += y.demand; n++; } }
+      return n ? sum / n : x.demand;
+    });
+    const cells: (OpportunityCell & { busy_pct: number; busy_tier: Busyness["tier"]; area_demand: number })[] = await Promise.all(rows.map(async (x, i) => {
       const busy = await busyAt(c.id, x.cell.lat, x.cell.lon);
-      return { g: x.cell.g, lon: x.cell.lon, lat: x.cell.lat, demand: r2(x.demand), supply: x.supply, score: r2(x.demand - sz[i]), busy_pct: busy.pct, busy_tier: busy.tier };
+      return { g: x.cell.g, lon: x.cell.lon, lat: x.cell.lat, demand: r2(x.demand), area_demand: r2(area[i]), supply: x.supply, score: r2((x.demand + area[i]) / 2 - sz[i]), busy_pct: busy.pct, busy_tier: busy.tier };
     }));
-    const candidates = cells.filter((x) => x.demand > 0.5);
+    const candidates = cells.filter((x) => x.demand > 0.5 && x.area_demand > 0.2);
     const active = candidates.filter((x) => x.busy_tier !== "quiet");
-    const best = (active.length >= 3 ? active : candidates).sort((a, b) => b.score - a.score).slice(0, 10)
-      .map((x) => ({ ...x, near: nearestCoreHood(core, x.lat, x.lon)?.h.name }));
+    // at most two blocks per neighbourhood, so the shortlist offers real alternatives
+    const perHood = new Map<string, number>();
+    const best = (active.length >= 3 ? active : candidates).sort((a, b) => b.score - a.score)
+      .map((x) => ({ ...x, near: nearestCoreHood(core, x.lat, x.lon)?.h.name }))
+      .filter((x) => { const k = x.near ?? x.g, n = perHood.get(k) ?? 0; perHood.set(k, n + 1); return n < 2; })
+      .slice(0, 10);
     const totalSupply = rows.reduce((s, x) => s + x.supply, 0);
     return {
-      data: { city: c.name, taste: sig.name, demand_source: saved ? "precomputed Qloo heatmaps, popularity-corrected" : "live Qloo heatmap, popularity-corrected", supply_kind, supply_source: supplySource, cells_scored: rows.length, venues_counted: totalSupply, top_opportunities: best, ranking: "busy enough → strongest taste demand → fewest existing venues", how: "score = Qloo demand z − z(log(1 + venue count)); open map data misses some venues, treat supply as a lower bound" },
+      data: { city: c.name, taste: sig.name, demand_source: saved ? "precomputed Qloo heatmaps, popularity-corrected" : "live Qloo heatmap, popularity-corrected", supply_kind, supply_source: supplySource, cells_scored: rows.length, venues_counted: totalSupply, top_opportunities: best, ranking: "busy enough → the block and the area around it want this taste → fewest existing venues", how: "score = mean(block demand z, demand z of blocks within 1.3 km) − z(log(1 + venue count)); blocks whose surrounding area doesn't lean into the taste are left out; open map data misses some venues, treat supply as a lower bound" },
       summary: `${best.length} gaps for ${sig.name} in ${c.name} (${totalSupply} existing ${supply_kind} counted)`,
       uiActions: [{ type: "opportunity", city: c.id, kind: supply_kind, taste: sig.name, cells }],
     };
