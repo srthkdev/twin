@@ -723,8 +723,8 @@ const site_check = defineTool({
         chains_within_1km: near, twins_abroad: twins,
         sources: ["Twin taste grid (Qloo heatmaps, popularity-corrected)", sup ? `${sup.source} ${sup.release}` : null, brands?.source].filter(Boolean),
       },
-      summary: `${g.display.split(",").slice(0, 2).join(",")}: ${hood?.h.name ?? city.name}`,
-      uiActions: [{ type: "focus", lat: g.lat, lon: g.lon, label: g.display.split(",")[0] }],
+      summary: `${place}: ${hood?.h.name ?? city.name}`,
+      uiActions: [{ type: "focus", lat: g.lat, lon: g.lon, label: place.split(",")[0].trim() }],
     };
   },
 });
