@@ -1,4 +1,5 @@
 import { MethodDiagram } from "@/components/method-diagram";
+import { AgentDiagram } from "@/components/agent-diagram";
 
 export const metadata = { title: "Method — Twin" };
 
@@ -7,6 +8,8 @@ const LIMITS = [
   ["Affluence is under-weighted", "Rich areas over-index on many items at once, so subtracting the baseline removes part of their signal. Luxury ↔ income turns negative after correction."],
   ["Coverage is uneven", "Mexico City and Paris return sparse data for many Western basket items, so their twins rest on less evidence."],
   ["Taste is not demographics", "Twin matches what a place over-indexes on, not who lives there. Two twins can differ in income, age and history."],
+  ["Taste does not replace footfall", "In the chain backtest, raw popularity predicts where chains open better than taste. Twin ranks busy blocks first and uses taste to choose among them."],
+  ["Venue counts are a lower bound", "Overture Maps misses some venues and chains, so supply and whitespace are screening signals for a site visit, not a census."],
 ];
 
 export default function MethodPage() {
@@ -54,12 +57,22 @@ export default function MethodPage() {
         </div>
 
         <div>
-          <h2 className="text-[22px] font-medium tracking-[-0.03em]">The agent</h2>
+          <h2 className="text-[22px] font-medium tracking-[-0.03em]">From a match to a decision</h2>
           <p className="mt-5 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
-            The fingerprints answer &ldquo;which place is like this one&rdquo;. The agent adds live Qloo calls for what comes next —
-            <span className="text-foreground"> local_scene</span> (venues near a neighbourhood, steered by the source&apos;s taste),
-            <span className="text-foreground"> audience</span> (age and gender skew) and <span className="text-foreground">cross_domain</span> (brands for fans of an artist).
-            It runs on free open-weight models through OpenRouter (MiniMax M3.1 Flash first), or a key you bring, and the same tools ship as an MCP server.
+            Fingerprints answer &ldquo;which place is like this one&rdquo;. The agent turns that into a decision someone can act on, with every
+            number checked against the data it came from.
+          </p>
+          <div className="panel mt-6 p-4 sm:p-6"><AgentDiagram /></div>
+          <dl className="mt-6 grid gap-3 text-[12px] sm:grid-cols-3">
+            {[
+              ["Taste · Qloo", "twins, local scene, audiences, cross-domain, trends, demand heatmaps, live city fingerprints"],
+              ["Supply · Overture", "venue counts per block, 10,000 chains with their locations, brand whitespace"],
+              ["Your sites · Twin", "lookalike blocks for your own best locations, a one-address site check"],
+            ].map(([t, b]) => <div key={t} className="panel p-4"><dt className="text-foreground">{t}</dt><dd className="mt-1.5 leading-relaxed text-muted-foreground">{b}</dd></div>)}
+          </dl>
+          <p className="mt-4 max-w-2xl text-[12px] leading-relaxed text-dim">
+            Models: Gemini 3.5 Flash-Lite first, then other free Gemini and OpenRouter models; if one fails or runs out mid-answer the next continues
+            from the finished steps. Seven report playbooks, 29 tools, and the same tools as an MCP server.
           </p>
         </div>
 
