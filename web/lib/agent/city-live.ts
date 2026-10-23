@@ -18,7 +18,7 @@ export interface CoreHood { id: string; name: string; lon: number; lat: number; 
 export interface CoreFile { city: string; items: string[]; cells: CoreCell[]; hoods: CoreHood[] }
 interface LiveInfo extends CityMeta { qlooQuery: string; bbox: [number, number, number, number]; builtAt: string; qlooCalls: number }
 
-export const MIN_CELLS = 150;
+export const MIN_CELLS = 100;
 const MIN_COV = 0.35;
 const HOOD_R_KM = 1.3;
 
@@ -189,21 +189,23 @@ async function buildCity(name: string, stats: QlooStats | undefined, emit: Progr
 
   // 1. heatmaps (probe one broad item first so a bad Qloo location query fails after 1-2 calls, not 40)
   const items = CORE_BASKET;
-  const heats = new Map<string, Map<string, HeatCell>>();
-  let qlooQuery = g.name;
   const probe = items[0];
-  let ph = await fetchHeat(qlooQuery, probe.key, probe.val, stats).catch(() => new Map<string, HeatCell>());
-  if (ph.size < 30 && g.country) {
-    const alt = `${g.name}, ${g.country}`;
-    const ph2 = await fetchHeat(alt, probe.key, probe.val, stats).catch(() => new Map<string, HeatCell>());
-    if (ph2.size > ph.size) { ph = ph2; qlooQuery = alt; }
+  const osm = osmHoods(g);
+  osm.catch(() => {});
+  const heats = new Map<string, Map<string, HeatCell>>();
+  // Qloo knows some cities by their English name ("Copenhagen"), others by the local one ("Lisboa"): try both.
+  let qlooQuery = g.name, ph = new Map<string, HeatCell>();
+  for (const q of [...new Set([g.name, name.trim(), g.country ? `${g.name}, ${g.country}` : ""].filter(Boolean))]) {
+    const h = await fetchHeat(q, probe.key, probe.val, stats).catch(() => new Map<string, HeatCell>());
+    if (h.size > ph.size) { ph = h; qlooQuery = q; }
+    if (ph.size >= 30) break;
   }
   if (ph.size < 30) throw new ToolError(`Qloo has too little data for ${g.name}: its heatmap for a top global artist covers only ${ph.size} map cells.`);
   heats.set(probe.id, ph);
   let done = 1, failed = 0;
   emit({ stage: "heatmaps", done, total: items.length, note: `${probe.label}: ${ph.size} cells` });
   const queue = items.slice(1);
-  await Promise.all(Array.from({ length: 4 }, async () => {
+  await Promise.all(Array.from({ length: 8 }, async () => {
     for (;;) {
       const it = queue.shift();
       if (!it) return;
@@ -248,7 +250,7 @@ async function buildCity(name: string, stats: QlooStats | undefined, emit: Progr
 
   // 3. neighbourhoods
   emit({ stage: "neighbourhoods", done: 0, total: 1, note: "OpenStreetMap neighbourhoods" });
-  const { hoods, source: hoodSource } = await findHoods(id, g, qlooQuery, cells, stats);
+  const { hoods, source: hoodSource } = await findHoods(id, [g.name, name, qlooQuery], osm, [...new Set([qlooQuery, name.trim()])], cells, stats);
   emit({ stage: "neighbourhoods", done: 1, total: 1, note: `${hoods.length} neighbourhoods (${hoodSource})` });
 
   const lats = cells.map((c) => c.lat).sort((a, b) => a - b), lons = cells.map((c) => c.lon).sort((a, b) => a - b);
@@ -269,30 +271,37 @@ async function buildCity(name: string, stats: QlooStats | undefined, emit: Progr
 
 const PLACE_RANK: Record<string, number> = { suburb: 3, quarter: 2, neighbourhood: 1 };
 
-async function findHoods(cityId: string, g: GeoHit, qlooQuery: string, cells: CoreCell[], stats?: QlooStats): Promise<{ hoods: CoreHood[]; source: string }> {
-  const lat = cells.map((c) => c.lat), lon = cells.map((c) => c.lon), pad = 0.01;
-  const s = Math.max(Math.min(...lat) - pad, g.bbox[0] - 0.05), n = Math.min(Math.max(...lat) + pad, g.bbox[2] + 0.05);
-  const w = Math.max(Math.min(...lon) - pad, g.bbox[1] - 0.05), e = Math.min(Math.max(...lon) + pad, g.bbox[3] + 0.05);
-  type Cand = { name: string; lat: number; lon: number; score: number };
-  const cands: Cand[] = [];
-  let source = "openstreetmap";
-  try {
-    const els = await overpass(`[out:json][timeout:35];node["place"~"^(suburb|quarter|neighbourhood)$"]["name"](${s},${w},${n},${e});out body;`, { timeoutMs: 25000 });
-    for (const el of els) {
-      const t = el.tags ?? {}, nm = t["name:en"] || t.int_name || t.name;
-      if (!nm || el.lat == null || el.lon == null) continue;
-      const pop = parseInt((t.population ?? "").replace(/\D/g, ""), 10);
-      cands.push({ name: nm, lat: el.lat, lon: el.lon, score: (PLACE_RANK[t.place] ?? 0) + (pop ? Math.log10(pop) : 0) + (t.wikidata || t.wikipedia ? 1.5 : 0) });
-    }
-  } catch { source = "qloo-localities"; }
-  if (cands.length < 5) {
-    source = cands.length ? "openstreetmap+qloo-localities" : "qloo-localities";
-    try {
+type Cand = { name: string; lat: number; lon: number; score: number };
+
+/** OpenStreetMap neighbourhood names inside the city's box. Started before the heatmaps so it costs no extra time. */
+async function osmHoods(g: GeoHit): Promise<Cand[]> {
+  const [s, w, n, e] = [g.bbox[0] - 0.05, g.bbox[1] - 0.05, g.bbox[2] + 0.05, g.bbox[3] + 0.05];
+  const els = await overpass(`[out:json][timeout:25];node["place"~"^(suburb|quarter|neighbourhood)$"]["name"](${s},${w},${n},${e});out body;`, { timeoutMs: 15000 });
+  return els.flatMap((el) => {
+    const t = el.tags ?? {}, nm = t["name:en"] || t.int_name || t.name;
+    if (!nm || el.lat == null || el.lon == null) return [];
+    const pop = parseInt((t.population ?? "").replace(/\D/g, ""), 10);
+    return [{ name: nm, lat: el.lat, lon: el.lon, score: (PLACE_RANK[t.place] ?? 0) + (pop ? Math.log10(pop) : 0) + (t.wikidata || t.wikipedia ? 1.5 : 0) }];
+  });
+}
+
+async function findHoods(cityId: string, cityNames: string[], osm: Promise<Cand[]>, qlooQueries: string[], cells: CoreCell[], stats?: QlooStats): Promise<{ hoods: CoreHood[]; source: string }> {
+  const skip = new Set(cityNames.map(norm));
+  // OpenStreetMap names are finer but Overpass is often busy; Qloo's localities answer in seconds. Use both.
+  const qloo = (async (): Promise<Cand[]> => {
+    for (const q of qlooQueries) {
       const r = await qlooGet<{ results?: { entities?: { name: string; popularity?: number; location?: { lat: number; lon: number }; properties?: { admin_level?: number } }[] } }>(
-        "/v2/insights", { "filter.type": "urn:entity:locality", "filter.location.query": qlooQuery, "filter.parents.types": "urn:entity:locality", take: 50 }, stats, 30000);
-      for (const e2 of r.results?.entities ?? []) if (e2.location && (e2.properties?.admin_level ?? 9) >= 8) cands.push({ name: e2.name, lat: e2.location.lat, lon: e2.location.lon, score: 2 + (e2.popularity ?? 0) * 3 });
-    } catch { /* no fallback available */ }
-  }
+        "/v2/insights", { "filter.type": "urn:entity:locality", "filter.location.query": q, "filter.parents.types": "urn:entity:locality", take: 50 }, stats, 30000).catch(() => null);
+      // wards are level 7 in some countries (Tokyo), 8–10 in most; the city itself is not a neighbourhood
+      const out = (r?.results?.entities ?? []).filter((x) => x.location && (x.properties?.admin_level ?? 9) >= 7 && !skip.has(norm(x.name)))
+        .map((x) => ({ name: x.name, lat: x.location!.lat, lon: x.location!.lon, score: 2 + (x.popularity ?? 0) * 3 + ((x.properties?.admin_level ?? 9) >= 8 ? 1 : 0) }));
+      if (out.length >= 5) return out;
+    }
+    return [];
+  })();
+  const [fromOsm, fromQloo] = await Promise.all([osm.catch(() => [] as Cand[]), qloo]);
+  const cands: Cand[] = fromOsm.length >= 5 ? fromOsm : [...fromOsm, ...fromQloo];
+  const source = fromOsm.length >= 5 ? "openstreetmap" : fromOsm.length ? "openstreetmap+qloo-localities" : "qloo-localities";
   cands.sort((a, b) => b.score - a.score);
   const hoods: CoreHood[] = [], seen = new Set<string>();
   for (const c of cands) {

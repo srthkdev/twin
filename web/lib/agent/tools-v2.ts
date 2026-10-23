@@ -37,7 +37,7 @@ async function staticDemand(ds: DataSet, city: string, taste: string) {
   return { cells, z: Float64Array.from(cells, (c) => c.v[item.i]), present: cells.length, sig: { ...key, name: item.label } };
 }
 
-async function twinSource(ds: DataSet, source: string, cities: CityMeta[]) {
+async function twinSource(ds: DataSet, source: string, cities: CityMeta[], ctx?: Pick<ToolCtx, "stats" | "progress">): Promise<{ city: CityMeta; label: string; lat: number; lon: number; hoodId: string | null; v: number[]; staticHood: DataSet["hoods"][number] | null }> {
   const staticHood = ds.hoods.find((h) => h.id === source || norm(h.name) === norm(source));
   for (const city of cities) {
     if (staticHood && city.id !== staticHood.city) continue;
@@ -56,6 +56,12 @@ async function twinSource(ds: DataSet, source: string, cities: CityMeta[]) {
     const core = await loadCore(city.id);
     const v = core && hoodVec(core.cells, g.lat, g.lon)?.v;
     if (v) return { city, label: g.name, lat: g.lat, lon: g.lon, hoodId: null, v, staticHood: null };
+  }
+  // "Shimokitazawa, Tokyo": the city is named, so build it once (cached) and look again.
+  const cityName = source.includes(",") ? source.split(",").pop()!.trim() : "";
+  if (ctx && cityName.length > 1 && !(await findCityAny(cityName))) {
+    await cityOrThrow(cityName, ctx);
+    return twinSource(ds, source, await allCities());
   }
   throw new ToolError(`"${source}" is not inside a fingerprinted city. Call add_city for its city first.`);
 }
@@ -193,7 +199,7 @@ const twins_anywhere = defineTool({
   }),
   async run({ source, target_city, k }, { ds, stats, progress }) {
     const tgt = await cityOrThrow(target_city, { stats, progress });
-    const src = await twinSource(ds, source, await allCities());
+    const src = await twinSource(ds, source, await allCities(), { stats, progress });
     const { v: srcVec, label: srcName, city: srcCity, hoodId: srcHoodId } = src;
     if (srcCity.id === tgt.city.id) throw new ToolError("Source and target are in the same city.");
     const labels = coreLabels(tgt.core);
@@ -381,7 +387,8 @@ const opportunity = defineTool({
   }),
   live: true,
   async run({ city, taste, taste_is, supply_kind: kindText }, { ds, stats, progress }) {
-    const supply_kind = (kindText && (await supplyKindFor(kindText, stats))) || (await supplyKindFor(taste, stats));
+    // An artist's or brand's fans need somewhere to go: music venues unless the model says otherwise.
+    const supply_kind = (kindText && (await supplyKindFor(kindText, stats))) || (await supplyKindFor(taste, stats)) || (taste_is === "entity" ? "music_venue" : null);
     if (!supply_kind) throw new ToolError(`No venue kind in the supply data matches "${kindText || taste}". Pass supply_kind, one of: ${SUPPLY_KINDS.join(", ")}.`);
     const { city: c, core } = await cityOrThrow(city, { stats, progress });
     const saved = c.source === "static" ? await staticDemand(ds, c.id, taste) : null;

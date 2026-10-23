@@ -542,6 +542,7 @@ export function jsonSchemaOf(t: ToolDef): Record<string, unknown> {
 
 export interface ExecResult { ok: boolean; content: string; summary: string; uiActions: AgentAction[]; qloo: QlooStats; data?: unknown }
 const MAX_RESULT_CHARS = 9000;
+const CITY_BUILDERS = new Set(["add_city", "twins_anywhere", "opportunity", "tour", "where_in_city"]);
 
 /** Validate args, run a tool, never throw. `content` is what the model sees. */
 export async function executeTool(name: string, rawArgs: unknown, ds?: DataSet, progress: (note: string) => void = () => {}, run?: AgentRunContext): Promise<ExecResult> {
@@ -557,7 +558,8 @@ export async function executeTool(name: string, rawArgs: unknown, ds?: DataSet, 
     const ctx = { ds: ds ?? (await loadDataSet()), stats, progress } as ToolContext & { run?: AgentRunContext };
     ctx.run = run;
     // One stuck upstream call must not freeze a whole run: the model gets a timeout error and works around it.
-    const limit = name === "add_city" ? 170_000 : 75_000;
+    // Tools that may fingerprint a new city first (≈40 Qloo calls, once) get the longer budget.
+    const limit = CITY_BUILDERS.has(name) ? 170_000 : 75_000;
     const out = await Promise.race([t.run(parsed.data, ctx), new Promise<never>((_, rej) => setTimeout(() => rej(new ToolError(`${name} timed out after ${limit / 1000}s; continue without it or retry once`)), limit))]);
     let content = JSON.stringify(out.data);
     if (content.length > MAX_RESULT_CHARS) content = content.slice(0, MAX_RESULT_CHARS) + '..."[truncated]';

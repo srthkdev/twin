@@ -9,8 +9,8 @@ export const newStats = (): QlooStats => ({ live: 0, cached: 0 });
 export const qlooConfigured = () => !!(process.env.QLOO_API_KEY && process.env.QLOO_BASE_URL);
 
 const mem = new Map<string, unknown>();
-// Taste data moves slowly; a week keeps the free quota for new questions instead of repeats.
-const TTL_MS = 7 * 24 * 3600 * 1000;
+// Taste data moves slowly; a month keeps the quota for new questions instead of repeats.
+const TTL_MS = 30 * 24 * 3600 * 1000;
 
 export class QlooError extends Error {}
 
@@ -28,6 +28,16 @@ export async function qlooGet<T = unknown>(path: string, params: Record<string, 
   if (mem.has(h)) { if (stats) stats.cached++; return mem.get(h) as T; }
   const raw = await storeGet<{ t: number; d: T }>(`qloo/${h}.json`);
   if (raw && Date.now() - raw.t < TTL_MS) { mem.set(h, raw.d); if (stats) stats.cached++; return raw.d; }
+  try { return await live<T>(url, key, h, stats, timeoutMs); }
+  catch (e) {
+    // An older answer beats no answer when Qloo is down or rate-limited.
+    if (raw) { if (stats) stats.cached++; return raw.d; }
+    throw e;
+  }
+}
+
+async function live<T>(url: string, key: string, h: string, stats: QlooStats | undefined, timeoutMs: number): Promise<T> {
+  const path = new URL(url).pathname;
   if (stats) stats.live++;
   let res: Response | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {

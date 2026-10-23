@@ -1,12 +1,18 @@
-// One cache for every expensive call (Qloo, OSM, Wikipedia, search, live cities).
-// Production: Vercel Blob, shared by all serverless instances and by local runs, so a test run warms the demo.
-// Without BLOB_READ_WRITE_TOKEN: files under web/.cache/twin. A small in-memory layer sits in front of both.
+// One cache for every expensive call (Qloo, OSM, Wikipedia, search, live cities), plus reports and usernames.
+// Production: Upstash Redis, shared by all serverless instances and by local runs, so a test run warms the demo.
+// Vercel Blob is the older backend (still read if it is the only one set). Without either: files under web/.cache/twin.
+// A small in-memory layer sits in front of all of them.
 import { get, list, put } from "@vercel/blob";
+import { Redis } from "@upstash/redis";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 const PREFIX = "twin/";
-const blobOn = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+const redisUrl = () => process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = () => process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+let client: Redis | null = null;
+const redis = () => (client ??= redisUrl() && redisToken() ? new Redis({ url: redisUrl()!, token: redisToken()!, retry: { retries: 1 } }) : null);
+const blobOn = () => !redis() && !!process.env.BLOB_READ_WRITE_TOKEN;
 const diskRoot = () => join(process.env.TWIN_WEB_ROOT ?? process.cwd(), ".cache", "twin");
 
 /** Blob calls must never hold up an answer: a slow read counts as a miss, a slow write is dropped. */
@@ -24,7 +30,9 @@ export async function storeGet<T>(key: string, o: { fresh?: boolean } = {}): Pro
   if (!o.fresh && mem.has(key)) return mem.get(key) as T;
   let v: T | null = null;
   try {
-    if (blobOn()) {
+    const r = redis();
+    if (r) v = await within(r.get<T>(PREFIX + key), 8000);
+    else if (blobOn()) {
       v = await within((async () => {
         const r = await get(PREFIX + key, { access: "public", useCache: !o.fresh });
         return r?.statusCode === 200 && r.stream ? JSON.parse(await new Response(r.stream).text()) as T : null;
@@ -41,7 +49,9 @@ export async function storePut(key: string, data: unknown): Promise<void> {
   remember(key, data);
   const body = JSON.stringify(data);
   try {
-    if (blobOn()) {
+    const r = redis();
+    if (r) await within(r.set(PREFIX + key, body), 10000);
+    else if (blobOn()) {
       await within(put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", cacheControlMaxAge: 60 }), 10000);
     } else {
       const f = join(diskRoot(), key);
@@ -55,7 +65,9 @@ export async function storePut(key: string, data: unknown): Promise<void> {
 export async function storeCreate(key: string, data: unknown): Promise<boolean> {
   const body = JSON.stringify(data);
   try {
-    if (blobOn()) await within(put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: false, contentType: "application/json" }), 10000);
+    const r = redis();
+    if (r) { if ((await within(r.set(PREFIX + key, body, { nx: true }), 10000)) !== "OK") return false; }
+    else if (blobOn()) await within(put(PREFIX + key, body, { access: "public", addRandomSuffix: false, allowOverwrite: false, contentType: "application/json" }), 10000);
     else { const f = join(diskRoot(), key); await mkdir(dirname(f), { recursive: true }); await writeFile(f, body, { flag: "wx" }); }
   } catch { return false; }
   remember(key, data);
@@ -64,6 +76,17 @@ export async function storeCreate(key: string, data: unknown): Promise<boolean> 
 
 /** Keys under a prefix (e.g. "cities/"), relative to the store root. */
 export async function storeList(prefix: string): Promise<string[]> {
+  const r = redis();
+  if (r) {
+    const out: string[] = [];
+    let cursor = "0";
+    do {
+      const [next, keys] = await within(r.scan(cursor, { match: `${PREFIX}${prefix}*`, count: 1000 }), 8000);
+      out.push(...keys.map((k) => k.slice(PREFIX.length)));
+      cursor = String(next);
+    } while (cursor !== "0");
+    return out;
+  }
   if (blobOn()) {
     const out: string[] = [];
     let cursor: string | undefined;
@@ -93,4 +116,4 @@ export async function storeCached<T>(key: string, ttlMs: number, fn: () => Promi
   return d;
 }
 
-export const storeBackend = () => (blobOn() ? "vercel-blob" : "disk");
+export const storeBackend = () => (redis() ? "upstash-redis" : blobOn() ? "vercel-blob" : "disk");

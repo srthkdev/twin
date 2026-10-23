@@ -21,6 +21,7 @@
     "@json-render/react-pdf": "0.21.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@react-pdf/renderer": "4.9.0",
+    "@upstash/redis": "1.39.0",
     "@vercel/blob": "^2.8.2",
     "ai": "^7.0.146",
     "class-variance-authority": "^0.7.1",

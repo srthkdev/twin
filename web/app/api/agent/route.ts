@@ -78,7 +78,7 @@ export async function POST(req: Request) {
           stopWhen: (options) => isStepCount(run.reportMode ? 16 : 8)(options),
           // the last step must be an answer, never another tool call
           prepareStep: ({ stepNumber }) => (stepNumber >= (run.reportMode ? 15 : 7) ? { toolChoice: "none" as const } : undefined),
-          timeout: { firstChunkMs: 30_000, chunkMs: 45_000, stepMs: 100_000 },
+          timeout: { firstChunkMs: 30_000, chunkMs: 45_000, stepMs: 190_000 },
           temperature: 0.4,
           // a 429 means a daily or per-minute cap: retrying the same model only waits; the next model answers now
           maxRetries: 0,
