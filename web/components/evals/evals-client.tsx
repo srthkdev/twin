@@ -96,8 +96,9 @@ export function EvalsClient() {
           What the data <span className="text-primary">supports.</span>
         </h1>
         <p className="mt-4 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
-          Three questions, each with labels committed before any result was computed: does raw Qloo data separate neighbourhoods, does the
-          corrected map agree with the census, and does Twin find the twins people already name. Losses are shown next to wins.
+          Four questions, each with labels or hypotheses committed before any result was computed: does taste predict where real chains
+          open, does raw Qloo data separate neighbourhoods, does the corrected map agree with the census, and does Twin find the twins
+          people already name. Losses are shown next to wins.
         </p>
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-dim">
           <span>ground truth <span className="text-muted-foreground">edf9056</span></span>
