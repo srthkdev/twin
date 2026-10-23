@@ -101,7 +101,7 @@ export async function POST(req: Request) {
           providerOptions,
           onStepFinish: (step) => { stepsDone++; meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
         });
-        let shown = false, retry = false;
+        let shown = false, retry = false, lastError = "";
         const parts = toUIMessageStream<ToolSet, TwinUIMessage>({
           stream: result.stream,
           sendStart: !started,
@@ -112,6 +112,7 @@ export async function POST(req: Request) {
         for (let r = await reader.read(); !r.done; r = await reader.read()) {
           const chunk = r.value;
           if (chunk.type === "error") {
+            lastError = chunk.errorText;
             if (!userKey && isDailyCap(chunk.errorText)) cappedOn.set(capKey, utcDay());
             if (later()) { retry = true; void reader.cancel(); break; }
           }
@@ -128,7 +129,7 @@ export async function POST(req: Request) {
           i--; continue;
         }
         if (!retry) break;
-        console.warn(`[agent] ${label} (attempt ${i + 1}) failed or stalled${shown ? " mid-answer" : ""}; continuing from ${done.length} finished messages`);
+        console.warn(`[agent] ${label} (attempt ${i + 1}) failed or stalled${shown ? " mid-answer" : ""} (${lastError.slice(0, 160)}); continuing from ${done.length} finished messages`);
       }
       if (finish) writer.write(finish);
     },

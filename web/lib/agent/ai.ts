@@ -21,6 +21,7 @@ export const isDailyCap = (text: string) => /free-models-per-day|per-day|PerDay|
 
 /** Google AI Studio (free tier): fast and good at parallel tool calls, so it answers first when configured. */
 export const GEMINI_MODEL = "gemini-3.5-flash-lite";
+const GEMINI_MODELS = [GEMINI_MODEL, "gemini-3.5-flash", "gemini-3.1-flash-lite"];
 const gemini = (apiKey: string) => createOpenAICompatible({ name: "gemini", apiKey, baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", includeUsage: true });
 
 export interface Attempt { label: string; capKey: string; model: LanguageModel; providerOptions?: ReturnType<typeof fallbackOptions> }
@@ -33,7 +34,8 @@ export function agentAttempts(picked: string | undefined, userKey?: string): Att
   const viaOpenRouter = (key: string) => order.map((m) => ({ label: m, capKey: key, model: openrouter(key)(m), providerOptions: fallbackOptions(m) }));
   if (userKey) return viaOpenRouter(userKey);
   const g = process.env.GEMINI_API_KEY?.trim();
-  const google = g ? [{ label: `google/${GEMINI_MODEL}`, capKey: g, model: gemini(g)(GEMINI_MODEL) }] : [];
+  // free-tier limits are per model, so each Gemini model is its own budget
+  const google = g ? GEMINI_MODELS.map((m) => ({ label: `google/${m}`, capKey: `${g}:${m}`, model: gemini(g)(m) })) : [];
   const routed = usableKeys().flatMap(viaOpenRouter);
   return picked && OPENROUTER_MODELS.includes(picked) ? [...routed, ...google] : [...google, ...routed];
 }
