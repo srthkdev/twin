@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { APICallError, NoObjectGeneratedError, Output, streamText } from "ai";
+import type { Attempt } from "./ai";
 import { z } from "zod";
 import type { City, Hood } from "../types";
 import type { Report } from "./report-types";
@@ -130,7 +130,9 @@ export async function verifyBaseline(plain: PlainAnswer, ds: BaselineData, looku
     try {
       if (place.kind === "neighbourhood") {
         const city = findCity(place.city, ds);
-        const hood = city && ds.hoods.find((h) => h.city === city.id && sameName(h.name, place.name));
+        // Twin's names can carry a qualifier ("Kreuzberg (SO36)"): the plain name matches too
+        const bare = (n: string) => n.replace(/\s*\([^)]*\)/g, "").split(" / ")[0];
+        const hood = city && ds.hoods.find((h) => h.city === city.id && (sameName(h.name, place.name) || sameName(bare(h.name), place.name)));
         if (hood) return { ...place, status: "verified", reason: `Twin lists this neighbourhood in ${city.name}.`, source: "Twin", matchedName: hood.name, link: `hood:${hood.id}` };
         const local = await lookupGeo(`${place.name}, ${place.city}`);
         let matches = local.filter((hit) => hoodType(hit) && sameName(hit.name, place.name));
@@ -193,28 +195,23 @@ export function parsePlainAnswer(text: string): PlainAnswer {
 export const baselineCacheKey = (question: string, model: string) => `baseline/${createHash("sha256").update(JSON.stringify([question.trim(), model])).digest("hex")}.json`;
 const pending = new Map<string, Promise<BaselineResult>>();
 
-export async function runBaseline(question: string, primary: string, apiKey: string, ds: BaselineData, signal?: AbortSignal): Promise<BaselineResult> {
+export async function runBaseline(question: string, primary: string, attempts: Attempt[], ds: BaselineData, signal?: AbortSignal): Promise<BaselineResult> {
   // The plain answer is never stored: each comparison is a fresh model call. Only the data lookups that verify it are cached.
   const key = baselineCacheKey(question, primary);
   const current = pending.get(key);
   if (current) return current;
   const work = (async () => {
-    const { OPENROUTER_MODELS, fallbackOptions } = await import("./ai");
-    const provider = createOpenAICompatible({
-      name: "openrouter", apiKey, baseURL: "https://openrouter.ai/api/v1",
-      headers: { "HTTP-Referer": "https://github.com/srthkdev/twin", "X-Title": "Twin" },
-      includeUsage: true, supportsStructuredOutputs: true,
-    });
     const abortSignal = AbortSignal.any([AbortSignal.timeout(165_000), ...(signal ? [signal] : [])]);
     const prompt = `${question}\n\nReturn JSON only: {"answer": string, "places": [{"name": string, "city": string, "kind": "neighbourhood" | "venue", "claim": string}]}. Give a concise answer in plain words. Include every place named in the answer in places, at most 12 distinct neighbourhoods or venues. Use its full city name, with country where ambiguous; use an empty city if unknown. The claim is what your answer says about that place.`;
     let plain: PlainAnswer | undefined, model = primary;
-    for (const candidate of [primary, ...OPENROUTER_MODELS.filter((m) => m !== primary)]) {
+    // the same model chain as the agent (Gemini first, then the OpenRouter keys)
+    for (const attempt of attempts) {
       for (const structured of [true, false]) {
         let streamError: unknown;
         const result = streamText({
-          model: provider(candidate), instructions: "Answer as a helpful assistant.", prompt,
+          model: attempt.model, instructions: "Answer as a helpful assistant.", prompt,
           ...(structured ? { output: Output.object({ schema: baselineSchema }) } : {}),
-          providerOptions: fallbackOptions(candidate), temperature: 0.4, maxOutputTokens: 5000,
+          providerOptions: attempt.providerOptions, temperature: 0.4, maxOutputTokens: 5000,
           timeout: { firstChunkMs: 30_000, chunkMs: 45_000, totalMs: 60_000 }, maxRetries: 0, abortSignal,
           onError: ({ error }) => { streamError = error; },
         });
@@ -229,7 +226,7 @@ export async function runBaseline(question: string, primary: string, apiKey: str
             break;
           }
         }
-        model = (await result.response).modelId || candidate;
+        model = (await result.response).modelId || attempt.label;
         break;
       }
       if (plain) break;

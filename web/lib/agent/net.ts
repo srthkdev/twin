@@ -61,7 +61,7 @@ export function nominatimSlot<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export interface GeoHit { name: string; display: string; lat: number; lon: number; bbox: [number, number, number, number]; type: string; country: string; osm?: string }
-interface NomRow { name?: string; display_name: string; lat: string; lon: string; boundingbox: string[]; type: string; class: string; osm_type?: string; osm_id?: number; address?: Record<string, string>; importance?: number }
+interface NomRow { name?: string; display_name: string; lat: string; lon: string; boundingbox: string[]; type: string; class?: string; category?: string; osm_type?: string; osm_id?: number; address?: Record<string, string>; importance?: number }
 
 /** Nominatim search -> best hit(s). bbox = [south, west, north, east]. Cached 30 days. */
 export async function geocode(query: string, limit = 1): Promise<GeoHit[]> {
@@ -73,7 +73,8 @@ export async function geocode(query: string, limit = 1): Promise<GeoHit[]> {
     name: r.name || r.display_name.split(",")[0].trim(),
     display: r.display_name, lat: +r.lat, lon: +r.lon,
     bbox: [+r.boundingbox[0], +r.boundingbox[2], +r.boundingbox[1], +r.boundingbox[3]] as [number, number, number, number],
-    type: `${r.class}/${r.type}`, country: r.address?.country ?? r.display_name.split(",").pop()!.trim(),
+    // jsonv2 calls it category; older formats call it class
+    type: `${r.category ?? r.class}/${r.type}`, country: r.address?.country ?? r.display_name.split(",").pop()!.trim(),
     osm: r.osm_type && r.osm_id ? `https://www.openstreetmap.org/${r.osm_type}/${r.osm_id}` : undefined,
   }));
 }
