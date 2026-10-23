@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { TraitList } from "./trait-chip";
 import { Label } from "./meter";
-import { addCity, cityCode } from "@/lib/data";
+import { addCity, cityCode, isLive } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import type { City, DataSet, Hood } from "@/lib/types";
 import type { Pair } from "@/hooks/use-pairs";
@@ -126,7 +126,7 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
         <section className="px-4 py-4">
           <Label>twin in</Label>
           <ul className="mt-2">
-            {ds.cities.filter((c) => c.id !== sourceCityId).map((c) => {
+            {ds.cities.filter((c) => c.id !== sourceCityId && !isLive(c)).map((c) => {
               const top = !pin && source ? ds.twins[source.id]?.[c.id]?.[0] : undefined;
               const name = top && ds.hoods.find((h) => h.id === top.hood)?.name;
               const on = toCity === c.id;
@@ -143,6 +143,16 @@ export function SourcePanel({ ds, source, pin, toCity, onPickHood, onPickCity, o
               );
             })}
           </ul>
+          {ds.cities.some((c) => isLive(c) && c.id !== sourceCityId) && <>
+            <Label className="mt-4">more cities · built from live qloo data</Label>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {ds.cities.filter((c) => isLive(c) && c.id !== sourceCityId).map((c) => {
+                const on = toCity === c.id;
+                return <button key={c.id} onClick={() => onPickCity(on ? null : c.id)} aria-pressed={on}
+                  className={cn("border px-1.5 py-0.5 text-[11px] transition-colors", on ? "border-primary text-primary" : "border-line text-muted-foreground hover:border-line-strong hover:text-foreground")}>{c.name.toLowerCase()}</button>;
+              })}
+            </div>
+          </>}
           <form onSubmit={(e) => { e.preventDefault(); void submitCity(); }} className="mt-3">
             <label className="flex items-center gap-2 border border-line bg-background px-2 py-1.5 focus-within:border-line-strong">
               <span className="text-dim">+</span>
