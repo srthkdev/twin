@@ -67,6 +67,7 @@ export async function POST(req: Request) {
       // the user sees one continuous answer.
       const done: ModelMessage[] = [];
       let stepsDone = 0, nudged = false, started = false;
+      const waited = new Set<number>();
       // one start and one finish for the whole answer, however many rounds it takes
       let finish: Parameters<typeof writer.write>[0] | undefined;
       const open = (a: { capKey: string }) => cappedOn.get(a.capKey) !== utcDay();
@@ -101,7 +102,7 @@ export async function POST(req: Request) {
           providerOptions,
           onStepFinish: (step) => { stepsDone++; meta.model = step.response?.modelId ?? meta.model; done.push(...step.response.messages); },
         });
-        let shown = false, retry = false, lastError = "";
+        let shown = false, retry = false, wait = false, lastError = "";
         const parts = toUIMessageStream<ToolSet, TwinUIMessage>({
           stream: result.stream,
           sendStart: !started,
@@ -114,6 +115,13 @@ export async function POST(req: Request) {
           if (chunk.type === "error") {
             lastError = chunk.errorText;
             if (!userKey && isDailyCap(chunk.errorText)) cappedOn.set(capKey, utcDay());
+            // A per-minute limit clears in seconds: wait for it once rather than fall through to capped models.
+            else if (/429|RESOURCE_EXHAUSTED|rate.?limit|quota/i.test(chunk.errorText) && !waited.has(i) && Date.now() - t0 < 200_000) {
+              waited.add(i);
+              const hint = Number(chunk.errorText.match(/retry(?:Delay)?[^0-9]{0,12}(\d+(?:\.\d+)?)\s*s/i)?.[1] ?? 12);
+              await new Promise((r) => setTimeout(r, Math.min(25, Math.max(4, hint)) * 1000));
+              wait = true; void reader.cancel(); break;
+            }
             if (later()) { retry = true; void reader.cancel(); break; }
           }
           if (chunk.type === "start") started = true;
@@ -121,6 +129,7 @@ export async function POST(req: Request) {
           if (chunk.type !== "start" && chunk.type !== "start-step" && chunk.type !== "finish-step") shown = true;
           writer.write(chunk);
         }
+        if (wait) { console.warn(`[agent] ${label} hit a per-minute limit; retrying after a pause`); i--; continue; }
         // Some models end a report run after the research, without writing it: ask once more and require the report tool.
         if (!retry && run.reportMode && !run.reportId && !nudged && stepsDone < 15 && Date.now() - t0 < 240_000) {
           nudged = true;
