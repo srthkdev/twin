@@ -68,11 +68,15 @@ export async function qlooSearchEntity(text: string, stats?: QlooStats, type?: s
   return hit ? { id: hit.entity_id, name: hit.name, types: hit.types ?? [] } : null;
 }
 
-/** Resolve free text to a Qloo place tag id (prefers the curated urn:tag:genre:place family). */
+/** Resolve free text to a Qloo place tag id. Venue genres and categories carry heatmap data; "hotel:ramen" or
+ *  "setting:music_venue" style tags mostly don't, so they rank last. */
+const TAG_ALIASES: Record<string, string> = { "music venue": "live music venue", "music venues": "live music venue", "concert venue": "live music venue" };
+const tagRank = (id: string) => (/:hotel:/.test(id) ? 9 : id.startsWith("urn:tag:genre:place") ? 0 : id.startsWith("urn:tag:category:place") ? 1 : 5);
 export async function qlooResolveTag(text: string, stats?: QlooStats): Promise<QlooTag | null> {
-  const r = await qlooGet<{ results?: { tags?: { id: string; name: string }[] } }>("/v2/tags", { "filter.query": text, "filter.parents.types": "urn:entity:place", take: 8 }, stats);
+  const q = TAG_ALIASES[text.trim().toLowerCase()] ?? text;
+  const r = await qlooGet<{ results?: { tags?: { id: string; name: string }[] } }>("/v2/tags", { "filter.query": q, "filter.parents.types": "urn:entity:place", take: 8 }, stats);
   const tags = r.results?.tags ?? [];
-  const t = tags.find((x) => x.id.startsWith("urn:tag:genre:place")) ?? tags[0];
+  const t = tags.map((x, i) => ({ x, k: tagRank(x.id) * 10 + i })).sort((a, b) => a.k - b.k)[0]?.x;
   return t ? { id: t.id, name: t.name } : null;
 }
 
@@ -99,7 +103,9 @@ export async function qlooScene(place: string, stats?: QlooStats, take = 12): Pr
   let r = await once({ "signal.location.query": place });
   // Qloo can't resolve every neighbourhood name; the same question by coordinates usually works.
   if (r.empty) {
-    const g = (await geocode(place).catch(() => []))[0];
+    // "Pigalle (SoPi), Paris" or "Anzures / Chapultepec, Mexico City" -> "Pigalle, Paris", "Anzures, Mexico City"
+    const plain = place.replace(/\s*\([^)]*\)/g, "").split(",").map((p) => p.split(" / ")[0].trim()).filter(Boolean).join(", ");
+    const g = (await geocode(place).catch(() => []))[0] ?? (plain !== place ? (await geocode(plain).catch(() => []))[0] : undefined);
     if (g) r = await once({ "signal.location": `POINT(${g.lon} ${g.lat})`, "signal.location.radius": 1500 });
   }
   if (r.empty && r.errors.length) throw new QlooError(r.errors[0]);
