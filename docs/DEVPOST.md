@@ -55,11 +55,14 @@ The corrected maps also grouped items the way you'd expect. Bad Bunny went with 
 - **The report on the map.** An open report numbers its shortlist on the map (1 = top pick) and flies to its city. Every place in the text is a link that moves the map.
 - **Take it with you.** A share link anyone can open, a PDF rendered on the server, and Markdown.
 - **Twin vs a plain AI.** One click asks a model without Twin's tools the same question, and every place it names is checked against OpenStreetMap. Many can't be found or sit in the wrong city.
+- **Brand whitespace.** Where a chain already is (10,000 chains from Overture Maps across the six built-in cities) and the busy blocks that match the taste around its branches but have none within 1 km. "Where should Pret open next in London?" returns Stoke Newington, Clapham and Peckham, with Pret's own backtest score.
+- **Lookalike sites.** "My cafés on Redchurch Street and Broadway Market do well. Where in Paris?" Busy blocks whose taste matches the average of your own sites, in any of the 24 cities.
+- **Site check.** One address: how busy it is, what the block leans into, the venue mix and chains within 1 km, and its twins abroad. No Qloo quota needed.
 - **Gap scan.** "What thrives in Reuterkiez's twins abroad that Reuterkiez itself lacks?" compares venue mixes across the twins and lists what recurs there and is missing at home.
 - **Opportunity map.** Busy blocks first, then Qloo taste *demand* against *supply*: how many such venues physically exist (Overture Maps Places). The gaps are painted on the map.
 - **Any city on Earth.** Six cities have the full 116-trait fingerprint. Eighteen more (Lisbon, Tokyo, Barcelona, Amsterdam, Madrid, Rome, Milan, Melbourne, Sydney, Toronto, Chicago, San Francisco, Austin, Seoul, São Paulo, Buenos Aires, Istanbul, Vienna) are built from 40 live Qloo heatmaps. Any other city is built the first time someone asks, in under a minute, and cached.
 - **Runs in the background.** A report keeps running if you close the tab. Pick a username (no password; a sync code moves it to another device) and it lands in your history.
-- **An agent with 26 tools,** streaming its work as a timeline with each step's source (QLOO, TWIN, OVERTURE, OSM, WIKI, WEB) and timing. Answers are written for people: a one-line verdict, reasons in plain words, "% match" instead of cosines.
+- **An agent with 29 tools,** streaming its work as a timeline with each step's source (QLOO, TWIN, OVERTURE, OSM, WIKI, WEB) and timing. Answers are written for people: a one-line verdict, reasons in plain words, "% match" instead of cosines.
 - **MCP server.** The same tools run over stdio, so Twin works inside Claude Code, Codex or any MCP client.
 
 ### Who answers what
@@ -99,7 +102,7 @@ We kept one rule: **Qloo makes every taste decision, and the other sources only 
 - **Pipeline:** Python, standard library only.
 - **App:** Next.js with MapLibre's globe projection and deck.gl columns for the city blocks.
 - **Agent:** Vercel AI SDK. Server: `streamText` with tools, and `createUIMessageStream` so tool progress and map actions stream as data parts. Client: `useChat`.
-- **Models:** free open-weight models through OpenRouter: MiniMax M3.1 Flash, then NVIDIA Nemotron 3 Ultra, then Gemma 4 31B. If one fails mid-run, the next continues from the steps already finished. Visitors can bring their own key.
+- **Models:** Gemini 3.5 Flash-Lite first (Google AI Studio free tier: a full report in 11–20 s), then Gemini 3.5 Flash and 3.1 Flash-Lite, then free OpenRouter models (MiniMax M3.1 Flash, Nemotron 3 Ultra) on two keys. If one fails or runs out of free requests mid-run, the next continues from the steps already finished. Visitors can bring their own key.
 - **Reports:** json-render for the report blocks (web and PDF from one schema), `@react-pdf/renderer` on the server, seven playbooks as Markdown skills the agent loads on demand.
 - **Caching:** every Qloo, OpenStreetMap, Wikipedia and search response, every live city, every report and every username goes to Upstash Redis, gzipped. Qloo answers are kept for 30 days, and an older copy is served if Qloo is down. Repeat questions cost nothing, which matters on free tiers.
 - **Supply data:** Overture Maps Places, queried with DuckDB straight from its cloud bucket and binned into the same 1 km cells. It's precomputed per city, so opportunity answers are instant.
@@ -219,6 +222,8 @@ So MiniMax leads, with the others as automatic fallbacks.
 - **Free models send arguments in shapes no schema expects:** text wrapped as `{"$text": …}`, lists as JSON strings, made-up block types, `take: 10` when the maximum is 8. A repair step fixes these before validation instead of letting the model retry the same mistake.
 - **The grounding check was too strict and too slow.** It rejected "ages 30 to 34" and "333 Lounge" as untraced numbers, and took 110 s on a large report. It now checks only numbers that matter (charts and headline values) against a sorted index: 0.4 s for 240,000 numbers.
 - **The storage store was suspended two days before the deadline.** All the caching blew through Vercel Blob's free operation limit. We moved to Upstash Redis, gzipped large values and cached only the condensed heatmap cells instead of Qloo's full answers: 82 MB became 31 MB.
+- **Reports were too slow on free models:** 2–7 minutes, and twice they hit Vercel's 300 s limit with no report. Past a step or time budget the agent may now only chart and write, then must write; a model that stops early is asked once more. With Gemini first, reports take 11–20 s.
+- **The opportunity map once picked a shopping centre.** One busy block can spike on any taste, so a block now has to share the taste with the blocks around it, and the shortlist allows two blocks per neighbourhood.
 - **New cities came back with no neighbourhoods** when OpenStreetMap's servers timed out. Qloo's own locality list now runs in parallel, and city builds dropped from ~150 s to ~45 s.
 
 ## Challenges
@@ -242,4 +247,4 @@ So MiniMax leads, with the others as automatic fallbacks.
 
 ## Built with
 
-Qloo Insights API (heatmaps, location insights, audiences, demographics, compare, trending, search, tags) · Vercel AI SDK · OpenRouter (MiniMax M3.1 Flash, Nemotron 3 Ultra, Gemma 4 31B) · json-render · React PDF · Upstash Redis · Overture Maps Places · DuckDB · OpenStreetMap (Nominatim, Overpass) · Wikipedia / Wikidata · Tavily · Python · Next.js · MapLibre GL · deck.gl · Tailwind · shadcn/ui · Recharts · Model Context Protocol · US Census ACS 2023
+Qloo Insights API (heatmaps, location insights, audiences, demographics, compare, trending, search, tags) · Vercel AI SDK · Google Gemini (3.5 Flash-Lite) · OpenRouter (MiniMax M3.1 Flash, Nemotron 3 Ultra) · json-render · React PDF · Upstash Redis · Overture Maps Places · DuckDB · OpenStreetMap (Nominatim, Overpass) · Wikipedia / Wikidata · Tavily · Python · Next.js · MapLibre GL · deck.gl · Tailwind · shadcn/ui · Recharts · Model Context Protocol · US Census ACS 2023

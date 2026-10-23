@@ -27,10 +27,13 @@
 | **Report on the map** | An open report numbers its shortlist on the map and flies to its city; every place in the text moves the map. |
 | **Twin vs a plain AI** | One click asks a model without Twin's tools; every place it names is checked on OpenStreetMap. |
 | **Gap scan** | What recurs in a neighbourhood's twins abroad and is missing at home. |
+| **Brand whitespace** | Where a chain is (10,000 chains, Overture) and the busy blocks that match its branches but have none within 1 km. |
+| **Lookalike sites** | Blocks in any of 24 cities like your own best locations. |
+| **Site check** | One address: busyness, taste, venue mix, chains nearby, twins abroad. |
 | **Read a block** | Height = likeness, colour = what it's mostly about (sound · table · scene). Hover for its traits and how many venues stand there; *ask* sends that block to the agent. |
 | **Taste vs popularity** | One toggle shows the same map on raw Qloo scores, where everything busy looks alike. |
 | **24 cities, and any other** | Six with the full 116-trait fingerprint, eighteen more built from live Qloo heatmaps (Lisbon, Tokyo, Barcelona, Amsterdam, Madrid, Rome, Milan, Melbourne, Sydney, Toronto, Chicago, San Francisco, Austin, Seoul, São Paulo, Buenos Aires, Istanbul, Vienna). Any other city is built in under a minute the first time someone asks. |
-| **Agent** | 26 tools on free open models (MiniMax M3.1 Flash → Nemotron 3 Ultra → Gemma 4 31B via OpenRouter, failing over mid-run), streamed as a timeline. Reports keep running if you close the tab; a username (no password, a sync code) keeps your history across devices. |
+| **Agent** | 29 tools on free models (Gemini 3.5 Flash-Lite first, then other Gemini and OpenRouter models, failing over mid-run; a report takes 11–20 s), streamed as a timeline. Reports keep running if you close the tab; a username (no password, a sync code) keeps your history across devices. |
 | **Opportunity map** | Busy blocks first, then Qloo demand for a taste vs how many such venues physically exist (Overture Maps). |
 | **MCP server** | The same tools, usable from Claude Code, Codex or any MCP client. |
 
@@ -97,6 +100,7 @@ QLOO_API_KEY=...                      # Qloo hackathon key
 QLOO_BASE_URL=https://hackathon.api.qloo.com
 OPENROUTER_API_KEY=...                # free models; visitors can also bring their own
 TAVILY_API_KEY=...                    # optional: web search
+GEMINI_API_KEY=...                    # optional: Google AI Studio, tried first
 KV_REST_API_URL=...                   # optional: shared store (Upstash Redis) for cache, reports, usernames;
 KV_REST_API_TOKEN=...                 #   files under web/.cache otherwise
 ```
